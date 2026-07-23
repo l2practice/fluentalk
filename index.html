@@ -224,14 +224,20 @@ textarea.form-input{resize:vertical;min-height:72px;line-height:1.6}
 .dash-content{flex:1;margin-left:216px;padding:28px;min-height:calc(100vh - 56px);background:var(--bg)}
 .dash-title{font-size:1.3rem;font-weight:800;color:var(--black);margin-bottom:20px;letter-spacing:-.02em}
 /* Hamburger — hidden on desktop, the only way into the nav on mobile */
-.tb-menu{display:none;background:none;border:none;padding:6px;margin-right:-4px;cursor:pointer;border-radius:8px;color:var(--g700);align-items:center;justify-content:center}
-.tb-menu:hover{background:var(--g100)}
-.tb-menu span{display:block;width:20px;height:2px;background:currentColor;border-radius:2px;transition:var(--tr)}
-.tb-menu span+span{margin-top:4px}
+.tb-menu{display:none;flex-direction:column;align-items:center;justify-content:center;gap:4px;
+  width:38px;height:38px;flex-shrink:0;background:none;border:1.5px solid var(--g200);
+  border-radius:10px;padding:0;cursor:pointer;color:var(--g700);transition:var(--tr)}
+.tb-menu:hover,.tb-menu:active{background:var(--blue-l);border-color:var(--blue-m);color:var(--blue)}
+.tb-menu span{display:block;width:17px;height:2px;background:currentColor;border-radius:2px}
 .nav-backdrop{display:none;position:fixed;inset:0;background:rgba(17,24,39,.5);z-index:99;backdrop-filter:blur(2px)}
 .nav-backdrop.show{display:block}
 @media(max-width:768px){
   .tb-menu{display:flex}
+  .topbar{padding:0 12px;gap:10px}
+  .tb-brand{font-size:.92rem;white-space:nowrap}
+  .tb-sub{display:none}                 /* the drawer already names the section */
+  .tb-user{max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .tb-right{gap:6px}
   .sidenav{transform:translateX(-100%);transition:transform .22s cubic-bezier(.4,0,.2,1);box-shadow:var(--shl);width:250px;z-index:150}
   .sidenav.open{transform:translateX(0)}
   .dash-content{margin-left:0;padding:16px}
@@ -906,7 +912,25 @@ async function gasCall(action, payload = {}) {
     body: JSON.stringify(body)
   });
   if (!r.ok) throw new Error('Network error ' + r.status);
-  return r.json();
+  const j = await r.json();
+  if (j && j.success === false && j.error === 'SESSION_EXPIRED') { handleSessionExpired(); }
+  return j;
+}
+
+let _expiredHandled = false;
+function handleSessionExpired() {
+  if (_expiredHandled) return;   // one redirect, however many calls were in flight
+  _expiredHandled = true;
+  const wasTeacher = !!A.teacherToken;
+  A.user = null; A.sessionToken = null; A.teacherToken = null;
+  localStorage.removeItem('speak_session');
+  localStorage.removeItem('speak_teacher');
+  SS('S-auth');
+  switchAuthTab('login');
+  toast(wasTeacher
+    ? 'Teacher session ended — please sign in again.'
+    : 'Your session ended. Please sign in again.', 'info', 6000);
+  setTimeout(() => { _expiredHandled = false; }, 1500);
 }
 
 // ════════════════════════════════════════════
