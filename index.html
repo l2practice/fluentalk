@@ -1597,10 +1597,10 @@ async function renderStudentOverview(c) {
               ${t.latestScore ? `<span style="font-weight:700;color:${scoreColor(t.latestScore)}">${t.latestScore}</span>` : ''}
             </div>
             ${t.scores.length ? `<div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
-              ${t.scores.map(m=>`<span style="font-size:11px;background:var(--g100);border-radius:6px;padding:2px 8px">Lần ${m.attemptNo}: <strong style="color:${scoreColor(m.overall)}">${m.overall}</strong></span>`).join('')}
+              ${t.scores.map(m=>`<span style="font-size:11px;background:var(--g100);border-radius:6px;padding:2px 8px">Attempt ${m.attemptNo}: <strong style="color:${scoreColor(m.overall)}">${m.overall}</strong></span>`).join('')}
             </div>` : ''}
           </div>`).join('')}
-      </div>` : '<div class="empty">You haven't practiced yet. Go to Practice to get started!</div>'}`;
+      </div>` : '<div class="empty">You have not practiced yet. Go to Practice to get started!</div>'}`;
 }
 
 async function renderPeerComparison(c) {
