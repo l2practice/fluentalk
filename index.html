@@ -223,7 +223,21 @@ textarea.form-input{resize:vertical;min-height:72px;line-height:1.6}
 .sidenav-section{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--g400);padding:12px 16px 4px;margin:0 8px}
 .dash-content{flex:1;margin-left:216px;padding:28px;min-height:calc(100vh - 56px);background:var(--bg)}
 .dash-title{font-size:1.3rem;font-weight:800;color:var(--black);margin-bottom:20px;letter-spacing:-.02em}
-@media(max-width:768px){.sidenav{transform:translateX(-100%)}.dash-content{margin-left:0;padding:16px}}
+/* Hamburger — hidden on desktop, the only way into the nav on mobile */
+.tb-menu{display:none;background:none;border:none;padding:6px;margin-right:-4px;cursor:pointer;border-radius:8px;color:var(--g700);align-items:center;justify-content:center}
+.tb-menu:hover{background:var(--g100)}
+.tb-menu span{display:block;width:20px;height:2px;background:currentColor;border-radius:2px;transition:var(--tr)}
+.tb-menu span+span{margin-top:4px}
+.nav-backdrop{display:none;position:fixed;inset:0;background:rgba(17,24,39,.5);z-index:99;backdrop-filter:blur(2px)}
+.nav-backdrop.show{display:block}
+@media(max-width:768px){
+  .tb-menu{display:flex}
+  .sidenav{transform:translateX(-100%);transition:transform .22s cubic-bezier(.4,0,.2,1);box-shadow:var(--shl);width:250px;z-index:150}
+  .sidenav.open{transform:translateX(0)}
+  .dash-content{margin-left:0;padding:16px}
+  .sidenav-item{padding:12px 16px;font-size:14px}
+}
+@media(min-width:769px){.nav-backdrop{display:none!important}}
 
 /* ═══════════════════════════════════════
    SCORE DISPLAY
@@ -502,6 +516,7 @@ textarea.form-input{resize:vertical;min-height:72px;line-height:1.6}
 <!-- ══════ TEACHER DASHBOARD ══════ -->
 <div class="screen" id="S-teacher">
   <div class="topbar">
+    <button class="tb-menu" onclick="toggleNav()" aria-label="Open menu"><span></span><span></span><span></span></button>
     <span class="tb-brand">Speaking <em>App</em></span>
     <span class="tb-sub">/ Teacher Portal</span>
     <div class="tb-right">
@@ -520,6 +535,9 @@ textarea.form-input{resize:vertical;min-height:72px;line-height:1.6}
       <div class="sidenav-item" onclick="teacherTab('classroom')"><span class="sidenav-icon">🏫</span> Classroom</div>
       <div class="sidenav-item" onclick="teacherTab('homework')"><span class="sidenav-icon">📚</span> Homework Book</div>
       <div class="sidenav-item" onclick="teacherTab('progress')"><span class="sidenav-icon">📈</span> Study Progress</div>
+      <div class="sidenav-section">Archive</div>
+      <div class="sidenav-item" onclick="teacherTab('studentArchive')"><span class="sidenav-icon">🗄️</span> Student Archive</div>
+      <div class="sidenav-item" onclick="teacherTab('classArchive')"><span class="sidenav-icon">📦</span> Class Archive</div>
       <div class="sidenav-section">Account</div>
       <div class="sidenav-item" onclick="teacherTab('settings')"><span class="sidenav-icon">⚙️</span> Settings</div>
       <div class="sidenav-item" onclick="logout()" style="color:var(--red);margin-top:auto"><span class="sidenav-icon">🚪</span> Sign Out</div>
@@ -531,6 +549,7 @@ textarea.form-input{resize:vertical;min-height:72px;line-height:1.6}
 <!-- ══════ STUDENT DASHBOARD ══════ -->
 <div class="screen" id="S-student">
   <div class="topbar">
+    <button class="tb-menu" onclick="toggleNav()" aria-label="Open menu"><span></span><span></span><span></span></button>
     <span class="tb-brand">Speaking <em>App</em></span>
     <span class="tb-sub" id="std-tb-sub">/ Student</span>
     <div class="tb-right">
@@ -837,6 +856,7 @@ textarea.form-input{resize:vertical;min-height:72px;line-height:1.6}
 </div>
 
 <!-- Toast -->
+<div class="nav-backdrop" id="nav-backdrop" onclick="closeNav()"></div>
 <div class="toast-wrap" id="toast-wrap"></div>
 
 <script src="cefr-dict.js"></script>
@@ -906,6 +926,36 @@ async function gasCall(action, payload = {}) {
   if (!r.ok) throw new Error('Network error ' + r.status);
   return r.json();
 }
+
+// ════════════════════════════════════════════
+// MOBILE NAV
+// ════════════════════════════════════════════
+function activeSidenav() {
+  const scr = document.querySelector('.screen.active');
+  return scr ? scr.querySelector('.sidenav') : null;
+}
+function toggleNav() {
+  const nav = activeSidenav();
+  if (!nav) return;
+  nav.classList.contains('open') ? closeNav() : openNav();
+}
+function openNav() {
+  const nav = activeSidenav();
+  if (!nav) return;
+  nav.classList.add('open');
+  document.getElementById('nav-backdrop').classList.add('show');
+}
+function closeNav() {
+  document.querySelectorAll('.sidenav').forEach(n => n.classList.remove('open'));
+  document.getElementById('nav-backdrop').classList.remove('show');
+}
+// Choosing a destination should dismiss the drawer, or it covers the content
+// the person just asked for.
+document.addEventListener('click', e => {
+  if (e.target.closest('.sidenav-item')) closeNav();
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeNav(); });
+window.addEventListener('resize', () => { if (window.innerWidth > 768) closeNav(); });
 
 // ════════════════════════════════════════════
 // TOAST
@@ -1032,7 +1082,7 @@ let _sortCol = '', _sortDir = 1;
 
 async function teacherTab(tab) {
   document.querySelectorAll('.sidenav-item').forEach((el,i) => {
-    const tabs = ['overview','classroom','homework','progress','settings'];
+    const tabs = ['overview','classroom','homework','progress','studentArchive','classArchive','settings'];
     el.classList.toggle('active', tabs[i] === tab);
   });
   const c = document.getElementById('teacher-content');
@@ -1042,6 +1092,8 @@ async function teacherTab(tab) {
     if (tab === 'classroom') await renderTeacherClassroom(c);
     if (tab === 'homework')  await renderTeacherHomework(c);
     if (tab === 'progress')  await renderTeacherProgress(c);
+    if (tab === 'studentArchive') await renderStudentArchive(c);
+    if (tab === 'classArchive')   await renderClassArchive(c);
     if (tab === 'settings')  await renderTeacherSettings(c);
   } catch(e) { c.innerHTML = '<div class="empty">Error: ' + e.message + '</div>'; }
 }
@@ -1443,8 +1495,8 @@ function renderProgressUI(c, classes) {
           <th onclick="sortProg('ClassID')">Class ⇅</th>
           <th onclick="sortProg('Part')">Mode ⇅</th>
           <th onclick="sortProg('Topic')">Topic ⇅</th>
-          <th>Start</th><th>End</th><th>Duration</th>
-          <th>Q</th><th>Date</th>
+          <th>First attempt</th><th>Latest attempt</th><th>Duration</th>
+          <th>Q</th><th>Attempts</th>
           <th>Milestone Scores ⇅</th><th>⚠</th>
         </tr></thead>
         <tbody id="prog-tbody">
@@ -1464,7 +1516,10 @@ function buildProgressRows(sessions, classFilter) {
   });
   let rows = Object.values(map);
   if (classFilter) rows = rows.filter(r => String(r.ClassID||'').toUpperCase() === classFilter.toUpperCase());
-  // Sort by latest session
+  // Order each group oldest-first so "first attempt" and "latest attempt" mean
+  // what they say; the backend hands sessions back newest-first.
+  rows.forEach(r => r.sessions.sort((a, b) =>
+    String(a.StartTime || '').localeCompare(String(b.StartTime || ''))));
   rows.sort((a,b) => {
     const la = a.sessions.slice(-1)[0]?.StartTime || '';
     const lb = b.sessions.slice(-1)[0]?.StartTime || '';
@@ -1479,8 +1534,8 @@ function renderProgressRows(rows) {
   return rows.map((r, ri) => {
     const count    = r.sessions.length;
     const lastSess = r.sessions.slice(-1)[0];
-    const start    = fmtDT(r.sessions[0]?.StartTime);
-    const end      = fmtDT(lastSess?.StartTime);
+    const start    = fmtDT(r.sessions[0]?.StartTime);   // first ever attempt
+    const end      = fmtDT(lastSess?.StartTime);        // most recent attempt
     const dur      = lastSess?.DurationMin ? lastSess.DurationMin + 'm' : '—';
     const qCount   = (() => { try { return (JSON.parse(lastSess?.QuestionsJSON || '[]')).length; } catch(e) { return '—'; } })();
     // Milestones: find sessions where IsMilestone is true
@@ -1612,6 +1667,170 @@ async function exportSessions() {
     if (!res.success) { toast(res.error, 'error'); return; }
     window.open(res.url, '_blank');
     toast('Export successful!', 'success');
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// ── ARCHIVES ────────────────────────────────
+// Archiving hides someone from day-to-day lists but must never destroy their
+// record: their practice history is still the evidence of what they did.
+let _archSessions = [];
+
+async function renderStudentArchive(c) {
+  const [stuRes, clsRes, sessRes] = await Promise.all([
+    gasCall('teacher.getStudents', {}),
+    gasCall('teacher.getClasses', {}),
+    gasCall('teacher.getAllSessions', {})
+  ]);
+  _teacherClasses = clsRes.data || [];
+  _archSessions   = sessRes.data || [];
+  const archived  = (stuRes.data || []).filter(s => s.Status === 'Archived');
+
+  const byClass = {};
+  archived.forEach(s => {
+    const k = s.ClassID || '—';
+    (byClass[k] = byClass[k] || []).push(s);
+  });
+
+  c.innerHTML = `
+    <h2 class="dash-title">🗄️ Student Archive</h2>
+    <p style="font-size:13px;color:var(--g600);margin-bottom:18px">
+      Archived students cannot sign in, but everything they practised is kept. Restore anyone to give their account back.
+    </p>
+    ${archived.length ? Object.keys(byClass).map(cid => `
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div style="font-weight:700">${classNameOf(cid)}</div>
+            <div style="font-size:11px;color:var(--g400);font-family:var(--fm)">${cid}</div>
+          </div>
+          <span class="badge badge-grey">${byClass[cid].length} archived</span>
+        </div>
+        <div class="tbl-wrap">
+          <table class="tbl">
+            <thead><tr><th>Student ID</th><th>Full Name</th><th>Email</th><th>Sessions</th><th></th></tr></thead>
+            <tbody>
+              ${byClass[cid].map(s => {
+                const n = _archSessions.filter(x => String(x.StudentID) === String(s.StudentID)).length;
+                return `<tr>
+                  <td style="font-family:var(--fm);font-size:12px">${s.StudentID}</td>
+                  <td style="font-weight:600">${s.FullName}</td>
+                  <td style="font-size:12px">${s.Email || '—'}</td>
+                  <td><span class="badge ${n ? 'badge-blue' : 'badge-grey'}">${n}</span></td>
+                  <td style="display:flex;gap:6px">
+                    ${n ? `<button class="btn btn-outline btn-sm" onclick="showArchivedHistory('${s.StudentID}','${String(s.FullName).replace(/'/g,'&#39;')}')">View history</button>` : ''}
+                    <button class="btn btn-green btn-sm" onclick="restoreStudent('${s.StudentID}','${String(s.FullName).replace(/'/g,'&#39;')}','${s.ClassID||''}')">Restore</button>
+                  </td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>`).join('') : '<div class="empty">No archived students</div>'}`;
+}
+
+function showArchivedHistory(studentId, name) {
+  const mine = _archSessions.filter(s => String(s.StudentID) === String(studentId));
+  const byTopic = {};
+  mine.forEach(s => (byTopic[s.Topic || '—'] = byTopic[s.Topic || '—'] || []).push(s));
+
+  document.getElementById('dm-title').textContent = name + ' — archived practice history';
+  document.getElementById('dm-meta').textContent = mine.length + ' sessions across ' + Object.keys(byTopic).length + ' topics';
+  document.getElementById('dm-body').innerHTML = '<div style="padding:18px">' + Object.keys(byTopic).map(topic => {
+    const list = byTopic[topic].slice().sort((a,b) => String(a.StartTime||'').localeCompare(String(b.StartTime||'')));
+    const graded = list.filter(x => x.Overall);
+    return `<div class="card">
+      <div class="card-header">
+        <div><span style="font-weight:700">${topic}</span> <span class="badge badge-blue" style="margin-left:6px">${list[0]?.Part||'—'}</span></div>
+        <span class="badge badge-grey">${list.length} attempts</span>
+      </div>
+      ${graded.length ? `<div style="display:flex;gap:6px;flex-wrap:wrap">${graded.map(m => `
+        <span style="font-size:12px;background:var(--g100);border-radius:8px;padding:4px 10px">
+          Attempt ${m.AttemptNo}: <strong style="color:${scoreColor(m.Overall)}">${m.Overall}</strong>
+        </span>`).join('')}</div>` : '<div style="font-size:12px;color:var(--g400)">No graded attempts</div>'}
+      <div style="font-size:11px;color:var(--g400);margin-top:8px">
+        First ${fmtDT(list[0]?.StartTime)} · Latest ${fmtDT(list[list.length-1]?.StartTime)}
+      </div>
+    </div>`;
+  }).join('') + '</div>';
+  openModal('detail-modal');
+}
+
+async function restoreStudent(studentId, name, classId) {
+  if (!confirm('Restore ' + name + '? They will be able to sign in again.')) return;
+  try {
+    const res = await gasCall('teacher.activateUser', { studentId, status: 'Active', classId });
+    if (!res.success) { toast(res.error, 'error'); return; }
+    toast(name + ' restored', 'success');
+    teacherTab('studentArchive');
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function renderClassArchive(c) {
+  const [clsRes, stuRes, sessRes] = await Promise.all([
+    gasCall('teacher.getClasses', {}),
+    gasCall('teacher.getStudents', {}),
+    gasCall('teacher.getAllSessions', {})
+  ]);
+  const all = clsRes.data || [];
+  _teacherClasses = all;
+  const students = stuRes.data || [];
+  const sessions = sessRes.data || [];
+  const archived = all.filter(cl => cl.Status === 'Archived');
+
+  c.innerHTML = `
+    <h2 class="dash-title">📦 Class Archive</h2>
+    <p style="font-size:13px;color:var(--g600);margin-bottom:18px">
+      An archived class stops accepting new registrations. Its students keep their accounts and all practice history stays readable here.
+    </p>
+    ${archived.length ? archived.map(cl => {
+      const cid  = cl.ClassID;
+      const mem  = students.filter(s => String(s.ClassID||'').toUpperCase() === String(cid).toUpperCase());
+      const sess = sessions.filter(s => String(s.ClassID||'').toUpperCase() === String(cid).toUpperCase());
+      const graded = sess.filter(s => s.Overall);
+      const avg = graded.length
+        ? Math.round(graded.reduce((a,s) => a + (parseFloat(s.Overall)||0), 0) / graded.length * 10) / 10
+        : null;
+      return `<div class="card">
+        <div class="card-header">
+          <div>
+            <div style="font-weight:700;font-size:1rem">${cl.ClassName || cid}</div>
+            <div style="font-size:11px;color:var(--g400)">
+              <span style="font-family:var(--fm)">${cid}</span>
+              ${[cl.AcademicYear, cl.Semester].filter(Boolean).length ? ' · ' + [cl.AcademicYear, cl.Semester].filter(Boolean).join(' · ') : ''}
+            </div>
+          </div>
+          <span class="badge badge-grey">Archived</span>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:10px;margin-bottom:12px">
+          <div style="background:var(--g50);border:1px solid var(--g100);border-radius:10px;padding:10px;text-align:center">
+            <div style="font-family:var(--fm);font-size:1.3rem;font-weight:800">${mem.length}</div>
+            <div style="font-size:10px;color:var(--g600);text-transform:uppercase;letter-spacing:.05em;font-weight:600">Students</div>
+          </div>
+          <div style="background:var(--g50);border:1px solid var(--g100);border-radius:10px;padding:10px;text-align:center">
+            <div style="font-family:var(--fm);font-size:1.3rem;font-weight:800">${sess.length}</div>
+            <div style="font-size:10px;color:var(--g600);text-transform:uppercase;letter-spacing:.05em;font-weight:600">Sessions</div>
+          </div>
+          <div style="background:var(--g50);border:1px solid var(--g100);border-radius:10px;padding:10px;text-align:center">
+            <div style="font-family:var(--fm);font-size:1.3rem;font-weight:800;color:${avg ? scoreColor(avg) : 'var(--g400)'}">${avg ?? '—'}</div>
+            <div style="font-size:10px;color:var(--g600);text-transform:uppercase;letter-spacing:.05em;font-weight:600">Avg band</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-outline btn-sm" onclick="_progFilter='${cid}';teacherTab('progress')">View study progress</button>
+          <button class="btn btn-green btn-sm" onclick="restoreClass('${cid}','${String(cl.ClassName||cid).replace(/'/g,'&#39;')}')">Reopen class</button>
+        </div>
+      </div>`;
+    }).join('') : '<div class="empty">No archived classes</div>'}`;
+}
+
+async function restoreClass(classId, className) {
+  if (!confirm('Reopen "' + className + '"?\n\nThe class code will accept new registrations again.')) return;
+  try {
+    const res = await gasCall('teacher.setClassStatus', { classId, status: 'Active' });
+    if (!res.success) { toast(res.error, 'error'); return; }
+    toast('Class reopened', 'success');
+    _classroomVisited = false;
+    teacherTab('classArchive');
   } catch(e) { toast(e.message, 'error'); }
 }
 
@@ -2020,10 +2239,12 @@ async function launch(mode, qs, retryCount) {
     const chk = await gasCall('speak.findExisting', { topic: A.topic, assignId: A.assignId || '' });
     if (chk.success && chk.exists) {
       A.retryCount = chk.attemptCount;
+      A.pendingMilestone = !!chk.pendingMilestone;
     } else {
       A.retryCount = retryCount || 0;
+      A.pendingMilestone = false;
     }
-  } catch(e) { A.retryCount = retryCount || 0; }
+  } catch(e) { A.retryCount = retryCount || 0; A.pendingMilestone = false; }
 
   A.mode = mode;
   A.qs   = qs;
@@ -2332,33 +2553,78 @@ async function confirmEndSession() {
 // ════════════════════════════════════════════
 // GRADING
 // ════════════════════════════════════════════
-const GM = 'gemini-2.5-flash-lite';
-const GM2= 'gemini-2.5-flash';
+// Current stable strings (Google model docs, July 2026).
+const GM  = 'gemini-3.5-flash-lite';
+const GM2 = 'gemini-3.6-flash';
 
-async function gemFetch(sys, usr, mx, attempt, jsonMode) {
-  mx = mx || 1024; attempt = attempt || 1;
-  if (!A.gkey) throw new Error('Not set Gemini API key');
-  const gc = { maxOutputTokens: mx, temperature: 0.45 };
+function thinkingCfgFor(model) {
+  // Grading four IELTS answers against band descriptors is exactly the kind of
+  // task reasoning helps with, and it runs only on milestone attempts.
+  if (/^gemini-3/.test(model))   return { thinkingLevel: 'medium' };  // Gemini 3.x
+  if (/^gemini-2\.5/.test(model)) return { thinkingBudget: -1 };       // 2.5: dynamic
+  return null;
+}
+
+// Grading only runs on milestone attempts — four times in ten sessions — so
+// there is nothing to gain by rationing tokens here. maxOutputTokens is left
+// unset so the model uses its own ceiling, and thinking is given real room:
+// a capped budget was what produced empty replies and, previously, invented
+// band scores.
+async function gemFetch(sys, usr, attempt, jsonMode, noThinkCfg) {
+  attempt = attempt || 1;
+  if (!A.gkey) throw new Error('No Gemini API key set');
+
+  const model = attempt === 1 ? GM : GM2;
+  const gc = { temperature: 0.45 };            // no maxOutputTokens: use model max
   if (jsonMode) gc.responseMimeType = 'application/json';
+  const tc = noThinkCfg ? null : thinkingCfgFor(model);
+  if (tc) gc.thinkingConfig = tc;
+
   const body = { contents: [{ parts: [{ text: usr }] }], generationConfig: gc };
   if (sys) body.systemInstruction = { parts: [{ text: sys }] };
-  const model = attempt === 1 ? GM : GM2;
-  const url   = 'https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent?key=' + A.gkey;
+
+  const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent?key=' + A.gkey;
   const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+
   if (!r.ok) {
     let msg = 'Gemini error ' + r.status;
-    try { const ej = await r.json(); msg = ej.error?.message?.split('\n')[0]?.substring(0, 120) || msg; } catch(_) {}
+    try { const ej = await r.json(); msg = ej.error?.message?.split('\n')[0] || msg; } catch (_) {}
+
+    // Thinking parameters differ across model generations. If this one rejects
+    // the field, retry without it rather than failing the whole grading run.
+    if (r.status === 400 && !noThinkCfg && /thinking/i.test(msg))
+      return gemFetch(sys, usr, attempt, jsonMode, true);
+
+    if (r.status === 404 && attempt === 1)
+      return gemFetch(sys, usr, 2, jsonMode, noThinkCfg);
+
     if (r.status === 429 && attempt <= 2) {
       const el = document.getElementById('g-title');
-      for (let i = 20; i > 0; i--) { if (el) el.textContent = '⏳ Rate limit — retrying in ' + i + 's…'; await new Promise(res => setTimeout(res, 1000)); }
-      return gemFetch(sys, usr, mx, attempt + 1, jsonMode);
+      for (let i = 20; i > 0; i--) {
+        if (el) el.textContent = 'Rate limit reached — retrying in ' + i + 's…';
+        await new Promise(res => setTimeout(res, 1000));
+      }
+      return gemFetch(sys, usr, attempt + 1, jsonMode, noThinkCfg);
     }
-    throw new Error(msg);
+    throw new Error(msg + '  (model: ' + model + ')');
   }
-  const j = await r.json();
-  const text = j.candidates?.[0]?.content?.parts?.[0]?.text || '';
-  if (!text) throw new Error('Gemini returned an empty response');
-  return text.trim();
+
+  const j    = await r.json();
+  const cand = j.candidates?.[0];
+  const text = (cand?.content?.parts || []).map(p => p.text || '').join('').trim();
+
+  if (!text) {
+    const why = cand?.finishReason || 'unknown';
+    // Nothing is capping the output any more, so hitting the ceiling means the
+    // request itself is too large — raising a limit would not help.
+    if (why === 'MAX_TOKENS')
+      throw new Error('The reply exceeded the model output limit. Try grading fewer questions in one session.');
+    if (why === 'SAFETY' || why === 'PROHIBITED_CONTENT')
+      throw new Error('Gemini blocked this response (' + why + '). Try rephrasing the questions.');
+    if (attempt === 1) return gemFetch(sys, usr, 2, jsonMode, noThinkCfg);
+    throw new Error('Gemini returned nothing (finishReason: ' + why + ', model: ' + model + ')');
+  }
+  return text;
 }
 
 function gStep(txt, done) {
@@ -2380,15 +2646,6 @@ function localMetrics(text) {
   const uniq  = new Set(ws);
   const fillers = String(text||'').match(FILLER_RE) || [];
   return { wordCount: ws.length, uniqueWords: uniq.size, ttr: ws.length ? Math.round(uniq.size/ws.length*100)/100 : 0, fillerCount: fillers.length };
-}
-function estimateBand(m, answerLen) {
-  const wc = m.wordCount || 0;
-  let base = 5.0;
-  if (wc >= 80) base = 6.0;
-  if (wc >= 120) base = 6.5;
-  if (wc >= 60 && m.ttr >= 0.5) base = Math.max(base, 5.5);
-  if (m.fillerCount > wc * 0.1) base = Math.max(4.0, base - 0.5);
-  return { overall: base, scores: { fluency:{ score:base }, lexical:{ score: wc>=80?6:5 }, grammar:{ score: base }, pronunciation:{ score: base } } };
 }
 
 function buildGradePrompt(qaBlock, n, evidence, part) {
@@ -2537,10 +2794,10 @@ async function finishSession() {
 
     // Determine attempt number
     const attemptNo = A.retryCount + 1;
-    const shouldGrade = isMilestone(attemptNo);
+    let shouldGrade = isMilestone(attemptNo) || A.pendingMilestone;
 
     let rpt = null;
-    let gradeFailed = false;
+    let gradeFailed = false, gradeError = '';
 
     if (shouldGrade) {
       gStep('Attempt ' + attemptNo + ' — milestone, grading now…');
@@ -2549,8 +2806,10 @@ async function finishSession() {
           const kw = (r.keywords || []).join(', ');
           return `Q${i+1}: "${r.question}"\nA${i+1}: "${r.studentAnswer}"${kw ? '\nKeywords: ' + kw : ''}`;
         }).join('\n\n');
-        const cap = Math.min(900 * answered.length + 700, 8192);
-        const rawGrade = await gemFetch('IELTS Speaking examiner. Return ONLY valid JSON.', buildGradePrompt(qaBlock, answered.length, A.langEvidence, A.mode), cap, 1, true);
+        const rawGrade = await gemFetch(
+          'IELTS Speaking examiner. Return ONLY valid JSON.',
+          buildGradePrompt(qaBlock, answered.length, A.langEvidence, A.mode),
+          1, true);
         const parsed = _parseGradeJSON(rawGrade);
         if (!parsed?.qs) throw new Error('Invalid grading JSON');
         parsed.qs.forEach((g, i) => {
@@ -2565,18 +2824,15 @@ async function finishSession() {
       } catch(eg) {
         console.warn('Grade failed:', eg);
         gradeFailed = true;
-        toast('AI grading failed — using estimated scores', 'error', 5000);
+        gradeError = eg.message || String(eg);
+        shouldGrade = false;   // record the attempt, but with no scores attached
+        toast('AI grading failed — the attempt was saved without a score', 'error', 8000);
       }
     } else {
       gStep('Attempt ' + attemptNo + ' recorded (graded at attempts 3, 5, 8, 10)', true);
     }
 
-    // Fallback estimates
-    answered.forEach(r => {
-      if (shouldGrade && !r.overall) { const est = estimateBand(r._m); Object.assign(r, est); r._estimated = true; }
-    });
-
-    gStep(gradeFailed ? '⚠ Using estimated scores' : shouldGrade ? 'Grading complete ✓' : 'Saving…', true);
+    gStep(gradeFailed ? 'Grading unavailable — saving the attempt unscored' : shouldGrade ? 'Grading complete ✓' : 'Saving…', true);
 
     // Upload audio
     gStep('Saving audio…');
@@ -2607,6 +2863,7 @@ async function finishSession() {
       retryCount: A.retryCount,
       attemptNo,
       isMilestone: shouldGrade,
+      gradeError: gradeError || '',
       overall: shouldGrade ? overall : '',
       fc: shouldGrade ? fc : '',
       lr: shouldGrade ? lr : '',
@@ -2629,7 +2886,7 @@ async function finishSession() {
     A.retryCount = attemptNo;
     gStep('Saved ✓', true);
 
-    setTimeout(() => renderResults(answered, rpt, shouldGrade, attemptNo, overall, fc, lr, gr, p), 400);
+    setTimeout(() => renderResults(answered, rpt, shouldGrade, attemptNo, overall, fc, lr, gr, p, gradeError), 400);
   } catch(e) {
     gStep('Error: ' + e.message);
     toast('Error: ' + e.message, 'error', 6000);
@@ -2659,7 +2916,6 @@ function buildReport(answered, r, isMilestone, attemptNo) {
     return lines.join('\n');
   }
   lines.push('### 📝 IELTS SPEAKING RESULT');
-  if (answered.some(x => x._estimated)) lines.push('> ⚠️ Some scores are estimated (AI grading failed). Re-practice to get accurate graded feedback.');
   if (r) {
     if (r.good?.length) lines.push('- **Good phrases:** ' + r.good.join(' · '));
     if (r.weak)         lines.push('- **Area to improve:** ' + r.weak);
@@ -2672,12 +2928,18 @@ function buildReport(answered, r, isMilestone, attemptNo) {
 // ════════════════════════════════════════════
 // RESULTS RENDER
 // ════════════════════════════════════════════
-function renderResults(answered, rpt, isMilestone, attemptNo, overall, fc, lr, gr, p) {
+function renderResults(answered, rpt, isMilestone, attemptNo, overall, fc, lr, gr, p, gradeError) {
   SS('S-results');
   const main = document.getElementById('results-main');
   const next = nextMilestone(attemptNo);
 
   main.innerHTML = `
+    ${gradeError ? `<div class="card" style="background:var(--red-l);border-color:var(--red)">
+      <div style="font-weight:700;color:var(--red-d)">⚠️ AI grading did not run for this attempt</div>
+      <p style="margin-top:6px;font-size:13px;color:var(--red-d)">Your answers and the measurements below were saved, but no band score was given — showing an invented number would be worse than showing none.</p>
+      <div style="margin-top:8px;font-family:var(--fm);font-size:11px;background:#fff;border-radius:6px;padding:8px 10px;color:var(--g700);word-break:break-word">${gradeError}</div>
+      <p style="margin-top:8px;font-size:12px;color:var(--red-d)">Check your Gemini API key in Practice, then try this attempt again — it will not count as a wasted milestone.</p>
+    </div>` : ''}
     ${isMilestone ? `
       <div class="res-hero">
         <div style="font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.35);margin-bottom:6px">Attempt ${attemptNo} · Overall</div>
@@ -2717,7 +2979,7 @@ function renderResults(answered, rpt, isMilestone, attemptNo, overall, fc, lr, g
               ${[['Fluency & Coherence','fluency'],['Lexical Resource','lexical'],['Grammatical Range','grammar'],['Pronunciation','pronunciation']].map(([n,k])=>{
                 const v = r.scores?.[k]?.score || '—';
                 const cls = v >= 6 ? 'hi' : v >= 5 ? 'mid' : 'lo';
-                return `<div class="score-row"><div class="score-badge ${cls}">${v}</div><div><div class="score-nm">${n}</div>${r._estimated?'<div class="score-cm">estimated</div>':''}</div></div>`;
+                return `<div class="score-row"><div class="score-badge ${cls}">${v}</div><div><div class="score-nm">${n}</div></div></div>`;
               }).join('')}
             </div>
             ${r.audioUrl ? `<audio controls src="${r.audioUrl}" style="width:100%;margin-top:10px;border-radius:8px"></audio>` : ''}
