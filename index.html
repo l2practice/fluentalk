@@ -463,9 +463,9 @@ textarea.form-input{resize:vertical;min-height:72px;line-height:1.6}
             <input class="form-input" id="reg-id" placeholder="SE123456">
           </div>
           <div class="form-group">
-            <label class="form-label">Class ID</label>
-            <input class="form-input" id="reg-class" placeholder="IELTS41">
-            <div class="form-hint">Provided by your teacher</div>
+            <label class="form-label">Class ID *</label>
+            <input class="form-input" id="reg-class" placeholder="IELTS41" style="text-transform:uppercase">
+            <div class="form-hint">Ask your teacher for this</div>
           </div>
         </div>
         <div class="form-group">
@@ -492,7 +492,7 @@ textarea.form-input{resize:vertical;min-height:72px;line-height:1.6}
         </div>
         <button class="btn-signin" onclick="doRegister()">Create Account →</button>
         <p style="font-size:11px;color:var(--g400);margin-top:12px;text-align:center;line-height:1.6">
-          Your account needs to be activated by your teacher before you can sign in.
+          Enter a valid Class ID and you can sign in straight away.
         </p>
       </div>
     </div>
@@ -697,7 +697,7 @@ textarea.form-input{resize:vertical;min-height:72px;line-height:1.6}
     <div class="modal-body">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
         <div class="form-group"><label class="form-label">Student ID *</label><input class="form-input" id="as-id" placeholder="SE123456"></div>
-        <div class="form-group"><label class="form-label">Class ID</label><input class="form-input" id="as-class" placeholder="IELTS41"></div>
+        <div class="form-group"><label class="form-label">Class *</label><select class="form-input form-select" id="as-class"></select></div>
       </div>
       <div class="form-group"><label class="form-label">Full Name *</label><input class="form-input" id="as-name"></div>
       <div class="form-group"><label class="form-label">Email</label><input class="form-input" id="as-email" type="email"></div>
@@ -719,13 +719,15 @@ textarea.form-input{resize:vertical;min-height:72px;line-height:1.6}
       <button class="btn btn-ghost btn-sm" onclick="closeModal('create-class-modal')">✕</button>
     </div>
     <div class="modal-body">
-      <div class="form-group"><label class="form-label">Class ID * <small style="color:var(--g400)">(students use this when registering)</small></label><input class="form-input" id="cc-id" placeholder="e.g. IELTS41" style="text-transform:uppercase"></div>
-      <div class="form-group"><label class="form-label">Class Name</label><input class="form-input" id="cc-name" placeholder="e.g. IELTS Speaking Class 41"></div>
+      <div class="form-group"><label class="form-label">Class Name *</label><input class="form-input" id="cc-name" placeholder="e.g. IELTS Speaking Class 41"></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
         <div class="form-group"><label class="form-label">Academic Year</label><input class="form-input" id="cc-year" placeholder="2025-2026"></div>
         <div class="form-group"><label class="form-label">Semester</label><input class="form-input" id="cc-sem" placeholder="HK1"></div>
       </div>
       <div class="form-group"><label class="form-label">Teacher Name</label><input class="form-input" id="cc-teacher" placeholder="Teacher name"></div>
+      <div style="background:var(--blue-l);border:1px solid var(--blue-m);border-radius:var(--r);padding:11px 14px;font-size:12px;color:var(--blue-d);line-height:1.6">
+        A unique <strong>class code</strong> will be generated automatically. Share it with your students — anyone who enters it joins this class instantly.
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal('create-class-modal')">Cancel</button>
@@ -755,8 +757,8 @@ textarea.form-input{resize:vertical;min-height:72px;line-height:1.6}
         <div class="form-group"><label class="form-label">Deadline</label><input class="form-input" id="asn-deadline" type="date"></div>
       </div>
       <div class="form-group">
-        <label class="form-label">Assigned Classes <small style="color:var(--g400)">(comma-separated, or ALL)</small></label>
-        <input class="form-input" id="asn-classes" placeholder="IELTS41, IELTS42" style="text-transform:uppercase">
+        <label class="form-label">Assign to *</label>
+        <div id="asn-class-list" style="border:1.5px solid var(--g200);border-radius:var(--r);padding:10px 12px;max-height:150px;overflow-y:auto;background:#fff"></div>
       </div>
       <div id="asn-questions-wrap">
         <label class="form-label" style="margin-top:4px">Questions *</label>
@@ -797,18 +799,39 @@ textarea.form-input{resize:vertical;min-height:72px;line-height:1.6}
         <label class="form-label">Status</label>
         <select class="form-input form-select" id="act-status">
           <option value="Active">Active</option>
-          <option value="Pending">Pending</option>
-          <option value="Archived">Archived</option>
+          <option value="Archived">Archived (blocked from signing in)</option>
         </select>
       </div>
       <div class="form-group">
         <label class="form-label">Assign to Class</label>
-        <input class="form-input" id="act-class" placeholder="ClassID" style="text-transform:uppercase">
+        <select class="form-input form-select" id="act-class"></select>
       </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal('activate-modal')">Cancel</button>
       <button class="btn btn-green" onclick="doActivate()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Class Code Result -->
+<div class="modal-overlay" id="class-code-modal">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header">
+      <span class="modal-title">✅ Class created</span>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('class-code-modal')">✕</button>
+    </div>
+    <div class="modal-body" style="text-align:center">
+      <div style="font-size:13px;color:var(--g600);margin-bottom:6px" id="ccm-name"></div>
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--g400);margin-bottom:10px">Class Code</div>
+      <div id="ccm-code" style="font-family:var(--fm);font-size:2.4rem;font-weight:800;letter-spacing:.12em;color:var(--blue);background:var(--blue-l);border:2px dashed var(--blue-m);border-radius:var(--rl);padding:16px 10px;user-select:all"></div>
+      <p style="font-size:12px;color:var(--g600);margin-top:14px;line-height:1.7">
+        Give this code to your students. When they register with it, they join this class straight away.
+      </p>
+    </div>
+    <div class="modal-footer" style="justify-content:center">
+      <button class="btn btn-primary" onclick="copyClassCode()">📋 Copy code</button>
+      <button class="btn btn-outline" onclick="closeModal('class-code-modal')">Done</button>
     </div>
   </div>
 </div>
@@ -937,13 +960,15 @@ async function doRegister() {
   const classId   = document.getElementById('reg-class').value.trim();
   const dob       = document.getElementById('reg-dob').value;
   const phone     = document.getElementById('reg-phone').value.trim();
-  if (!studentId || !fullName || !email || !password) { toast('Please fill in all required fields', 'error'); return; }
+  if (!studentId || !fullName || !email || !password || !classId) { toast('Please fill in all required fields', 'error'); return; }
   if (password.length < 6) { toast('Password must be at least 6 characters', 'error'); return; }
   try {
     const res = await gasCall('auth.register', { studentId, fullName, email, password, classId: classId.toUpperCase(), dob, phone });
-    if (!res.success) { toast(res.error, 'error'); return; }
+    if (!res.success) { toast(res.error, 'error', 6000); return; }
     toast(res.message, 'success', 5000);
     switchAuthTab('login');
+    document.getElementById('login-email').value = email;
+    document.getElementById('login-pass').focus();
   } catch(e) { toast('Error: ' + e.message, 'error'); }
 }
 
@@ -1068,6 +1093,8 @@ async function renderTeacherOverview(c) {
     </div>`;
 }
 
+let _classroomVisited = false;
+
 async function renderTeacherClassroom(c) {
   const [clRes, stuRes] = await Promise.all([
     gasCall('teacher.getClasses'),
@@ -1075,7 +1102,14 @@ async function renderTeacherClassroom(c) {
   ]);
   _teacherClasses   = (clRes.data || []).filter(c => c.Status !== 'Archived');
   _teacherStudents  = stuRes.data || [];
-  _activeClass = _activeClass || (_teacherClasses[0]?.ClassID || '');
+  // Preselect a class the first time only — otherwise the "All" filter would be
+  // reset back to the first class on every re-render.
+  if (!_classroomVisited) {
+    _classroomVisited = true;
+    _activeClass = _teacherClasses[0]?.ClassID || '';
+  }
+  // Selected class may have just been archived
+  if (_activeClass && !_teacherClasses.some(cl => cl.ClassID === _activeClass)) _activeClass = '';
   renderClassroomUI(c);
 }
 
@@ -1083,29 +1117,33 @@ function renderClassroomUI(c) {
   const students = _teacherStudents.filter(s =>
     !_activeClass || String(s.ClassID||'').toUpperCase() === _activeClass.toUpperCase()
   );
-  const pending = students.filter(s => s.Status === 'Pending');
   c.innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px">
       <h2 style="font-size:1.3rem">🏫 Classroom</h2>
       <div style="display:flex;gap:8px">
         <button class="btn btn-outline btn-sm" onclick="openModal('create-class-modal')">+ New Class</button>
-        <button class="btn btn-primary btn-sm" onclick="openModal('add-student-modal')">+ Add Student</button>
+        <button class="btn btn-primary btn-sm" onclick="openAddStudent()">+ Add Student</button>
       </div>
     </div>
-    ${pending.length ? `<div class="card" style="border-color:var(--gold);background:var(--gold-l)">
-      <div style="font-weight:700;color:var(--gold);margin-bottom:10px">⏳ ${pending.length} students pending activation</div>
-      ${pending.map(s => `
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(0,0,0,.06)">
-          <div><div style="font-weight:600">${s.FullName}</div><div style="font-size:11px;color:var(--g600)">${s.StudentID} · ${s.Email} · Class: ${s.ClassID||'—'}</div></div>
-          <button class="btn btn-green btn-sm" onclick="showActivate('${s.StudentID}','${s.FullName}','${s.ClassID||''}')">Activate</button>
-        </div>`).join('')}
-    </div>` : ''}
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
       <button class="btn ${!_activeClass?'btn-primary':'btn-outline'} btn-sm" onclick="_activeClass='';teacherTab('classroom')">All</button>
       ${_teacherClasses.map(cl => `
-        <button class="btn ${_activeClass===cl.ClassID?'btn-primary':'btn-outline'} btn-sm" onclick="_activeClass='${cl.ClassID}';teacherTab('classroom')">${cl.ClassID} <span class="badge badge-grey" style="margin-left:4px">${cl.StudentCount||0}</span></button>
+        <button class="btn ${_activeClass===cl.ClassID?'btn-primary':'btn-outline'} btn-sm" onclick="_activeClass='${cl.ClassID}';teacherTab('classroom')">${cl.ClassName||cl.ClassID} <span class="badge badge-grey" style="margin-left:4px">${cl.StudentCount||0}</span></button>
       `).join('')}
     </div>
+    ${(() => {
+      const cur = _teacherClasses.find(cl => cl.ClassID === _activeClass);
+      if (!cur) return '';
+      return `<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;background:var(--blue-l);border:1px solid var(--blue-m);border-radius:var(--rl);padding:12px 16px;margin-bottom:16px">
+        <div>
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--g600)">Class Code</div>
+          <div style="font-family:var(--fm);font-size:1.3rem;font-weight:800;letter-spacing:.1em;color:var(--blue-d);user-select:all">${cur.ClassID}</div>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="copyText('${cur.ClassID}')">📋 Copy</button>
+        <div style="font-size:12px;color:var(--g600);flex:1;min-width:180px">Students who register with this code join <strong>${cur.ClassName||cur.ClassID}</strong> immediately.</div>
+        <button class="btn btn-outline btn-sm" style="color:var(--red)" onclick="archiveClass('${cur.ClassID}','${String(cur.ClassName||cur.ClassID).replace(/'/g,'&#39;')}')">Archive class</button>
+      </div>`;
+    })()}
     <div class="tbl-wrap">
       <table class="tbl">
         <thead><tr>
@@ -1129,10 +1167,25 @@ function renderClassroomUI(c) {
     </div>`;
 }
 
+function classOptions(selected, includeBlank) {
+  const opts = _teacherClasses.map(cl =>
+    `<option value="${cl.ClassID}" ${String(selected||'') === cl.ClassID ? 'selected' : ''}>${cl.ClassName || cl.ClassID} — ${cl.ClassID}</option>`
+  ).join('');
+  return (includeBlank ? '<option value="">— No class —</option>' : '') + opts;
+}
+
+function openAddStudent() {
+  const sel = document.getElementById('as-class');
+  if (!_teacherClasses.length) { toast('Create a class first', 'error'); return; }
+  sel.innerHTML = classOptions(_activeClass, false);
+  ['as-id','as-name','as-email','as-phone'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  openModal('add-student-modal');
+}
+
 function showActivate(studentId, fullName, classId) {
   document.getElementById('act-title').textContent = 'Edit: ' + fullName;
   document.getElementById('act-status').value = 'Active';
-  document.getElementById('act-class').value = classId || '';
+  document.getElementById('act-class').innerHTML = classOptions(classId, true);
   document.getElementById('activate-modal')._studentId = studentId;
   openModal('activate-modal');
 }
@@ -1152,28 +1205,66 @@ async function doActivate() {
 }
 
 async function archiveStudent(studentId) {
-  if (!confirm('Archive this student?')) return;
+  if (!confirm('Archive this student? They will no longer be able to sign in.')) return;
   try {
     await gasCall('teacher.archiveStudent', { studentId });
-    toast('Archived successfully', 'success');
+    toast('Student archived', 'success');
+    teacherTab('classroom');
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function archiveClass(classId, className) {
+  if (!confirm('Archive "' + className + '"?\n\nThe class code will stop working for new registrations. Existing students keep their accounts and history.')) return;
+  try {
+    const res = await gasCall('teacher.archiveClass', { classId });
+    if (!res.success) { toast(res.error, 'error'); return; }
+    toast('Class archived', 'success');
+    _activeClass = '';
     teacherTab('classroom');
   } catch(e) { toast(e.message, 'error'); }
 }
 
 async function doCreateClass() {
-  const classId     = document.getElementById('cc-id').value.trim().toUpperCase();
-  const className   = document.getElementById('cc-name').value.trim() || classId;
+  const className   = document.getElementById('cc-name').value.trim();
   const academicYear= document.getElementById('cc-year').value.trim();
   const semester    = document.getElementById('cc-sem').value.trim();
   const teacherName = document.getElementById('cc-teacher').value.trim();
-  if (!classId) { toast('Class ID cannot be empty', 'error'); return; }
+  if (!className) { toast('Please enter a class name', 'error'); return; }
   try {
-    const res = await gasCall('teacher.createClass', { classId, className, academicYear, semester, teacherName });
+    const res = await gasCall('teacher.createClass', { className, academicYear, semester, teacherName });
     if (!res.success) { toast(res.error, 'error'); return; }
-    toast('Class ' + classId + ' created successfully!', 'success');
     closeModal('create-class-modal');
+    ['cc-name','cc-year','cc-sem','cc-teacher'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    document.getElementById('ccm-name').textContent = res.className || className;
+    document.getElementById('ccm-code').textContent = res.classId;
+    openModal('class-code-modal');
     teacherTab('classroom');
   } catch(e) { toast(e.message, 'error'); }
+}
+
+function copyClassCode() {
+  const code = document.getElementById('ccm-code').textContent.trim();
+  copyText(code);
+}
+
+function copyText(txt) {
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(txt)
+      .then(() => toast('Copied: ' + txt, 'success'))
+      .catch(() => fallbackCopy(txt));
+  } else fallbackCopy(txt);
+}
+
+function fallbackCopy(txt) {
+  const ta = document.createElement('textarea');
+  ta.value = txt;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand('copy'); toast('Copied: ' + txt, 'success'); }
+  catch(_) { toast('Copy failed — code is ' + txt, 'info', 6000); }
+  ta.remove();
 }
 
 async function doAddStudent() {
@@ -1232,7 +1323,7 @@ async function renderTeacherHomework(c) {
     gasCall('teacher.getClasses')
   ]);
   _teacherAssignments = asnRes.data || [];
-  const classes = (clsRes.data || []).filter(c => c.Status !== 'Archived');
+  _teacherClasses = (clsRes.data || []).filter(c => c.Status !== 'Archived');
   c.innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
       <h2 style="font-size:1.3rem">📚 Homework Book</h2>
@@ -1246,7 +1337,7 @@ async function renderTeacherHomework(c) {
             <tr>
               <td style="font-weight:600">${a.Title||'—'}</td>
               <td><span class="badge badge-blue">${a.Part||'—'}</span></td>
-              <td style="font-size:12px">${String(a.AssignedClasses||'').replace(/,/g,', ')}</td>
+              <td style="font-size:12px">${fmtClassList(a.AssignedClasses)}</td>
               <td style="font-size:12px">${a.Deadline ? new Date(a.Deadline).toLocaleDateString('vi-VN') : '—'}</td>
               <td><span class="badge ${a.Status==='Active'?'badge-green':'badge-grey'}">${a.Status||'—'}</span></td>
               <td>
@@ -1259,17 +1350,36 @@ async function renderTeacherHomework(c) {
 }
 
 function openCreateAsn() {
+  if (!_teacherClasses.length) { toast('Create a class first', 'error'); return; }
   _asnQCount = 4;
+  const list = document.getElementById('asn-class-list');
+  list.innerHTML = `
+    <label style="display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer;font-size:13px;font-weight:600;border-bottom:1px solid var(--g100);margin-bottom:4px">
+      <input type="checkbox" id="asn-cls-all" onchange="asnToggleAll(this.checked)"> All classes
+    </label>
+    ${_teacherClasses.map(cl => `
+      <label style="display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer;font-size:13px">
+        <input type="checkbox" class="asn-cls" value="${cl.ClassID}" ${cl.ClassID === _activeClass ? 'checked' : ''}>
+        ${cl.ClassName || cl.ClassID} <span style="font-family:var(--fm);color:var(--g400);font-size:11px">${cl.ClassID}</span>
+      </label>`).join('')}`;
+  document.getElementById('asn-title').value = '';
+  document.getElementById('asn-deadline').value = '';
   openModal('create-asn-modal');
   setTimeout(renderAsnQuestions, 50);
+}
+
+function asnToggleAll(checked) {
+  document.querySelectorAll('.asn-cls').forEach(cb => { cb.checked = false; cb.disabled = checked; });
 }
 
 async function doCreateAssignment() {
   const title    = document.getElementById('asn-title').value.trim();
   const part     = document.getElementById('asn-part').value;
   const deadline = document.getElementById('asn-deadline').value;
-  const classes  = document.getElementById('asn-classes').value.trim().toUpperCase();
+  const allChecked = document.getElementById('asn-cls-all')?.checked;
+  const picked = Array.from(document.querySelectorAll('.asn-cls:checked')).map(cb => cb.value);
   if (!title) { toast('Please enter an assignment title', 'error'); return; }
+  if (!allChecked && !picked.length) { toast('Select at least one class', 'error'); return; }
   const questions = [];
   for (let i = 0; i < _asnQCount; i++) {
     const q = document.getElementById('asn-q-' + i);
@@ -1278,7 +1388,7 @@ async function doCreateAssignment() {
   if (part !== 'part2' && questions.length < 4) { toast('At least 4 questions required for Part 1/3', 'error'); return; }
   if (part === 'part2' && questions.length < 1) { toast('At least 1 question required for Part 2', 'error'); return; }
   try {
-    const assignedClasses = classes ? classes.split(',').map(s => s.trim()).filter(Boolean) : ['ALL'];
+    const assignedClasses = allChecked ? ['ALL'] : picked;
     const res = await gasCall('teacher.createAssignment', { title, part, questions, deadline, assignedClasses });
     if (!res.success) { toast(res.error, 'error'); return; }
     toast('Assignment created successfully!', 'success');
@@ -1319,7 +1429,7 @@ function renderProgressUI(c, classes) {
     <div class="search-row">
       <select class="search-inp" style="max-width:180px" onchange="_progFilter=this.value;renderTeacherProgress(document.getElementById('teacher-content'))">
         <option value="">All classes</option>
-        ${classes.map(cl => `<option value="${cl.ClassID}" ${_progFilter===cl.ClassID?'selected':''}>${cl.ClassID}</option>`).join('')}
+        ${classes.map(cl => `<option value="${cl.ClassID}" ${_progFilter===cl.ClassID?'selected':''}>${cl.ClassName || cl.ClassID}</option>`).join('')}
       </select>
       <input class="search-inp" placeholder="Name / ID / Topic…" id="prog-search" oninput="filterProgressTable()" style="max-width:280px">
       <span style="font-size:12px;color:var(--g600)">${rows.length} results</span>
@@ -2493,6 +2603,17 @@ document.addEventListener('keydown', e => {
 // ════════════════════════════════════════════
 // UTILITIES
 // ════════════════════════════════════════════
+function fmtClassList(raw) {
+  const s = String(raw || '').trim();
+  if (!s) return '—';
+  if (s.toUpperCase() === 'ALL') return '<span class="badge badge-blue">All classes</span>';
+  return s.split(',').map(code => {
+    const c = code.trim();
+    const cl = _teacherClasses.find(x => x.ClassID === c);
+    return `<span class="badge badge-grey" style="margin-right:4px">${cl ? (cl.ClassName || c) : c}</span>`;
+  }).join('');
+}
+
 function fmtDT(dt) {
   if (!dt) return '—';
   try {
