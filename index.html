@@ -284,11 +284,6 @@ textarea.form-input{resize:vertical;min-height:72px;line-height:1.6}
 .kw-pill{background:#fff;border:1.5px solid #FDE68A;border-radius:99px;padding:3px 12px;font-size:12px;font-weight:600;color:var(--gold-d)}
 
 /* Grading */
-.grading-wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;padding:60px 24px;text-align:center;background:var(--bg)}
-.gstep{font-size:13px;color:var(--g600);padding:5px 0;display:flex;gap:9px;align-items:center;text-align:left}
-.gstep .dot{width:20px;height:20px;border-radius:50%;background:var(--g200);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700}
-.gstep.done .dot{background:var(--green);color:#fff}
-.gstep.now .dot{background:var(--blue);color:#fff;animation:spin .7s linear infinite}
 
 /* Prep timer */
 .prep-box{background:var(--gold-l);border:1px solid #FDE68A;border-radius:var(--r);padding:10px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px}
@@ -642,19 +637,6 @@ textarea.form-input{resize:vertical;min-height:72px;line-height:1.6}
   </div>
 </div>
 
-<!-- ══════ GRADING ══════ -->
-<div class="screen" id="S-grading">
-  <div class="topbar">
-    <span class="tb-brand">Speaking <em>App</em></span>
-    <span class="tb-sub">/ AI Grading…</span>
-  </div>
-  <div class="grading-wrap">
-    <div class="spinner" style="margin-bottom:20px"></div>
-    <div style="font-size:1rem;font-weight:700;color:var(--black)" id="g-title">Grading…</div>
-    <div style="max-width:400px;margin-top:20px;width:100%" id="g-steps"></div>
-  </div>
-</div>
-
 <!-- ══════ RESULTS ══════ -->
 <div class="screen" id="S-results">
   <div class="topbar">
@@ -928,6 +910,80 @@ async function gasCall(action, payload = {}) {
 }
 
 // ════════════════════════════════════════════
+// PRACTICE PACING GATE
+//
+// Two rules stand between attempts:
+//   • a short pause after an ungraded attempt, so repetition is spaced rather
+//     than hammered out back to back;
+//   • after a graded milestone, the feedback has to be opened and acknowledged
+//     before the next attempt unlocks.
+//
+// This is a teaching nudge, not a security control: it lives in the browser
+// and a determined student could clear it. It is here to shape the default
+// behaviour of someone who is trying to learn, which is nearly everyone.
+// ════════════════════════════════════════════
+const COOLDOWN_SECONDS = 20;
+
+function gateKey() { return 'speak_gate_' + (A.user?.studentId || 'anon'); }
+
+function loadGate() {
+  try {
+    const g = JSON.parse(localStorage.getItem(gateKey()) || '{}');
+    A.cooldownUntil = g.cooldownUntil || 0;
+    A.ackRequired   = !!g.ackRequired;
+    A.ackTopic      = g.ackTopic || '';
+  } catch (_) { A.cooldownUntil = 0; A.ackRequired = false; }
+}
+
+function saveGate() {
+  try {
+    localStorage.setItem(gateKey(), JSON.stringify({
+      cooldownUntil: A.cooldownUntil || 0,
+      ackRequired:   !!A.ackRequired,
+      ackTopic:      A.ackTopic || ''
+    }));
+  } catch (_) {}
+}
+
+function startCooldown() {
+  A.cooldownUntil = Date.now() + COOLDOWN_SECONDS * 1000;
+  A.ackRequired = false;
+  saveGate();
+}
+
+function requireAcknowledgement(topic) {
+  A.ackRequired = true;
+  A.ackTopic = topic || '';
+  A.cooldownUntil = 0;
+  saveGate();
+}
+
+function clearGate() {
+  A.cooldownUntil = 0; A.ackRequired = false; A.ackTopic = ''; saveGate();
+}
+
+function cooldownLeft() {
+  return Math.max(0, Math.ceil(((A.cooldownUntil || 0) - Date.now()) / 1000));
+}
+
+// Every route into a new session goes through here, otherwise the gate is
+// theatre — a student could simply reopen the topic from My History.
+function practiceGate() {
+  if (A.ackRequired)
+    return { ok: false, reason: 'Open your feedback and confirm you have read it before the next attempt.' };
+  const left = cooldownLeft();
+  if (left > 0)
+    return { ok: false, reason: `Take a moment to think about the feedback — you can practise again in ${left}s.` };
+  return { ok: true };
+}
+
+function gateBlocked() {
+  const g = practiceGate();
+  if (!g.ok) { toast(g.reason, 'info', 5000); return true; }
+  return false;
+}
+
+// ════════════════════════════════════════════
 // MOBILE NAV
 // ════════════════════════════════════════════
 function activeSidenav() {
@@ -997,6 +1053,7 @@ async function doLogin() {
     A.user = res.user;
     A.sessionToken = res.sessionToken;
     localStorage.setItem('speak_session', JSON.stringify({ user: A.user, token: A.sessionToken }));
+    loadGate();
     toast('Welcome, ' + A.user.fullName + '!', 'success');
     SS('S-student');
     studentTab('overview');
@@ -1541,6 +1598,7 @@ function renderProgressRows(rows) {
     // Milestones: find sessions where IsMilestone is true
     const milestones = r.sessions.filter(s => String(s.IsMilestone) === 'true' && s.Overall);
     const latestBatch = milestones.slice(-4);
+    const backupGraded = r.sessions.some(x => x.GradedBy && !/^gemini/i.test(x.GradedBy));
     const scoreStr = latestBatch.length
       ? latestBatch.map(m => `<span style="color:${scoreColor(m.Overall)};font-weight:700">${m.Overall}</span>`).join(' · ')
       : '<span style="color:var(--g400);font-style:italic;font-size:12px">not graded</span>';
@@ -1562,7 +1620,7 @@ function renderProgressRows(rows) {
       <td style="text-align:center">
         <span class="badge ${count>=10?'badge-green':count>=5?'badge-gold':'badge-grey'}">${count}x</span>
       </td>
-      <td>${scoreStr}</td>
+      <td>${scoreStr}${backupGraded ? ' <span class="badge badge-gold" title="At least one attempt was marked by the backup model, so its band may not be directly comparable">backup</span>' : ''}</td>
       <td style="text-align:center">
         ${hasUngraded ? '<span title="Milestone attempts without a score" style="cursor:help">⚠️</span>' : ''}
       </td>
@@ -1894,7 +1952,7 @@ async function studentTab(tab) {
     if (tab === 'overview')  await renderStudentOverview(c);
     if (tab === 'peer')      await renderPeerComparison(c);
     if (tab === 'homework')  await renderStudentHomework(c);
-    if (tab === 'practice')  renderPracticeHome(c);
+    if (tab === 'practice')  { renderPracticeHome(c); tickGateMsg(); }
     if (tab === 'history')   await renderMyHistory(c);
   } catch(e) { c.innerHTML = '<div class="empty">Error: ' + e.message + '</div>'; }
 }
@@ -2006,8 +2064,16 @@ function renderPracticeHome(c) {
   const groqKey  = localStorage.getItem('speak_groq_key') || '';
   A.gkey    = gemKey;
   A.groqKey = groqKey;
+  const gate = practiceGate();
   c.innerHTML = `
     <h2 style="margin-bottom:16px">🎤 Practice</h2>
+    ${!gate.ok ? `<div class="card" style="border-color:${A.ackRequired ? 'var(--blue)' : 'var(--gold)'};background:${A.ackRequired ? 'var(--blue-l)' : 'var(--gold-l)'}">
+      <div style="font-weight:700;color:${A.ackRequired ? 'var(--blue-d)' : 'var(--gold-d)'}">
+        ${A.ackRequired ? '📖 Feedback waiting to be read' : '⏳ Short pause between attempts'}
+      </div>
+      <p style="margin-top:5px;font-size:13px;color:var(--g700)" id="gate-msg">${gate.reason}</p>
+      ${A.ackRequired ? `<button class="btn btn-primary btn-sm" style="margin-top:10px" onclick="SS('S-student');studentTab('history')">Go to my feedback</button>` : ''}
+    </div>` : ''}
     <div class="key-wrap">
       <div style="font-weight:700;margin-bottom:10px">🔑 Gemini API Key <small style="font-weight:400;color:var(--g600)">(for grading)</small></div>
       <div class="key-row">
@@ -2040,6 +2106,15 @@ function renderPracticeHome(c) {
     </div>`;
 }
 
+function tickGateMsg() {
+  const el = document.getElementById('gate-msg');
+  if (!el) return;
+  const g = practiceGate();
+  if (g.ok) { studentTab('practice'); return; }
+  el.textContent = g.reason;
+  setTimeout(tickGateMsg, 1000);
+}
+
 function saveKey(type) {
   const val = document.getElementById(type + '-key-inp')?.value.trim();
   if (!val) return;
@@ -2051,11 +2126,13 @@ function saveKey(type) {
 }
 
 function openFreeSetup() {
+  if (gateBlocked()) return;
   A.assignId = '';
   buildSetup('free', null);
 }
 
 function startHWPractice(assignId, title, part) {
+  if (gateBlocked()) return;
   const hw = _studentHW.find(h => h.AssignID === assignId);
   if (!hw) return;
   let questions = [];
@@ -2102,6 +2179,7 @@ async function renderMyHistory(c) {
 }
 
 function retryFromHistory(topic, assignId, part) {
+  if (gateBlocked()) return;
   if (assignId) {
     const hw = _studentHW.find(h => h.AssignID === assignId);
     if (hw) { startHWPractice(assignId, hw.Title, part); return; }
@@ -2560,8 +2638,11 @@ const GM2 = 'gemini-3.6-flash';
 function thinkingCfgFor(model) {
   // Grading four IELTS answers against band descriptors is exactly the kind of
   // task reasoning helps with, and it runs only on milestone attempts.
-  if (/^gemini-3/.test(model))   return { thinkingLevel: 'medium' };  // Gemini 3.x
-  if (/^gemini-2\.5/.test(model)) return { thinkingBudget: -1 };       // 2.5: dynamic
+  // 'low' keeps a milestone under ~20s. The counting work — CEFR levels,
+  // tenses, sentence types, pacing — is already done locally and handed over
+  // as evidence, so the model is judging rather than tallying.
+  if (/^gemini-3/.test(model))   return { thinkingLevel: 'low' };   // Gemini 3.x
+  if (/^gemini-2\.5/.test(model)) return { thinkingBudget: 0 };      // 2.5: off
   return null;
 }
 
@@ -2599,9 +2680,8 @@ async function gemFetch(sys, usr, attempt, jsonMode, noThinkCfg) {
       return gemFetch(sys, usr, 2, jsonMode, noThinkCfg);
 
     if (r.status === 429 && attempt <= 2) {
-      const el = document.getElementById('g-title');
       for (let i = 20; i > 0; i--) {
-        if (el) el.textContent = 'Rate limit reached — retrying in ' + i + 's…';
+        setGradingStatus('Rate limit reached — retrying in ' + i + 's…');
         await new Promise(res => setTimeout(res, 1000));
       }
       return gemFetch(sys, usr, attempt + 1, jsonMode, noThinkCfg);
@@ -2627,18 +2707,34 @@ async function gemFetch(sys, usr, attempt, jsonMode, noThinkCfg) {
   return text;
 }
 
-function gStep(txt, done) {
-  const wrap = document.getElementById('g-steps');
-  const div  = document.createElement('div');
-  div.className = 'gstep ' + (done ? 'done' : 'now');
-  div.innerHTML = `<div class="dot">${done ? '✓' : '…'}</div><span>${txt}</span>`;
-  wrap.appendChild(div);
-  // mark previous step done
-  if (!done) {
-    const prev = wrap.querySelectorAll('.gstep.now');
-    prev.forEach((p, i) => { if (i < prev.length - 1) { p.className = 'gstep done'; p.querySelector('.dot').textContent = '✓'; } });
+// Groq meters each model separately, so grading here draws on a different
+// quota than Whisper transcription — using it as a backup costs no transcribe
+// capacity. Llama chat models are retired; the gpt-oss family replaced them.
+const GROQ_GRADE_MODEL = 'openai/gpt-oss-120b';
+
+async function groqGrade(sys, prompt) {
+  if (!A.groqKey) throw new Error('No Groq API key set');
+  const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Authorization': 'Bearer ' + A.groqKey, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: GROQ_GRADE_MODEL,
+      messages: [{ role: 'system', content: sys }, { role: 'user', content: prompt }],
+      temperature: 0.4,
+      response_format: { type: 'json_object' }
+    })
+  });
+  if (!r.ok) {
+    let msg = 'Groq error ' + r.status;
+    try { const e = await r.json(); msg = e.error?.message || msg; } catch (_) {}
+    throw new Error(msg);
   }
+  const j = await r.json();
+  const text = j.choices?.[0]?.message?.content?.trim();
+  if (!text) throw new Error('Groq returned an empty response');
+  return text;
 }
+
 
 const FILLER_RE = /\b(uh+m*|um+|er+m*|erm+|ah+|hmm+)\b/gi;
 function localMetrics(text) {
@@ -2774,84 +2870,91 @@ async function finishSession() {
   if (lastAns && A.recs[A.idx]) A.recs[A.idx].studentAnswer = lastAns;
   const answered = A.recs.filter(r => r.studentAnswer?.trim()?.length >= 2);
   if (!answered.length) { if (confirm('No answers recorded. Exit?')) { SS('S-student'); studentTab('practice'); } return; }
-  if (!A.gkey) { toast('Gemini API key required for grading', 'error'); return; }
-  SS('S-grading');
-  document.getElementById('g-steps').innerHTML = '';
+
+  // The local pass is deterministic and finishes in about a second, so the
+  // student can start reading real feedback immediately instead of staring at
+  // a spinner while the AI works. Padding the wait with a fake delay would
+  // only add time; showing what is already computed removes it.
+  answered.forEach(r => { r._m = localMetrics(r.studentAnswer); });
+  A.langText = answered.map(r => r.studentAnswer).join(' ');
+  const allWords = answered.reduce((a, r) => a.concat(r._words || []), []);
+  const allDur   = answered.reduce((a, r) => a + (r._dur || 0), 0);
+  A.prosody = prosodyFrom(allWords, allDur);
+  try {
+    A.langEvidence = analyzeLanguage(A.langText, A.prosody).evidence;
+  } catch (e) { A.langEvidence = ''; console.warn('Language analysis failed:', e); }
+
+  const attemptNo = A.retryCount + 1;
+  let shouldGrade = isMilestone(attemptNo) || A.pendingMilestone;
+
+  // Straight to the results screen — analysis visible now, band score fills in.
+  renderResults(answered, null, false, attemptNo, null, null, null, null, null, '', shouldGrade);
+
+  let rpt = null, gradeFailed = false, gradeError = '', gradedBy = '';
 
   try {
-    // Local metrics
-    answered.forEach(r => { r._m = localMetrics(r.studentAnswer); });
-
-    // Deterministic CEFR + grammar pass over the whole session. Costs nothing,
-    // so it runs on every attempt, not just the graded milestones.
-    A.langText = answered.map(r => r.studentAnswer).join(' ');
-    const allWords = answered.reduce((a, r) => a.concat(r._words || []), []);
-    const allDur   = answered.reduce((a, r) => a + (r._dur || 0), 0);
-    A.prosody = prosodyFrom(allWords, allDur);
-    try {
-      A.langEvidence = analyzeLanguage(A.langText, A.prosody).evidence;
-    } catch (e) { A.langEvidence = ''; console.warn('Language analysis failed:', e); }
-
-    // Determine attempt number
-    const attemptNo = A.retryCount + 1;
-    let shouldGrade = isMilestone(attemptNo) || A.pendingMilestone;
-
-    let rpt = null;
-    let gradeFailed = false, gradeError = '';
-
     if (shouldGrade) {
-      gStep('Attempt ' + attemptNo + ' — milestone, grading now…');
+      const qaBlock = answered.map((r, i) => {
+        const kw = (r.keywords || []).join(', ');
+        return `Q${i+1}: "${r.question}"\nA${i+1}: "${r.studentAnswer}"${kw ? '\nKeywords: ' + kw : ''}`;
+      }).join('\n\n');
+      const prompt = buildGradePrompt(qaBlock, answered.length, A.langEvidence, A.mode);
+      const sys    = 'IELTS Speaking examiner. Return ONLY valid JSON.';
+
+      let parsed = null;
       try {
-        const qaBlock = answered.map((r, i) => {
-          const kw = (r.keywords || []).join(', ');
-          return `Q${i+1}: "${r.question}"\nA${i+1}: "${r.studentAnswer}"${kw ? '\nKeywords: ' + kw : ''}`;
-        }).join('\n\n');
-        const rawGrade = await gemFetch(
-          'IELTS Speaking examiner. Return ONLY valid JSON.',
-          buildGradePrompt(qaBlock, answered.length, A.langEvidence, A.mode),
-          1, true);
-        const parsed = _parseGradeJSON(rawGrade);
-        if (!parsed?.qs) throw new Error('Invalid grading JSON');
-        parsed.qs.forEach((g, i) => {
-          if (!answered[i]) return;
-          answered[i].overall = g.overall;
-          answered[i].scores  = { fluency:{ score:g.fc||g.fluency }, lexical:{ score:g.lr||g.lexical }, grammar:{ score:g.gr||g.grammar }, pronunciation:{ score:g.p||g.pronunciation } };
-          answered[i].errors  = g.errors || [];
-          answered[i].suggestion = g.suggestion || '';
-          answered[i].natural = g.natural || '';
-        });
-        rpt = parsed.r || null;
-      } catch(eg) {
-        console.warn('Grade failed:', eg);
-        gradeFailed = true;
-        gradeError = eg.message || String(eg);
-        shouldGrade = false;   // record the attempt, but with no scores attached
-        toast('AI grading failed — the attempt was saved without a score', 'error', 8000);
+        setGradingStatus('Gemini is marking your answers…');
+        parsed   = _parseGradeJSON(await gemFetch(sys, prompt, 1, true));
+        gradedBy = GM;
+      } catch (eGem) {
+        console.warn('Gemini grading failed:', eGem);
+        // Groq bills chat models against a separate quota from Whisper, so
+        // falling back here does not eat into transcription.
+        if (A.groqKey) {
+          setGradingStatus('Gemini unavailable — trying the backup grader…');
+          try {
+            parsed   = _parseGradeJSON(await groqGrade(sys, prompt));
+            gradedBy = GROQ_GRADE_MODEL;
+          } catch (eGroq) {
+            console.warn('Groq grading failed:', eGroq);
+            throw new Error(eGem.message + '  ·  backup: ' + eGroq.message);
+          }
+        } else { throw eGem; }
       }
-    } else {
-      gStep('Attempt ' + attemptNo + ' recorded (graded at attempts 3, 5, 8, 10)', true);
+
+      if (!parsed?.qs) throw new Error('Grader returned malformed JSON');
+      parsed.qs.forEach((g, i) => {
+        if (!answered[i]) return;
+        answered[i].overall = g.overall;
+        answered[i].scores  = { fluency:{ score:g.fc||g.fluency }, lexical:{ score:g.lr||g.lexical }, grammar:{ score:g.gr||g.grammar }, pronunciation:{ score:g.p||g.pronunciation } };
+        answered[i].errors  = g.errors || [];
+        answered[i].suggestion = g.suggestion || '';
+        answered[i].natural = g.natural || '';
+      });
+      rpt = parsed.r || null;
     }
+  } catch (eg) {
+    gradeFailed = true;
+    gradeError  = eg.message || String(eg);
+    shouldGrade = false;   // record the attempt, but attach no score to it
+  }
 
-    gStep(gradeFailed ? 'Grading unavailable — saving the attempt unscored' : shouldGrade ? 'Grading complete ✓' : 'Saving…', true);
+  // Audio upload runs after the student already has feedback on screen.
+  setGradingStatus('Saving your recordings…');
+  await Promise.all(answered.map(async (r, qi) => {
+    if (!r._audioBlob) return;
+    try {
+      const b64 = await new Promise((res, rej) => { const rd = new FileReader(); rd.onloadend = () => res(rd.result.split(',')[1]); rd.onerror = rej; rd.readAsDataURL(r._audioBlob); });
+      const up = await gasCall('speak.uploadAudio', { audioBase64: b64, mimeType: r._audioMime || 'audio/webm', topic: A.topic || 'practice', attemptNum: attemptNo, qIdx: qi + 1 });
+      if (up?.success) r.audioUrl = up.url;
+    } catch(e) {}
+  }));
 
-    // Upload audio
-    gStep('Saving audio…');
-    await Promise.all(answered.map(async (r, qi) => {
-      if (!r._audioBlob) return;
-      try {
-        const b64 = await new Promise((res, rej) => { const rd = new FileReader(); rd.onloadend = () => res(rd.result.split(',')[1]); rd.onerror = rej; rd.readAsDataURL(r._audioBlob); });
-        const up = await gasCall('speak.uploadAudio', { audioBase64: b64, mimeType: r._audioMime || 'audio/webm', topic: A.topic || 'practice', attemptNum: attemptNo, qIdx: qi + 1 });
-        if (up?.success) r.audioUrl = up.url;
-      } catch(e) {}
-    }));
-    gStep('Audio saved ✓', true);
+  const overall = calcOverall(answered);
+  const fc = avg(answered, 'fluency'), lr = avg(answered, 'lexical'),
+        gr = avg(answered, 'grammar'), p = avg(answered, 'pronunciation');
 
-    // Build overall
-    const overall = calcOverall(answered);
-    const fc = avg(answered, 'fluency'), lr = avg(answered, 'lexical'), gr = avg(answered, 'grammar'), p = avg(answered, 'pronunciation');
-
-    // Save to GAS
-    gStep('Saving results…');
+  try {
     const saved = await gasCall('speak.saveResult', {
       assignId: A.assignId || '',
       topic:    A.topic || '',
@@ -2864,11 +2967,12 @@ async function finishSession() {
       attemptNo,
       isMilestone: shouldGrade,
       gradeError: gradeError || '',
+      gradedBy,
       overall: shouldGrade ? overall : '',
       fc: shouldGrade ? fc : '',
       lr: shouldGrade ? lr : '',
       gr: shouldGrade ? gr : '',
-      p:  shouldGrade ? p : '',
+      p:  shouldGrade ? p  : '',
       questionsJSON: A.qs.map(q => ({ question: q.question, keywords: q.keywords || [] })),
       resultsJSON:   answered.map(r => ({
         question: r.question, keywords: r.keywords || [],
@@ -2882,16 +2986,124 @@ async function finishSession() {
       analysis: buildAnalysisPayload()
     });
     A.lastSessionId = saved?.sessionId || '';
-    A.lastGraded    = shouldGrade;
-    A.retryCount = attemptNo;
-    gStep('Saved ✓', true);
-
-    setTimeout(() => renderResults(answered, rpt, shouldGrade, attemptNo, overall, fc, lr, gr, p, gradeError), 400);
-  } catch(e) {
-    gStep('Error: ' + e.message);
-    toast('Error: ' + e.message, 'error', 6000);
-    setTimeout(() => SS('S-session'), 3000);
+  } catch (e) {
+    toast('Could not save this attempt: ' + e.message, 'error', 8000);
   }
+  A.retryCount = attemptNo;
+
+  if (gradeFailed) toast('Grading failed — the attempt was saved without a score', 'error', 8000);
+  renderResults(answered, rpt, shouldGrade, attemptNo, overall, fc, lr, gr, p, gradeError, false, gradedBy);
+}
+
+// How many per-question panels have been opened this session.
+let _openedFeedback = new Set();
+function markFeedbackOpened(hdr) {
+  const body = hdr.nextElementSibling;
+  if (body && body.classList.contains('open')) {
+    _openedFeedback.add(hdr.querySelector('.qa-n')?.textContent || String(_openedFeedback.size));
+    updateAckButton();
+  }
+}
+
+function updateAckButton() {
+  const btn  = document.getElementById('ack-btn');
+  const note = document.getElementById('ack-progress');
+  if (!btn) return;
+  const need = parseInt(btn.dataset.need || '0');
+  const seen = _openedFeedback.size;
+  const done = seen >= need;
+  btn.disabled = !done;
+  if (note) note.textContent = done
+    ? 'All feedback opened.'
+    : `Opened ${seen} of ${need} — open each question to see what to fix.`;
+}
+
+function renderNextStep(answered, isMilestone, attemptNo) {
+  const zone = document.getElementById('next-step-zone');
+  if (!zone) return;
+
+  if (isMilestone) {
+    // A graded attempt is the one moment there is something substantial to act
+    // on. Reading it is the point of the milestone, so the next attempt waits.
+    _openedFeedback = new Set();
+    requireAcknowledgement(A.topic);
+    const need = answered.length;
+    zone.innerHTML = `
+      <div class="card" style="border-color:var(--blue);background:var(--blue-l)">
+        <div style="font-weight:700;color:var(--blue-d);font-size:1rem">📖 Read your feedback before attempt ${attemptNo + 1}</div>
+        <p style="margin-top:6px;font-size:13px;color:var(--g700);line-height:1.7">
+          Practising again without taking the corrections in just repeats the same answer.
+          Open each question above, look at what was marked, then confirm below.
+        </p>
+        <div id="ack-progress" style="font-size:12px;color:var(--blue-d);font-weight:600;margin:10px 0">Opened 0 of ${need} — open each question to see what to fix.</div>
+        <button class="btn btn-primary" id="ack-btn" data-need="${need}" disabled onclick="acknowledgeFeedback()">
+          ✅ I have read the feedback — start attempt ${attemptNo + 1}
+        </button>
+      </div>`;
+    updateAckButton();
+    return;
+  }
+
+  // Ungraded attempt: a short pause, filled with a concrete target rather than
+  // an empty timer.
+  startCooldown();
+  const a = analyzeLanguage(A.langText || '', A.prosody);
+  const targets = [];
+  if (a.lex) {
+    const b1 = [...a.lex.samples.B1, ...a.lex.samples.B2, ...a.lex.samples.C1, ...a.lex.samples.C2];
+    targets.push(b1.length
+      ? `You reached for ${b1.slice(0, 4).join(', ')}. Try adding two more precise words next time.`
+      : 'Every content word was elementary. Aim for two or three precise, topic-specific words.');
+  }
+  if (a.gram) {
+    const g = a.gram.features, s2 = a.gram.sentences;
+    const missing = [['presentPerfect','present perfect'],['conditional','a conditional'],
+                     ['relativeClause','a relative clause'],['passive','the passive'],
+                     ['comparative','a comparison']].filter(([k]) => !g[k]).map(([, n]) => n);
+    if (missing.length) targets.push(`Not used this time: ${missing.slice(0, 3).join(', ')}. Work one in.`);
+    if (s2.total && s2.complex / s2.total < 0.3)
+      targets.push(`Only ${s2.complex} of ${s2.total} sentences were complex. Join two ideas with because, although or which.`);
+  }
+  if (a.prosody && a.prosody.longPauses > 2)
+    targets.push(`${a.prosody.longPauses} pauses over 1.5s. Keep going with a filler rather than stopping.`);
+
+  zone.innerHTML = `
+    <div class="card" style="border-color:var(--gold);background:var(--gold-l)">
+      <div style="font-weight:700;color:var(--gold-d);font-size:1rem">🎯 Before attempt ${attemptNo + 1}</div>
+      <ul style="margin:8px 0 0 18px;font-size:13px;color:var(--g700);line-height:1.8">
+        ${targets.map(t => `<li>${t}</li>`).join('') || '<li>Say a little more, and give a reason for each answer.</li>'}
+      </ul>
+      <button class="btn btn-primary" id="cooldown-btn" disabled style="margin-top:12px"
+              onclick="retryFromHistory('${A.topic}','${A.assignId||''}','${A.mode}')">
+        🔄 Practice again
+      </button>
+    </div>`;
+  tickCooldown();
+}
+
+function tickCooldown() {
+  const btn = document.getElementById('cooldown-btn');
+  if (!btn) return;
+  const left = cooldownLeft();
+  if (left > 0) {
+    btn.disabled = true;
+    btn.textContent = `🔄 Practice again in ${left}s`;
+    setTimeout(tickCooldown, 500);
+  } else {
+    btn.disabled = false;
+    btn.textContent = '🔄 Practice again';
+  }
+}
+
+function acknowledgeFeedback() {
+  clearGate();
+  toast('Feedback acknowledged — good luck with the next attempt', 'success');
+  retryFromHistory(A.topic, A.assignId || '', A.mode);
+}
+
+function setGradingStatus(txt) {
+  const el = document.getElementById('grading-status');
+  if (el) el.textContent = txt;
 }
 
 function avg(answered, field) {
@@ -2928,12 +3140,28 @@ function buildReport(answered, r, isMilestone, attemptNo) {
 // ════════════════════════════════════════════
 // RESULTS RENDER
 // ════════════════════════════════════════════
-function renderResults(answered, rpt, isMilestone, attemptNo, overall, fc, lr, gr, p, gradeError) {
+function renderResults(answered, rpt, isMilestone, attemptNo, overall, fc, lr, gr, p, gradeError, gradingPending, gradedBy) {
   SS('S-results');
   const main = document.getElementById('results-main');
   const next = nextMilestone(attemptNo);
 
   main.innerHTML = `
+    ${gradingPending ? `<div class="card" style="background:var(--blue-l);border-color:var(--blue-m)">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div class="spinner" style="width:26px;height:26px;border-width:2px;margin:0;flex-shrink:0"></div>
+        <div>
+          <div style="font-weight:700;color:var(--blue-d)">Attempt ${attemptNo} — AI marking in progress</div>
+          <div id="grading-status" style="font-size:12px;color:var(--blue-d);margin-top:2px">Sending your answers to the examiner…</div>
+        </div>
+      </div>
+      <p style="margin-top:10px;font-size:12px;color:var(--g600)">Your measured profile is below and is already final — the band scores will appear here when marking finishes.</p>
+    </div>` : ''}
+
+    ${gradedBy && !/^gemini/.test(gradedBy) ? `<div class="card" style="background:var(--gold-l);border-color:#FDE68A">
+      <div style="font-weight:700;color:var(--gold-d)">ℹ️ Marked by the backup grader (${gradedBy})</div>
+      <p style="margin-top:4px;font-size:12px;color:var(--gold-d)">Gemini was unavailable, so a different model marked this attempt. Its band scores may not line up exactly with your other attempts — compare with care.</p>
+    </div>` : ''}
+
     ${gradeError ? `<div class="card" style="background:var(--red-l);border-color:var(--red)">
       <div style="font-weight:700;color:var(--red-d)">⚠️ AI grading did not run for this attempt</div>
       <p style="margin-top:6px;font-size:13px;color:var(--red-d)">Your answers and the measurements below were saved, but no band score was given — showing an invented number would be worse than showing none.</p>
@@ -2956,7 +3184,7 @@ function renderResults(answered, rpt, isMilestone, attemptNo, overall, fc, lr, g
 
     ${isMilestone ? answered.map((r, i) => `
       <div class="qacc">
-        <div class="qacc-hdr" onclick="this.nextElementSibling.classList.toggle('open')">
+        <div class="qacc-hdr" onclick="this.nextElementSibling.classList.toggle('open');markFeedbackOpened(this)">
           <div class="qa-n">${i+1}</div>
           <div class="qa-q">${r.question}</div>
           <div class="qa-band">${r.overall || '—'}</div>
@@ -2997,11 +3225,14 @@ function renderResults(answered, rpt, isMilestone, attemptNo, overall, fc, lr, g
         ${rpt.weak ? `<div style="font-size:13px;color:var(--g600)"><strong>Weakest area:</strong> ${rpt.weak}</div>` : ''}
       </div>` : ''}
 
-    <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap">
+    <div id="next-step-zone" style="margin-top:18px"></div>
+
+    <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap">
       ${isMilestone && A.lastSessionId ? `<button class="btn btn-green doc-export-btn" onclick="exportToDoc()">📄 Export to Google Doc</button>` : ''}
-      <button class="btn btn-primary" onclick="retryFromHistory('${A.topic}','${A.assignId||''}','${A.mode}')">🔄 Practice Again</button>
       <button class="btn btn-outline" onclick="SS('S-student');studentTab('history')">📋 My History</button>
     </div>`;
+
+  if (!gradingPending) renderNextStep(answered, isMilestone, attemptNo);
 }
 
 // ════════════════════════════════════════════
@@ -3449,7 +3680,7 @@ window.addEventListener('load', () => {
   // Restore session
   try {
     const saved = JSON.parse(localStorage.getItem('speak_session') || 'null');
-    if (saved?.token && saved?.user) { A.user = saved.user; A.sessionToken = saved.token; }
+    if (saved?.token && saved?.user) { A.user = saved.user; A.sessionToken = saved.token; loadGate(); }
   } catch(_) {}
   try {
     const tTok = localStorage.getItem('speak_teacher');
