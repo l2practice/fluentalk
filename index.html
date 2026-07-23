@@ -1,0 +1,2432 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Speaking App</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+/* ── TOKENS ── */
+:root{
+  --red:#C8102E;--red-d:#9B0B22;--red-l:#FEF2F2;
+  --blue:#1D4ED8;--blue-l:#EFF6FF;--blue-m:#3B82F6;
+  --green:#059669;--green-l:#ECFDF5;--green-d:#047857;
+  --gold:#D97706;--gold-l:#FEF3C7;
+  --navy:#1E3A5F;--navy2:#0F2847;
+  --purple:#7C3AED;--purple-l:#F5F3FF;
+  --g50:#F8FAFC;--g100:#F4F6FA;--g200:#E2E8F0;--g400:#94A3B8;--g600:#64748B;--g800:#334155;--black:#0F172A;
+  --white:#fff;--bg:#F0F4FA;
+  --sh:0 1px 3px rgba(0,0,0,.08);--shm:0 4px 16px rgba(0,0,0,.10);--shl:0 12px 40px rgba(0,0,0,.16);
+  --r:10px;--rl:16px;--rx:20px;--tr:.18s cubic-bezier(.4,0,.2,1);
+  --f:'Inter',sans-serif;--fm:'JetBrains Mono',monospace;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:var(--f);background:var(--bg);color:var(--black);min-height:100vh;font-size:15px;line-height:1.6;-webkit-font-smoothing:antialiased}
+
+/* ── SCREENS ── */
+.screen{display:none;flex-direction:column;min-height:100vh}
+.screen.active{display:flex;animation:fUp .22s ease}
+@keyframes fUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+/* ── TOPBAR ── */
+.topbar{background:linear-gradient(90deg,var(--navy2),var(--navy) 55%,var(--red-d));height:54px;display:flex;align-items:center;padding:0 20px;gap:12px;position:sticky;top:0;z-index:200;border-bottom:2px solid rgba(201,168,76,.4);flex-shrink:0}
+.tb-brand{font-weight:700;font-size:.95rem;color:#fff}
+.tb-brand em{color:#FCD34D;font-style:normal}
+.tb-sub{font-size:11px;color:rgba(255,255,255,.4)}
+.tb-right{margin-left:auto;display:flex;align-items:center;gap:8px}
+.tb-user{font-size:12px;color:#67E8F9;font-weight:600}
+.tb-btn{background:rgba(255,255,255,.1);border:1.5px solid rgba(255,255,255,.18);border-radius:8px;padding:5px 12px;color:rgba(255,255,255,.8);font-size:12px;cursor:pointer;font-family:var(--f);font-weight:600;transition:var(--tr)}
+.tb-btn:hover{background:rgba(255,255,255,.2);color:#fff}
+
+/* ── LAYOUT ── */
+.main{flex:1;padding:20px 16px;max-width:1000px;width:100%;margin:0 auto}
+.main-wide{max-width:1200px}
+.card{background:var(--white);border-radius:var(--rl);padding:20px;box-shadow:var(--sh);border:1.5px solid var(--g200);margin-bottom:14px}
+.card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.card-title{font-size:1rem;font-weight:700;color:var(--black)}
+
+/* ── BUTTONS ── */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 18px;border:none;border-radius:var(--r);font-family:var(--f);font-size:13px;font-weight:600;cursor:pointer;transition:var(--tr);white-space:nowrap;text-decoration:none}
+.btn:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 4px 10px rgba(0,0,0,.14)}
+.btn:disabled{opacity:.42;cursor:not-allowed;transform:none!important}
+.btn-primary{background:var(--blue);color:#fff}.btn-primary:hover:not(:disabled){background:#1e40af}
+.btn-red{background:var(--red);color:#fff}.btn-red:hover:not(:disabled){background:var(--red-d)}
+.btn-green{background:var(--green);color:#fff}
+.btn-gold{background:var(--gold);color:#fff}
+.btn-outline{background:transparent;border:1.5px solid var(--g200);color:var(--g800)}
+.btn-outline:hover:not(:disabled){border-color:var(--blue-m);color:var(--blue)}
+.btn-ghost{background:transparent;color:var(--g600);padding:6px 10px}
+.btn-ghost:hover:not(:disabled){color:var(--black);background:var(--g100)}
+.btn-full{width:100%}.btn-sm{padding:5px 12px;font-size:12px}.btn-lg{padding:13px 26px;font-size:15px;border-radius:var(--rl)}
+.btn-danger{background:#dc2626;color:#fff}
+
+/* ── FORMS ── */
+.form-group{margin-bottom:14px}
+.form-label{display:block;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--g600);margin-bottom:6px}
+.form-input{width:100%;padding:10px 13px;border:1.5px solid var(--g200);border-radius:var(--r);font-family:var(--f);font-size:14px;outline:none;background:#fff;transition:var(--tr);color:var(--black)}
+.form-input:focus{border-color:var(--blue-m);box-shadow:0 0 0 3px rgba(59,130,246,.1)}
+.form-select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2394A3B8' stroke-width='2' fill='none'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:32px}
+.form-hint{font-size:11px;color:var(--g400);margin-top:4px}
+.form-error{font-size:12px;color:var(--red);margin-top:4px}
+textarea.form-input{resize:vertical;min-height:72px}
+
+/* ── TABS ── */
+.tabs{display:flex;gap:4px;border-bottom:2px solid var(--g200);margin-bottom:20px}
+.tab{padding:9px 16px;font-size:13px;font-weight:600;color:var(--g600);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;transition:var(--tr);display:flex;align-items:center;gap:5px}
+.tab:hover{color:var(--black)}
+.tab.active{color:var(--blue);border-bottom-color:var(--blue)}
+
+/* ── BADGE / TAG ── */
+.badge{display:inline-flex;align-items:center;padding:3px 10px;border-radius:99px;font-size:11px;font-weight:700}
+.badge-green{background:var(--green-l);color:var(--green-d)}
+.badge-red{background:var(--red-l);color:var(--red-d)}
+.badge-gold{background:var(--gold-l);color:var(--gold)}
+.badge-blue{background:var(--blue-l);color:var(--blue)}
+.badge-grey{background:var(--g100);color:var(--g600)}
+.badge-navy{background:var(--navy2);color:#FCD34D}
+
+/* ── TABLE ── */
+.tbl{width:100%;border-collapse:collapse;font-size:13px}
+.tbl th{background:var(--g100);padding:9px 12px;text-align:left;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--g600);border-bottom:2px solid var(--g200);cursor:pointer;user-select:none}
+.tbl th:hover{color:var(--black)}
+.tbl td{padding:10px 12px;border-bottom:1px solid var(--g100);vertical-align:middle}
+.tbl tr:hover td{background:var(--g50)}
+.tbl-wrap{overflow-x:auto;border-radius:var(--r);border:1.5px solid var(--g200)}
+
+/* ── STATS CARD ── */
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px}
+.stat-box{background:var(--white);border-radius:var(--rl);padding:16px;border:1.5px solid var(--g200);text-align:center}
+.stat-val{font-size:2rem;font-weight:800;color:var(--black);font-family:var(--fm);line-height:1}
+.stat-lbl{font-size:11px;color:var(--g600);text-transform:uppercase;letter-spacing:.06em;margin-top:4px}
+.stat-sub{font-size:11px;color:var(--g400);margin-top:2px}
+
+/* ── MISC ── */
+.divider{height:1px;background:var(--g200);margin:18px 0}
+.empty{text-align:center;color:var(--g400);padding:40px 20px;font-size:14px}
+.toast-wrap{position:fixed;bottom:20px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:8px}
+.toast{background:var(--black);color:#fff;padding:10px 16px;border-radius:var(--r);font-size:13px;font-weight:500;box-shadow:var(--shl);animation:toastIn .22s ease;max-width:340px}
+.toast.success{background:var(--green)}
+.toast.error{background:var(--red)}
+.toast.info{background:var(--blue)}
+@keyframes toastIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.modal-overlay{display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.6);overflow-y:auto}
+.modal-overlay.active{display:flex;align-items:flex-start;justify-content:center;padding:40px 16px}
+.modal{background:#fff;border-radius:var(--rx);box-shadow:var(--shl);width:100%;max-width:560px;overflow:hidden}
+.modal-header{padding:18px 20px;border-bottom:1px solid var(--g200);display:flex;align-items:center;justify-content:space-between}
+.modal-title{font-weight:700;font-size:1rem}
+.modal-body{padding:20px}
+.modal-footer{padding:14px 20px;border-top:1px solid var(--g200);display:flex;gap:10px;justify-content:flex-end}
+.spinner{width:40px;height:40px;border:3px solid var(--g200);border-top-color:var(--blue-m);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── LOADING SCREEN ── */
+#S-loading{background:#111;display:flex;align-items:center;justify-content:center;flex-direction:column;position:fixed;inset:0;z-index:9000;transition:opacity .6s ease}
+.load-title{font-family:'Inter',serif;font-size:2.4rem;font-weight:700;color:#f5f0e8;letter-spacing:-.02em}
+.load-title em{color:#C8102E;font-style:normal}
+.load-sub{font-size:11px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:rgba(255,255,255,.35);margin-top:6px}
+.load-bar{width:120px;height:2px;background:rgba(255,255,255,.1);border-radius:2px;margin-top:22px;overflow:hidden}
+.load-bar-fill{height:100%;background:linear-gradient(90deg,var(--red-d),var(--red));width:0;animation:loadFill 1.8s ease forwards}
+@keyframes loadFill{to{width:100%}}
+
+/* ── AUTH SCREEN ── */
+#S-auth{background:#fff;display:flex;min-height:100vh}
+.auth-left{width:45%;background:linear-gradient(160deg,#1a0a0a 0%,#2d0a0a 40%,#1a0a0a 100%);position:relative;display:flex;flex-direction:column;justify-content:flex-end;padding:40px;overflow:hidden}
+.auth-left::before{content:'';position:absolute;inset:0;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60'%3E%3Crect width='60' height='60' fill='none' stroke='rgba(255,255,255,.04)' stroke-width='1'/%3E%3C/svg%3E");background-size:60px}
+.auth-glow{position:absolute;width:300px;height:300px;background:radial-gradient(circle,rgba(200,16,46,.25) 0%,transparent 70%);top:30%;left:50%;transform:translate(-50%,-50%);pointer-events:none}
+.auth-left-title{font-size:2.1rem;font-weight:700;color:#f5f0e8;position:relative;z-index:1}
+.auth-left-title em{color:#C8102E;font-style:normal}
+.auth-left-sub{font-size:11px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:rgba(255,255,255,.35);margin-top:4px;position:relative;z-index:1}
+.auth-stats{display:flex;gap:24px;margin-top:24px;position:relative;z-index:1}
+.auth-stat-val{font-size:1.5rem;font-weight:800;color:#fff;font-family:var(--fm)}
+.auth-stat-lbl{font-size:10px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.06em;margin-top:1px}
+.auth-right{flex:1;display:flex;align-items:center;justify-content:center;padding:40px}
+.auth-box{width:100%;max-width:400px}
+.auth-title{font-size:1.7rem;font-weight:700;margin-bottom:4px}
+.auth-sub{font-size:14px;color:var(--g600);margin-bottom:28px}
+.auth-tabs{display:flex;gap:0;border:1.5px solid var(--g200);border-radius:var(--rl);padding:3px;margin-bottom:24px}
+.auth-tab{flex:1;padding:9px;text-align:center;font-weight:600;font-size:13px;cursor:pointer;border-radius:12px;transition:var(--tr);color:var(--g600)}
+.auth-tab.active{background:var(--white);color:var(--red);box-shadow:0 2px 8px rgba(0,0,0,.1)}
+.teacher-btn{display:flex;align-items:center;justify-content:space-between;padding:13px 16px;border-radius:var(--r);background:var(--black);color:#fff;cursor:pointer;margin-top:12px;transition:var(--tr)}
+.teacher-btn:hover{background:#1f2937}
+@media(max-width:700px){.auth-left{display:none}.auth-right{padding:24px}}
+
+/* ── DASHBOARD NAV ── */
+.dash-wrap{display:flex;min-height:100vh;padding-top:54px}
+.sidenav{width:200px;background:var(--white);border-right:1px solid var(--g200);padding:16px 0;flex-shrink:0;position:fixed;top:54px;left:0;bottom:0;overflow-y:auto}
+.sidenav-item{display:flex;align-items:center;gap:9px;padding:10px 18px;font-size:13px;font-weight:600;color:var(--g600);cursor:pointer;transition:var(--tr);border-right:3px solid transparent}
+.sidenav-item:hover{color:var(--black);background:var(--g50)}
+.sidenav-item.active{color:var(--blue);background:var(--blue-l);border-right-color:var(--blue)}
+.sidenav-section{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--g400);padding:12px 18px 4px}
+.dash-content{flex:1;margin-left:200px;padding:24px;min-height:calc(100vh - 54px)}
+@media(max-width:768px){.sidenav{display:none}.dash-content{margin-left:0}}
+
+/* ── SCORE DISPLAY ── */
+.score-strip{display:flex;gap:0;border-bottom:1px solid var(--g200)}
+.score-col{flex:1;padding:14px 10px;text-align:center;border-right:1px solid var(--g200)}
+.score-col:last-child{border-right:none}
+.score-val{font-size:1.8rem;font-weight:800;font-family:var(--fm);line-height:1}
+.score-lbl{font-size:10px;color:var(--g600);text-transform:uppercase;letter-spacing:.06em;margin-top:3px}
+.score-val.overall{color:var(--blue)}
+.score-val.s55{color:var(--gold)}
+.score-val.s6{color:var(--green)}
+.score-val.s5{color:var(--red)}
+
+/* ── PRACTICE SCREENS ── */
+.prog-bar-wrap{margin-bottom:16px}
+.prog-hdr{display:flex;justify-content:space-between;font-size:12px;color:var(--g600);margin-bottom:5px}
+.prog-bar{height:3px;background:var(--g200);border-radius:2px;overflow:hidden}
+.prog-fill{height:100%;background:linear-gradient(90deg,var(--blue-m),var(--green));border-radius:2px;transition:width .4s ease}
+.q-box{background:linear-gradient(135deg,var(--navy2),#0d1f3c);border-radius:var(--rl);padding:20px 18px;margin-bottom:14px;position:relative}
+.q-box-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:rgba(255,255,255,.35);margin-bottom:6px}
+.q-box-txt{font-size:1.1rem;color:#fff;font-weight:500;line-height:1.7}
+.q-num{position:absolute;top:12px;right:12px;background:var(--red);color:#fff;font-size:10px;font-weight:700;padding:2px 9px;border-radius:99px}
+.rec-area{background:var(--g100);border:2px dashed var(--g200);border-radius:var(--rl);padding:30px 18px;text-align:center;transition:var(--tr);margin-bottom:14px}
+.rec-area.recording{border-color:var(--red);background:var(--red-l)}
+.rec-area.done{border-color:var(--green);background:var(--green-l);border-style:solid}
+.rec-btn{width:64px;height:64px;border-radius:50%;background:var(--g200);display:flex;align-items:center;justify-content:center;margin:0 auto 10px;font-size:26px;cursor:pointer;transition:var(--tr);border:3px solid transparent;user-select:none}
+.rec-btn.act{background:var(--red);border-color:var(--red-d);animation:recPulse 1s infinite}
+.rec-btn.done{background:var(--green);border-color:var(--green-d)}
+@keyframes recPulse{0%,100%{box-shadow:0 0 0 5px rgba(200,16,46,.1)}50%{box-shadow:0 0 0 14px rgba(200,16,46,.04)}}
+.wvf{display:flex;align-items:center;justify-content:center;gap:3px;height:28px;margin:6px 0}
+.wb{width:4px;height:5px;background:var(--red);border-radius:2px}
+.recording .wb{animation:wv .5s infinite alternate}
+@keyframes wv{from{height:5px}to{height:22px}}
+.wb:nth-child(2){animation-delay:.08s}.wb:nth-child(3){animation-delay:.16s}.wb:nth-child(4){animation-delay:.08s}.wb:nth-child(5){animation-delay:.22s}.wb:nth-child(6){animation-delay:.04s}.wb:nth-child(7){animation-delay:.12s}
+.rec-status{font-size:13px;font-weight:600;color:var(--g600)}
+.rec-timer{font-family:var(--fm);font-size:1.3rem;font-weight:700;color:var(--red);margin:4px 0}
+.kw-display{display:flex;flex-wrap:wrap;gap:5px;padding:10px;background:var(--gold-l);border:1.5px solid #FCD34D;border-radius:var(--r);margin-bottom:12px}
+.kw-pill{background:#fff;border:1.5px solid #FCD34D;border-radius:99px;padding:3px 11px;font-size:12px;font-weight:600;color:var(--gold)}
+.grading-wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;padding:60px 20px;text-align:center}
+.gstep{font-size:13px;color:var(--g600);padding:5px 0;display:flex;gap:8px;align-items:center;text-align:left}
+.gstep .dot{width:18px;height:18px;border-radius:50%;background:var(--g200);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700}
+.gstep.done .dot{background:var(--green);color:#fff}
+.gstep.now .dot{background:var(--blue-m);color:#fff;animation:spin .8s linear infinite}
+.prep-box{background:var(--gold-l);border:1.5px solid #FCD34D;border-radius:var(--r);padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:12px}
+.prep-cd{font-family:var(--fm);font-size:1.4rem;font-weight:700;color:var(--gold)}
+.prep-bar{flex:1;height:5px;background:#FCD34D;border-radius:2px;overflow:hidden}
+.prep-fill{height:100%;background:var(--gold);border-radius:2px;transition:width .1s linear}
+
+/* ── RESULTS ── */
+.res-hero{background:linear-gradient(135deg,var(--navy2),#000);border-radius:var(--rx);padding:26px 20px;margin-bottom:18px;text-align:center;border:1.5px solid rgba(255,255,255,.07)}
+.res-score{font-size:3.5rem;font-weight:800;color:#FCD34D;font-family:var(--fm);line-height:1}
+.res-label{font-size:12px;color:rgba(255,255,255,.35);margin:5px 0 16px}
+.crit-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.crit-box{background:rgba(255,255,255,.07);border-radius:10px;padding:12px 5px;text-align:center}
+.crit-score{font-size:1.3rem;font-weight:700;color:#fff;font-family:var(--fm)}
+.crit-name{font-size:10px;color:rgba(255,255,255,.35);text-transform:uppercase;letter-spacing:.07em;margin-top:2px}
+.rpt-box{background:var(--g100);border-radius:var(--rl);padding:16px;border:1px solid var(--g200);font-size:13.5px;line-height:1.8;color:var(--g800)}
+.rpt-box h3{font-size:.88rem;font-weight:700;color:var(--black);margin:14px 0 6px;padding-bottom:3px;border-bottom:1.5px solid var(--g200)}
+.rpt-box h3:first-child{margin-top:0}
+.rpt-box ul{padding-left:16px;margin:4px 0}.rpt-box li{margin-bottom:3px}
+.rpt-box strong{color:var(--black)}.rpt-box p{margin-bottom:7px}
+.qacc{border:1.5px solid var(--g200);border-radius:var(--rl);overflow:hidden;margin-bottom:10px}
+.qacc-hdr{background:var(--g100);padding:11px 15px;display:flex;align-items:center;gap:9px;cursor:pointer;transition:var(--tr)}
+.qacc-hdr:hover{background:var(--g200)}
+.qa-n{width:26px;height:26px;border-radius:50%;background:var(--red);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.qa-q{flex:1;font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.qa-band{background:var(--black);color:#FCD34D;font-family:var(--fm);font-size:11px;font-weight:700;padding:2px 10px;border-radius:99px;flex-shrink:0}
+.qacc-body{display:none;padding:16px;border-top:1px solid var(--g200)}
+.qacc-body.open{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.qs-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--g600);margin-bottom:5px;margin-top:10px}
+.qs-lbl:first-child{margin-top:0}
+.qs-student{background:var(--g100);border-radius:7px;padding:9px 11px;font-size:13px;line-height:1.7;font-style:italic}
+.qs-sugg{background:var(--blue-l);border-left:3px solid var(--blue-m);border-radius:7px;padding:9px 11px;font-size:13px;line-height:1.7}
+.score-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:8px}
+.score-row{background:var(--g100);border-radius:9px;padding:9px 12px;display:flex;align-items:center;gap:9px}
+.score-badge{min-width:40px;height:38px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-family:var(--fm);font-weight:800;font-size:1rem;flex-shrink:0}
+.score-badge.hi{background:var(--green-l);color:var(--green-d)}
+.score-badge.mid{background:var(--gold-l);color:#92400E}
+.score-badge.lo{background:var(--red-l);color:var(--red-d)}
+.score-nm{font-size:12px;font-weight:600;color:var(--g800)}
+.score-cm{font-size:11px;color:var(--g400);margin-top:1px}
+@media(max-width:600px){.qacc-body.open{grid-template-columns:1fr}.crit-grid{grid-template-columns:repeat(2,1fr)}}
+
+/* ── HOMEWORK DETAIL MODAL ── */
+.detail-modal{max-width:860px}
+.milestone-tbl{width:100%;border-collapse:collapse;font-size:13px;margin-bottom:16px}
+.milestone-tbl th{background:var(--g100);padding:8px 12px;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--g600);border-bottom:2px solid var(--g200)}
+.milestone-tbl td{padding:9px 12px;border-bottom:1px solid var(--g100)}
+.milestone-tbl tr.active-row td{background:var(--blue-l);font-weight:600}
+
+/* ── SEARCH BAR ── */
+.search-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center}
+.search-inp{flex:1;min-width:160px;padding:8px 12px;border:1.5px solid var(--g200);border-radius:var(--r);font-size:13px;outline:none;font-family:var(--f)}
+.search-inp:focus{border-color:var(--blue-m)}
+
+/* ── CHART ── */
+.mini-bar-wrap{display:flex;align-items:flex-end;gap:4px;height:50px}
+.mini-bar{background:var(--blue-l);border-radius:3px 3px 0 0;min-width:12px;transition:var(--tr);cursor:pointer;position:relative}
+.mini-bar:hover{background:var(--blue-m)}
+.mini-bar-tip{position:absolute;bottom:calc(100%+4px);left:50%;transform:translateX(-50%);background:var(--black);color:#fff;font-size:10px;padding:2px 6px;border-radius:4px;white-space:nowrap;pointer-events:none;display:none}
+.mini-bar:hover .mini-bar-tip{display:block}
+
+/* ── PEER TABLE ── */
+.peer-row{display:grid;grid-template-columns:auto 1fr auto auto;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid var(--g100)}
+.peer-rank{width:28px;height:28px;border-radius:50%;background:var(--g200);font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.peer-rank.top1{background:#FCD34D;color:var(--black)}
+.peer-rank.top2{background:var(--g400);color:#fff}
+.peer-rank.top3{background:#CD7F32;color:#fff}
+.peer-me .peer-rank{background:var(--blue);color:#fff}
+.peer-name{font-weight:600;font-size:13px}
+.peer-count{font-size:12px;font-weight:700;color:var(--blue)}
+.peer-last{font-size:11px;color:var(--g400)}
+
+/* ── KEY INPUT WRAP ── */
+.key-wrap{background:var(--gold-l);border:1.5px solid #FCD34D;border-radius:var(--rl);padding:14px 16px;margin-bottom:16px}
+.key-row{display:flex;gap:8px;align-items:center}
+.key-st{font-size:11px;font-weight:700;padding:2px 9px;border-radius:99px}
+.key-ok{background:var(--green-l);color:var(--green-d)}.key-bad{background:var(--red-l);color:var(--red-d)}
+
+/* ── TOPIC DROPDOWN ── */
+.topic-select{padding:9px 13px;border:2px solid var(--red-l);border-radius:var(--r);font-family:var(--f);font-size:14px;width:100%;outline:none;background:#fff;transition:var(--tr)}
+.topic-select:focus{border-color:var(--red);box-shadow:0 0 0 3px var(--red-l)}
+.topic-select.ok{border-color:var(--green);background:var(--green-l)}
+
+/* ── MODE TILES ── */
+.mode-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.mode-tile{background:var(--white);border:2px solid var(--g200);border-radius:var(--rl);padding:22px 14px;cursor:pointer;transition:var(--tr);text-align:center}
+.mode-tile:hover{border-color:var(--blue-m);transform:translateY(-2px);box-shadow:var(--shm)}
+.mode-tile.sel{border-color:var(--blue);background:var(--blue-l)}
+.mode-icon{font-size:2rem;margin-bottom:6px}
+.mode-title{font-weight:700;font-size:.9rem}
+.mode-sub{font-size:11px;color:var(--g600);margin-top:2px}
+.mode-tile.sel .mode-title{color:var(--blue)}
+</style>
+</head>
+<body>
+
+<!-- ══════ LOADING ══════ -->
+<div id="S-loading">
+  <div style="text-align:center">
+    <div class="load-title">Speaking <em>App</em></div>
+    <div class="load-sub">Your English Speaking Companion</div>
+    <div class="load-bar"><div class="load-bar-fill"></div></div>
+  </div>
+</div>
+
+<!-- ══════ AUTH ══════ -->
+<div class="screen" id="S-auth">
+  <div class="auth-left">
+    <div class="auth-glow"></div>
+    <div style="position:relative;z-index:1">
+      <div class="auth-left-title">Speaking <em>App</em></div>
+      <div class="auth-left-sub">English Speaking & Beyond</div>
+      <div class="auth-stats">
+        <div><div class="auth-stat-val">4</div><div class="auth-stat-lbl">Parts</div></div>
+        <div><div class="auth-stat-val">AI</div><div class="auth-stat-lbl">Powered</div></div>
+        <div><div class="auth-stat-val">∞</div><div class="auth-stat-lbl">Practice</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="auth-right">
+    <div class="auth-box">
+      <div class="auth-title">Welcome back</div>
+      <div class="auth-sub">Sign in to continue learning</div>
+      <div class="auth-tabs">
+        <div class="auth-tab active" onclick="switchAuthTab('login')">Sign In</div>
+        <div class="auth-tab" onclick="switchAuthTab('register')">Register</div>
+      </div>
+
+      <!-- LOGIN -->
+      <div id="login-form">
+        <div class="form-group">
+          <label class="form-label">Email Address</label>
+          <input class="form-input" id="login-email" type="email" placeholder="your@email.com" onkeydown="if(e.key==='Enter')doLogin()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Password</label>
+          <input class="form-input" id="login-pass" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()">
+        </div>
+        <div style="text-align:right;margin-bottom:16px">
+          <span style="font-size:12px;color:var(--red);cursor:pointer;font-weight:600" onclick="showForgot()">Forgot password?</span>
+        </div>
+        <button class="btn btn-red btn-full btn-lg" onclick="doLogin()">Sign In</button>
+        <div class="teacher-btn" onclick="showTeacherLogin()">
+          <div>
+            <div style="font-weight:700;font-size:13px">Teacher Portal</div>
+            <div style="font-size:11px;color:rgba(255,255,255,.5);margin-top:1px">Access with teacher password</div>
+          </div>
+          <span>→</span>
+        </div>
+      </div>
+
+      <!-- REGISTER -->
+      <div id="register-form" style="display:none">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div class="form-group">
+            <label class="form-label">Student ID *</label>
+            <input class="form-input" id="reg-id" placeholder="VD: SE123456">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Class ID</label>
+            <input class="form-input" id="reg-class" placeholder="VD: IELTS41">
+            <div class="form-hint">Lấy từ giáo viên trước khi đăng ký</div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Full Name *</label>
+          <input class="form-input" id="reg-name" placeholder="Nguyễn Văn A">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div class="form-group">
+            <label class="form-label">Date of Birth</label>
+            <input class="form-input" id="reg-dob" type="date">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Phone</label>
+            <input class="form-input" id="reg-phone" placeholder="0901234567">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Email *</label>
+          <input class="form-input" id="reg-email" type="email" placeholder="your@email.com">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Password *</label>
+          <input class="form-input" id="reg-pass" type="password" placeholder="Tối thiểu 6 ký tự">
+        </div>
+        <button class="btn btn-red btn-full btn-lg" onclick="doRegister()">Create Account</button>
+        <p style="font-size:11px;color:var(--g400);margin-top:10px;text-align:center">Tài khoản cần được giáo viên kích hoạt trước khi đăng nhập.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════ TEACHER DASHBOARD ══════ -->
+<div class="screen" id="S-teacher">
+  <div class="topbar">
+    <span class="tb-brand">Speaking <em>App</em></span>
+    <span class="tb-sub">/ Teacher Portal</span>
+    <div class="tb-right">
+      <span class="tb-user">👩‍🏫 Teacher</span>
+      <button class="tb-btn" onclick="logout()">Sign Out</button>
+    </div>
+  </div>
+  <div class="dash-wrap">
+    <nav class="sidenav">
+      <div class="sidenav-section">Management</div>
+      <div class="sidenav-item active" onclick="teacherTab('overview')">📊 Class Overview</div>
+      <div class="sidenav-item" onclick="teacherTab('classroom')">🏫 Classroom</div>
+      <div class="sidenav-item" onclick="teacherTab('homework')">📚 Homework Book</div>
+      <div class="sidenav-item" onclick="teacherTab('progress')">📈 Study Progress</div>
+      <div class="sidenav-section">Settings</div>
+      <div class="sidenav-item" onclick="teacherTab('settings')">⚙️ Settings</div>
+    </nav>
+    <div class="dash-content" id="teacher-content"></div>
+  </div>
+</div>
+
+<!-- ══════ STUDENT DASHBOARD ══════ -->
+<div class="screen" id="S-student">
+  <div class="topbar">
+    <span class="tb-brand">Speaking <em>App</em></span>
+    <span class="tb-sub" id="std-tb-sub">/ Student</span>
+    <div class="tb-right">
+      <span class="tb-user" id="std-tb-user"></span>
+      <button class="tb-btn" onclick="logout()">Sign Out</button>
+    </div>
+  </div>
+  <div class="dash-wrap">
+    <nav class="sidenav">
+      <div class="sidenav-item active" onclick="studentTab('overview')">📊 Overview</div>
+      <div class="sidenav-item" onclick="studentTab('peer')">👥 Peer Comparison</div>
+      <div class="sidenav-item" onclick="studentTab('homework')">📚 Homework</div>
+      <div class="sidenav-item" onclick="studentTab('practice')">🎤 Practice</div>
+      <div class="sidenav-item" onclick="studentTab('history')">📋 My History</div>
+    </nav>
+    <div class="dash-content" id="student-content"></div>
+  </div>
+</div>
+
+<!-- ══════ PRACTICE SETUP ══════ -->
+<div class="screen" id="S-setup">
+  <div class="topbar">
+    <span class="tb-brand">Speaking <em>App</em></span>
+    <span class="tb-sub" id="setup-tb">/ Practice Setup</span>
+    <div class="tb-right">
+      <span class="tb-user" id="u-setup"></span>
+      <button class="tb-btn" onclick="SS('S-student')">← Back</button>
+    </div>
+  </div>
+  <div class="main" style="max-width:700px" id="setup-main"></div>
+</div>
+
+<!-- ══════ PRACTICE SESSION ══════ -->
+<div class="screen" id="S-session">
+  <div class="topbar">
+    <span class="tb-brand">Speaking <em>App</em></span>
+    <span class="tb-sub" id="sess-tb">/ Speaking</span>
+    <div class="tb-right">
+      <span class="tb-user" id="u-sess"></span>
+      <button class="tb-btn btn-danger" onclick="confirmEndSession()">⏹ End</button>
+    </div>
+  </div>
+  <div class="main" style="max-width:700px">
+    <div class="prog-bar-wrap">
+      <div class="prog-hdr"><span id="prog-txt">Question 1 of 4</span><span id="prog-pct">0%</span></div>
+      <div class="prog-bar"><div class="prog-fill" id="prog-fill" style="width:0%"></div></div>
+    </div>
+    <div id="prep-wrap" style="display:none">
+      <div class="prep-box">
+        <span style="font-size:12px;font-weight:600;color:var(--gold)">⏱ Prep:</span>
+        <span class="prep-cd" id="prep-cd">1:00</span>
+        <div class="prep-bar"><div class="prep-fill" id="prep-fill" style="width:100%"></div></div>
+      </div>
+    </div>
+    <div class="q-box">
+      <div class="q-box-lbl" id="q-lbl">QUESTION</div>
+      <div class="q-box-txt" id="q-txt">Loading…</div>
+      <div class="q-num" id="q-num">1</div>
+    </div>
+    <div id="kw-bar" style="display:none;margin-bottom:12px">
+      <button class="btn btn-outline btn-sm" onclick="toggleKW()">💡 <span id="kw-btn-txt">Show keywords</span></button>
+    </div>
+    <div id="kw-disp" class="kw-display" style="display:none"></div>
+    <div class="rec-area" id="rec-area">
+      <div class="rec-btn" id="rec-btn" onclick="toggleTalk()">🎤</div>
+      <div class="wvf" id="wvf">
+        <div class="wb"></div><div class="wb"></div><div class="wb"></div>
+        <div class="wb"></div><div class="wb"></div><div class="wb"></div><div class="wb"></div>
+      </div>
+      <div class="rec-status" id="rec-st">Nhấn <b>SPACE</b> (hoặc 🎤) để bắt đầu</div>
+      <div class="rec-timer" id="rec-time" style="display:none">0:00</div>
+      <div style="font-size:11px;color:var(--g400);margin-top:3px" id="rec-hint">Nhấn SPACE lần nữa để chốt câu</div>
+      <div id="ptt-interim" style="font-size:13px;color:var(--g600);margin-top:8px;min-height:18px;font-style:italic"></div>
+      <div id="rec-play-wrap" style="display:none;gap:8px;justify-content:center;margin-top:10px">
+        <button class="btn btn-outline btn-sm" onclick="playLastRec()">🔊 Nghe lại</button>
+        <button class="btn btn-outline btn-sm" onclick="retryRec()">🔄 Thu lại</button>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-bottom:14px">
+      <button class="btn btn-outline btn-sm" id="prev-btn" onclick="prevQ()" disabled>◀ Prev</button>
+      <button class="btn btn-outline" id="next-btn" onclick="nextQ()">Next →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════ GRADING ══════ -->
+<div class="screen" id="S-grading">
+  <div class="topbar">
+    <span class="tb-brand">Speaking <em>App</em></span>
+    <span class="tb-sub">/ AI Grading…</span>
+  </div>
+  <div class="grading-wrap">
+    <div class="spinner" style="margin-bottom:20px"></div>
+    <div style="font-size:1rem;font-weight:700;color:var(--black)" id="g-title">Đang chấm điểm…</div>
+    <div style="max-width:400px;margin-top:20px;width:100%" id="g-steps"></div>
+  </div>
+</div>
+
+<!-- ══════ RESULTS ══════ -->
+<div class="screen" id="S-results">
+  <div class="topbar">
+    <span class="tb-brand">Speaking <em>App</em></span>
+    <span class="tb-sub">/ Results</span>
+    <div class="tb-right">
+      <span class="tb-user" id="u-res"></span>
+      <button class="tb-btn" onclick="SS('S-student');studentTab('history')">← History</button>
+    </div>
+  </div>
+  <div class="main" style="max-width:700px" id="results-main"></div>
+</div>
+
+<!-- ══════ MODALS ══════ -->
+<!-- Teacher Login -->
+<div class="modal-overlay" id="teacher-login-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">👩‍🏫 Teacher Portal</span>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('teacher-login-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Teacher Password</label>
+        <input class="form-input" id="teacher-pass" type="password" placeholder="Enter teacher password" onkeydown="if(event.key==='Enter')doTeacherLogin()">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('teacher-login-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="doTeacherLogin()">Access Portal</button>
+    </div>
+  </div>
+</div>
+
+<!-- Forgot Password -->
+<div class="modal-overlay" id="forgot-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">🔑 Reset Password</span>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('forgot-modal')">✕</button>
+    </div>
+    <div class="modal-body" id="forgot-body">
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input class="form-input" id="forgot-email" type="email">
+      </div>
+      <button class="btn btn-primary btn-full" onclick="sendForgot()">Send Code</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Student Modal -->
+<div class="modal-overlay" id="add-student-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">➕ Add Student</span>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('add-student-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group"><label class="form-label">Student ID *</label><input class="form-input" id="as-id" placeholder="SE123456"></div>
+        <div class="form-group"><label class="form-label">Class ID</label><input class="form-input" id="as-class" placeholder="IELTS41"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Full Name *</label><input class="form-input" id="as-name"></div>
+      <div class="form-group"><label class="form-label">Email</label><input class="form-input" id="as-email" type="email"></div>
+      <div class="form-group"><label class="form-label">Phone</label><input class="form-input" id="as-phone"></div>
+      <div class="form-hint" style="margin-top:-8px">Default password = Student ID</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('add-student-modal')">Cancel</button>
+      <button class="btn btn-green" onclick="doAddStudent()">Add Student</button>
+    </div>
+  </div>
+</div>
+
+<!-- Create Class Modal -->
+<div class="modal-overlay" id="create-class-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">🏫 Create Class</span>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('create-class-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group"><label class="form-label">Class ID * <small style="color:var(--g400)">(sinh viên sẽ dùng khi đăng ký)</small></label><input class="form-input" id="cc-id" placeholder="VD: IELTS41" style="text-transform:uppercase"></div>
+      <div class="form-group"><label class="form-label">Class Name</label><input class="form-input" id="cc-name" placeholder="VD: IELTS Speaking Class 41"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group"><label class="form-label">Academic Year</label><input class="form-input" id="cc-year" placeholder="2025-2026"></div>
+        <div class="form-group"><label class="form-label">Semester</label><input class="form-input" id="cc-sem" placeholder="HK1"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Teacher Name</label><input class="form-input" id="cc-teacher" placeholder="Nguyễn Thị B"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('create-class-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="doCreateClass()">Create Class</button>
+    </div>
+  </div>
+</div>
+
+<!-- Create Assignment Modal -->
+<div class="modal-overlay" id="create-asn-modal" style="overflow-y:auto">
+  <div class="modal" style="max-width:680px">
+    <div class="modal-header">
+      <span class="modal-title">📚 Create Assignment</span>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('create-asn-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group"><label class="form-label">Title *</label><input class="form-input" id="asn-title" placeholder="VD: Shoes - Part 1 Practice"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group">
+          <label class="form-label">Part *</label>
+          <select class="form-input form-select" id="asn-part" onchange="asnPartChange()">
+            <option value="part1">Part 1 — Introduction</option>
+            <option value="part2">Part 2 — Long Turn</option>
+            <option value="part3">Part 3 — Discussion</option>
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">Deadline</label><input class="form-input" id="asn-deadline" type="date"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Assigned Classes <small style="color:var(--g400)">(comma-separated, or ALL)</small></label>
+        <input class="form-input" id="asn-classes" placeholder="IELTS41, IELTS42" style="text-transform:uppercase">
+      </div>
+      <div id="asn-questions-wrap">
+        <label class="form-label" style="margin-top:4px">Questions *</label>
+        <div id="asn-q-list"></div>
+        <button class="btn btn-outline btn-sm" style="margin-top:6px" onclick="asnAddQ()">+ Add Question</button>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('create-asn-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="doCreateAssignment()">Create Assignment</button>
+    </div>
+  </div>
+</div>
+
+<!-- Session Detail Modal -->
+<div class="modal-overlay" id="detail-modal">
+  <div class="modal detail-modal">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title" id="dm-title">Session Detail</div>
+        <div style="font-size:12px;color:var(--g400);margin-top:2px" id="dm-meta"></div>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('detail-modal')">✕</button>
+    </div>
+    <div id="dm-body" style="max-height:80vh;overflow-y:auto"></div>
+  </div>
+</div>
+
+<!-- Activate Student Modal -->
+<div class="modal-overlay" id="activate-modal">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-header">
+      <span class="modal-title" id="act-title">Activate Student</span>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('activate-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Status</label>
+        <select class="form-input form-select" id="act-status">
+          <option value="Active">Active</option>
+          <option value="Pending">Pending</option>
+          <option value="Archived">Archived</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Assign to Class</label>
+        <input class="form-input" id="act-class" placeholder="ClassID" style="text-transform:uppercase">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('activate-modal')">Cancel</button>
+      <button class="btn btn-green" onclick="doActivate()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast-wrap" id="toast-wrap"></div>
+
+<script>
+// ════════════════════════════════════════════
+// CONFIG
+// ════════════════════════════════════════════
+const GAS_URL = 'https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec';
+
+// ════════════════════════════════════════════
+// STATE
+// ════════════════════════════════════════════
+const A = {
+  // auth
+  user: null,
+  sessionToken: null,
+  teacherToken: null,
+  // practice
+  mode: '', qs: [], recs: [], idx: 0,
+  retryCount: 0, topic: '', assignId: '',
+  t0: null, gkey: '', groqKey: '',
+  talking: false, talkBusy: false,
+  recStartTs: 0, curAnswer: '',
+  mr: null, chunks: [], lastBlob: null, lastMime: null,
+  prepLeft: 0, prepTm: null, recTm: null,
+  qSeconds: 0, qcdTm: null
+};
+
+// ════════════════════════════════════════════
+// SCREEN ROUTER
+// ════════════════════════════════════════════
+function SS(id) {
+  document.querySelectorAll('.screen').forEach(s => {
+    s.classList.remove('active');
+    s.style.display = '';
+  });
+  const el = document.getElementById(id);
+  if (el) { el.classList.add('active'); el.style.display = 'flex'; }
+  // Update topbar user labels
+  if (id === 'S-session') {
+    document.getElementById('u-sess').textContent = A.user?.fullName || '';
+  }
+  if (id === 'S-student') {
+    document.getElementById('std-tb-user').textContent = A.user?.fullName || '';
+    document.getElementById('std-tb-sub').textContent = '/ ' + (A.user?.classId || 'Student');
+  }
+  if (id === 'S-results') {
+    document.getElementById('u-res').textContent = A.user?.fullName || '';
+  }
+  if (id === 'S-setup') {
+    document.getElementById('u-setup').textContent = A.user?.fullName || '';
+  }
+}
+
+// ════════════════════════════════════════════
+// GAS API
+// ════════════════════════════════════════════
+async function gasCall(action, payload = {}) {
+  const body = { action, payload,
+    sessionToken: A.sessionToken || '',
+    teacherToken: A.teacherToken || ''
+  };
+  const r = await fetch(GAS_URL, {
+    method: 'POST',
+    body: JSON.stringify(body)
+  });
+  if (!r.ok) throw new Error('Network error ' + r.status);
+  return r.json();
+}
+
+// ════════════════════════════════════════════
+// TOAST
+// ════════════════════════════════════════════
+function toast(msg, type = 'info', dur = 3500) {
+  const w = document.getElementById('toast-wrap');
+  const el = document.createElement('div');
+  el.className = 'toast ' + type;
+  el.textContent = msg;
+  w.appendChild(el);
+  setTimeout(() => el.remove(), dur);
+}
+
+// ════════════════════════════════════════════
+// MODAL
+// ════════════════════════════════════════════
+function openModal(id) { document.getElementById(id).classList.add('active'); }
+function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+
+// ════════════════════════════════════════════
+// AUTH
+// ════════════════════════════════════════════
+function switchAuthTab(tab) {
+  document.querySelectorAll('.auth-tab').forEach((t,i) => t.classList.toggle('active', (i===0&&tab==='login')||(i===1&&tab==='register')));
+  document.getElementById('login-form').style.display = tab === 'login' ? '' : 'none';
+  document.getElementById('register-form').style.display = tab === 'register' ? '' : 'none';
+}
+
+async function doLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const pass  = document.getElementById('login-pass').value;
+  if (!email || !pass) { toast('Nhập đầy đủ thông tin', 'error'); return; }
+  try {
+    const res = await gasCall('auth.login', { email, password: pass });
+    if (!res.success) { toast(res.error, 'error'); return; }
+    A.user = res.user;
+    A.sessionToken = res.sessionToken;
+    localStorage.setItem('speak_session', JSON.stringify({ user: A.user, token: A.sessionToken }));
+    toast('Xin chào, ' + A.user.fullName + '!', 'success');
+    SS('S-student');
+    studentTab('overview');
+  } catch(e) { toast('Lỗi: ' + e.message, 'error'); }
+}
+
+async function doRegister() {
+  const studentId = document.getElementById('reg-id').value.trim();
+  const fullName  = document.getElementById('reg-name').value.trim();
+  const email     = document.getElementById('reg-email').value.trim();
+  const password  = document.getElementById('reg-pass').value;
+  const classId   = document.getElementById('reg-class').value.trim();
+  const dob       = document.getElementById('reg-dob').value;
+  const phone     = document.getElementById('reg-phone').value.trim();
+  if (!studentId || !fullName || !email || !password) { toast('Điền đầy đủ các trường bắt buộc', 'error'); return; }
+  if (password.length < 6) { toast('Mật khẩu tối thiểu 6 ký tự', 'error'); return; }
+  try {
+    const res = await gasCall('auth.register', { studentId, fullName, email, password, classId: classId.toUpperCase(), dob, phone });
+    if (!res.success) { toast(res.error, 'error'); return; }
+    toast(res.message, 'success', 5000);
+    switchAuthTab('login');
+  } catch(e) { toast('Lỗi: ' + e.message, 'error'); }
+}
+
+function showTeacherLogin() { openModal('teacher-login-modal'); document.getElementById('teacher-pass').focus(); }
+
+async function doTeacherLogin() {
+  const pass = document.getElementById('teacher-pass').value;
+  if (!pass) return;
+  try {
+    const res = await gasCall('auth.teacherLogin', { password: pass });
+    if (!res.success) { toast(res.error, 'error'); return; }
+    A.teacherToken = res.teacherToken;
+    localStorage.setItem('speak_teacher', res.teacherToken);
+    closeModal('teacher-login-modal');
+    toast('Teacher portal loaded', 'success');
+    SS('S-teacher');
+    teacherTab('overview');
+  } catch(e) { toast('Lỗi: ' + e.message, 'error'); }
+}
+
+function showForgot() { openModal('forgot-modal'); }
+async function sendForgot() {
+  const email = document.getElementById('forgot-email').value.trim();
+  if (!email) return;
+  try {
+    const res = await gasCall('auth.forgotPassword', { email });
+    if (!res.success) { toast(res.error, 'error'); return; }
+    document.getElementById('forgot-body').innerHTML = `
+      <p style="margin-bottom:14px;color:var(--g600)">Code đã gửi đến ${email}. Nhập code để tiếp tục.</p>
+      <div class="form-group"><label class="form-label">Code</label><input class="form-input" id="forgot-code" maxlength="6"></div>
+      <div class="form-group"><label class="form-label">New Password</label><input class="form-input" id="forgot-newpass" type="password"></div>
+      <button class="btn btn-primary btn-full" onclick="doResetPass('${email}')">Reset Password</button>`;
+    if (!res.emailSent && res.code) toast('Code (test): ' + res.code, 'info', 10000);
+  } catch(e) { toast(e.message, 'error'); }
+}
+async function doResetPass(email) {
+  const code = document.getElementById('forgot-code').value;
+  const newPassword = document.getElementById('forgot-newpass').value;
+  try {
+    const res = await gasCall('auth.resetPassword', { email, code, newPassword });
+    if (!res.success) { toast(res.error, 'error'); return; }
+    toast('Đặt lại mật khẩu thành công!', 'success');
+    closeModal('forgot-modal');
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+function logout() {
+  A.user = null; A.sessionToken = null; A.teacherToken = null;
+  localStorage.removeItem('speak_session');
+  localStorage.removeItem('speak_teacher');
+  SS('S-auth');
+}
+
+// ════════════════════════════════════════════
+// TEACHER DASHBOARD
+// ════════════════════════════════════════════
+let _teacherClasses = [], _teacherStudents = [], _teacherAssignments = [], _teacherSessions = [];
+let _activeClass = null;
+let _sortCol = '', _sortDir = 1;
+
+async function teacherTab(tab) {
+  document.querySelectorAll('.sidenav-item').forEach((el,i) => {
+    const tabs = ['overview','classroom','homework','progress','settings'];
+    el.classList.toggle('active', tabs[i] === tab);
+  });
+  const c = document.getElementById('teacher-content');
+  c.innerHTML = '<div class="spinner" style="margin-top:60px"></div>';
+  try {
+    if (tab === 'overview')  await renderTeacherOverview(c);
+    if (tab === 'classroom') await renderTeacherClassroom(c);
+    if (tab === 'homework')  await renderTeacherHomework(c);
+    if (tab === 'progress')  await renderTeacherProgress(c);
+    if (tab === 'settings')  await renderTeacherSettings(c);
+  } catch(e) { c.innerHTML = '<div class="empty">Lỗi: ' + e.message + '</div>'; }
+}
+
+async function renderTeacherOverview(c) {
+  const res = await gasCall('teacher.getClassStats');
+  if (!res.success) { c.innerHTML = '<div class="empty">' + res.error + '</div>'; return; }
+  const stats = res.data;
+  c.innerHTML = `
+    <h2 style="margin-bottom:20px;font-size:1.3rem">📊 Class Overview</h2>
+    <div class="stat-grid">
+      <div class="stat-box"><div class="stat-val">${stats.length}</div><div class="stat-lbl">Active Classes</div></div>
+      <div class="stat-box"><div class="stat-val">${stats.reduce((s,c)=>s+c.totalStudents,0)}</div><div class="stat-lbl">Total Students</div></div>
+      <div class="stat-box"><div class="stat-val">${stats.reduce((s,c)=>s+c.practiced,0)}</div><div class="stat-lbl">Have Practiced</div></div>
+      <div class="stat-box"><div class="stat-val">${stats.reduce((s,c)=>s+c.totalSessions,0)}</div><div class="stat-lbl">Total Sessions</div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px">
+      ${stats.map(cl => `
+        <div class="card" style="cursor:pointer" onclick="teacherTab('progress');setTimeout(()=>filterProgressByClass('${cl.classId}'),500)">
+          <div class="card-header">
+            <div>
+              <div style="font-weight:700;font-size:1rem">${cl.className || cl.classId}</div>
+              <div style="font-size:11px;color:var(--g400)">${cl.academicYear || ''} ${cl.semester || ''}</div>
+            </div>
+            <span class="badge badge-navy">${cl.classId}</span>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;text-align:center">
+            <div><div style="font-size:1.4rem;font-weight:800;color:var(--black)">${cl.totalStudents}</div><div style="font-size:10px;color:var(--g600)">Students</div></div>
+            <div><div style="font-size:1.4rem;font-weight:800;color:var(--green)">${cl.practiced}</div><div style="font-size:10px;color:var(--g600)">Practiced</div></div>
+            <div><div style="font-size:1.4rem;font-weight:800;color:var(--red)">${cl.notPracticed}</div><div style="font-size:10px;color:var(--g600)">Not yet</div></div>
+          </div>
+          <div style="margin-top:10px;height:6px;background:var(--g200);border-radius:3px;overflow:hidden">
+            <div style="height:100%;background:linear-gradient(90deg,var(--green),var(--blue-m));border-radius:3px;width:${cl.totalStudents>0?Math.round(cl.practiced/cl.totalStudents*100):0}%"></div>
+          </div>
+          ${cl.avgScore ? `<div style="margin-top:8px;font-size:12px;color:var(--g600)">Avg score: <strong style="color:var(--gold)">${cl.avgScore}</strong></div>` : ''}
+        </div>
+      `).join('')}
+    </div>`;
+}
+
+async function renderTeacherClassroom(c) {
+  const [clRes, stuRes] = await Promise.all([
+    gasCall('teacher.getClasses'),
+    gasCall('teacher.getStudents', {})
+  ]);
+  _teacherClasses   = (clRes.data || []).filter(c => c.Status !== 'Archived');
+  _teacherStudents  = stuRes.data || [];
+  _activeClass = _activeClass || (_teacherClasses[0]?.ClassID || '');
+  renderClassroomUI(c);
+}
+
+function renderClassroomUI(c) {
+  const students = _teacherStudents.filter(s =>
+    !_activeClass || String(s.ClassID||'').toUpperCase() === _activeClass.toUpperCase()
+  );
+  const pending = students.filter(s => s.Status === 'Pending');
+  c.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px">
+      <h2 style="font-size:1.3rem">🏫 Classroom</h2>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-outline btn-sm" onclick="openModal('create-class-modal')">+ New Class</button>
+        <button class="btn btn-primary btn-sm" onclick="openModal('add-student-modal')">+ Add Student</button>
+      </div>
+    </div>
+    ${pending.length ? `<div class="card" style="border-color:var(--gold);background:var(--gold-l)">
+      <div style="font-weight:700;color:var(--gold);margin-bottom:10px">⏳ ${pending.length} sinh viên chờ kích hoạt</div>
+      ${pending.map(s => `
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(0,0,0,.06)">
+          <div><div style="font-weight:600">${s.FullName}</div><div style="font-size:11px;color:var(--g600)">${s.StudentID} · ${s.Email} · Lớp: ${s.ClassID||'chưa có'}</div></div>
+          <button class="btn btn-green btn-sm" onclick="showActivate('${s.StudentID}','${s.FullName}','${s.ClassID||''}')">Activate</button>
+        </div>`).join('')}
+    </div>` : ''}
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
+      <button class="btn ${!_activeClass?'btn-primary':'btn-outline'} btn-sm" onclick="_activeClass='';teacherTab('classroom')">All</button>
+      ${_teacherClasses.map(cl => `
+        <button class="btn ${_activeClass===cl.ClassID?'btn-primary':'btn-outline'} btn-sm" onclick="_activeClass='${cl.ClassID}';teacherTab('classroom')">${cl.ClassID} <span class="badge badge-grey" style="margin-left:4px">${cl.StudentCount||0}</span></button>
+      `).join('')}
+    </div>
+    <div class="tbl-wrap">
+      <table class="tbl">
+        <thead><tr>
+          <th>Student ID</th><th>Full Name</th><th>Class</th><th>Email</th><th>Status</th><th></th>
+        </tr></thead>
+        <tbody>
+          ${students.length ? students.map(s => `
+            <tr>
+              <td style="font-family:var(--fm)">${s.StudentID}</td>
+              <td style="font-weight:600">${s.FullName}</td>
+              <td>${s.ClassID||'—'}</td>
+              <td style="font-size:12px">${s.Email}</td>
+              <td><span class="badge ${s.Status==='Active'?'badge-green':s.Status==='Pending'?'badge-gold':'badge-grey'}">${s.Status}</span></td>
+              <td style="display:flex;gap:6px">
+                <button class="btn btn-outline btn-sm" onclick="showActivate('${s.StudentID}','${s.FullName}','${s.ClassID||''}')">Edit</button>
+                ${s.Status !== 'Archived' ? `<button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="archiveStudent('${s.StudentID}')">Archive</button>` : ''}
+              </td>
+            </tr>`).join('') : '<tr><td colspan="6" class="empty">Không có sinh viên nào</td></tr>'}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+function showActivate(studentId, fullName, classId) {
+  document.getElementById('act-title').textContent = 'Edit: ' + fullName;
+  document.getElementById('act-status').value = 'Active';
+  document.getElementById('act-class').value = classId || '';
+  document.getElementById('activate-modal')._studentId = studentId;
+  openModal('activate-modal');
+}
+
+async function doActivate() {
+  const modal = document.getElementById('activate-modal');
+  const studentId = modal._studentId;
+  const status  = document.getElementById('act-status').value;
+  const classId = document.getElementById('act-class').value.trim().toUpperCase();
+  try {
+    const res = await gasCall('teacher.activateUser', { studentId, status, classId });
+    if (!res.success) { toast(res.error, 'error'); return; }
+    toast('Cập nhật thành công!', 'success');
+    closeModal('activate-modal');
+    teacherTab('classroom');
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function archiveStudent(studentId) {
+  if (!confirm('Archive sinh viên này?')) return;
+  try {
+    await gasCall('teacher.archiveStudent', { studentId });
+    toast('Đã archive', 'success');
+    teacherTab('classroom');
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function doCreateClass() {
+  const classId     = document.getElementById('cc-id').value.trim().toUpperCase();
+  const className   = document.getElementById('cc-name').value.trim() || classId;
+  const academicYear= document.getElementById('cc-year').value.trim();
+  const semester    = document.getElementById('cc-sem').value.trim();
+  const teacherName = document.getElementById('cc-teacher').value.trim();
+  if (!classId) { toast('ClassID không được để trống', 'error'); return; }
+  try {
+    const res = await gasCall('teacher.createClass', { classId, className, academicYear, semester, teacherName });
+    if (!res.success) { toast(res.error, 'error'); return; }
+    toast('Tạo lớp ' + classId + ' thành công!', 'success');
+    closeModal('create-class-modal');
+    teacherTab('classroom');
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function doAddStudent() {
+  const studentId = document.getElementById('as-id').value.trim();
+  const fullName  = document.getElementById('as-name').value.trim();
+  const classId   = document.getElementById('as-class').value.trim().toUpperCase();
+  const email     = document.getElementById('as-email').value.trim();
+  const phone     = document.getElementById('as-phone').value.trim();
+  if (!studentId || !fullName) { toast('Student ID và tên là bắt buộc', 'error'); return; }
+  try {
+    const res = await gasCall('teacher.addStudent', { studentId, fullName, classId, email, phone });
+    if (!res.success) { toast(res.error, 'error'); return; }
+    toast('Đã thêm ' + fullName, 'success');
+    closeModal('add-student-modal');
+    teacherTab('classroom');
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// ── HOMEWORK ────────────────────────────────
+let _asnQCount = 4;
+function asnPartChange() {
+  const part = document.getElementById('asn-part').value;
+  _asnQCount = part === 'part2' ? 1 : 4;
+  renderAsnQuestions();
+}
+
+function renderAsnQuestions() {
+  const part = document.getElementById('asn-part')?.value || 'part1';
+  const n    = part === 'part2' ? 1 : 4;
+  const list = document.getElementById('asn-q-list');
+  if (!list) return;
+  list.innerHTML = Array.from({length: n}, (_, i) => `
+    <div style="margin-bottom:10px">
+      <label class="form-label" style="margin-bottom:4px">Question ${i+1}${i<(part==='part2'?0:3)?'':' (optional)'}</label>
+      <textarea class="form-input" id="asn-q-${i}" rows="2" placeholder="Enter question ${i+1}…"></textarea>
+    </div>`).join('');
+  const wrap = document.getElementById('asn-questions-wrap');
+  const addBtn = wrap.querySelector('button');
+  if (part === 'part2') { addBtn.style.display = 'none'; }
+  else { addBtn.style.display = ''; }
+}
+
+function asnAddQ() {
+  _asnQCount++;
+  const list = document.getElementById('asn-q-list');
+  const div  = document.createElement('div');
+  div.style.marginBottom = '10px';
+  div.innerHTML = `<label class="form-label" style="margin-bottom:4px">Question ${_asnQCount}</label>
+    <textarea class="form-input" id="asn-q-${_asnQCount-1}" rows="2" placeholder="Enter question…"></textarea>`;
+  list.appendChild(div);
+}
+
+async function renderTeacherHomework(c) {
+  const [asnRes, clsRes] = await Promise.all([
+    gasCall('teacher.getAssignments', {}),
+    gasCall('teacher.getClasses')
+  ]);
+  _teacherAssignments = asnRes.data || [];
+  const classes = (clsRes.data || []).filter(c => c.Status !== 'Archived');
+  c.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+      <h2 style="font-size:1.3rem">📚 Homework Book</h2>
+      <button class="btn btn-primary btn-sm" onclick="openCreateAsn()">+ Create Assignment</button>
+    </div>
+    <div class="tbl-wrap">
+      <table class="tbl">
+        <thead><tr><th>Title</th><th>Part</th><th>Classes</th><th>Deadline</th><th>Status</th><th></th></tr></thead>
+        <tbody>
+          ${_teacherAssignments.length ? _teacherAssignments.map(a => `
+            <tr>
+              <td style="font-weight:600">${a.Title||'—'}</td>
+              <td><span class="badge badge-blue">${a.Part||'—'}</span></td>
+              <td style="font-size:12px">${String(a.AssignedClasses||'').replace(/,/g,', ')}</td>
+              <td style="font-size:12px">${a.Deadline ? new Date(a.Deadline).toLocaleDateString('vi-VN') : '—'}</td>
+              <td><span class="badge ${a.Status==='Active'?'badge-green':'badge-grey'}">${a.Status||'—'}</span></td>
+              <td>
+                <button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="deleteAsn('${a.AssignID}','${(a.Title||'').replace(/'/g,'`')}')">Delete</button>
+              </td>
+            </tr>`).join('') : '<tr><td colspan="6" class="empty">Chưa có bài tập nào</td></tr>'}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+function openCreateAsn() {
+  _asnQCount = 4;
+  openModal('create-asn-modal');
+  setTimeout(renderAsnQuestions, 50);
+}
+
+async function doCreateAssignment() {
+  const title    = document.getElementById('asn-title').value.trim();
+  const part     = document.getElementById('asn-part').value;
+  const deadline = document.getElementById('asn-deadline').value;
+  const classes  = document.getElementById('asn-classes').value.trim().toUpperCase();
+  if (!title) { toast('Nhập tiêu đề bài tập', 'error'); return; }
+  const questions = [];
+  for (let i = 0; i < _asnQCount; i++) {
+    const q = document.getElementById('asn-q-' + i);
+    if (q && q.value.trim()) questions.push(q.value.trim());
+  }
+  if (part !== 'part2' && questions.length < 4) { toast('Cần tối thiểu 4 câu hỏi cho Part 1/3', 'error'); return; }
+  if (part === 'part2' && questions.length < 1) { toast('Cần ít nhất 1 câu hỏi cho Part 2', 'error'); return; }
+  try {
+    const assignedClasses = classes ? classes.split(',').map(s => s.trim()).filter(Boolean) : ['ALL'];
+    const res = await gasCall('teacher.createAssignment', { title, part, questions, deadline, assignedClasses });
+    if (!res.success) { toast(res.error, 'error'); return; }
+    toast('Tạo bài tập thành công!', 'success');
+    closeModal('create-asn-modal');
+    teacherTab('homework');
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function deleteAsn(assignId, title) {
+  if (!confirm('Xóa bài tập "' + title + '"?')) return;
+  try {
+    const res = await gasCall('teacher.deleteAssignment', { assignId });
+    if (!res.success) { toast(res.error, 'error'); return; }
+    toast('Đã xóa', 'success');
+    teacherTab('homework');
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// ── STUDY PROGRESS ───────────────────────────
+let _progSessions = [], _progFilter = '';
+async function renderTeacherProgress(c) {
+  const [sessRes, clsRes] = await Promise.all([
+    gasCall('teacher.getAllSessions', {}),
+    gasCall('teacher.getClasses')
+  ]);
+  _progSessions = sessRes.data || [];
+  const classes = (clsRes.data || []).filter(c => c.Status !== 'Archived');
+  renderProgressUI(c, classes);
+}
+
+function filterProgressByClass(classId) {
+  _progFilter = classId;
+  const c = document.getElementById('teacher-content');
+  const classes = []; // re-render with filter
+  teacherTab('progress');
+}
+
+function renderProgressUI(c, classes) {
+  // Group sessions by StudentID+Topic → rows
+  const rows = buildProgressRows(_progSessions, _progFilter);
+  const MILESTONES = [3,5,8,10];
+  c.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px">
+      <h2 style="font-size:1.3rem">📈 Study Progress</h2>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-outline btn-sm" onclick="exportSessions()">⬇ Export to Sheet</button>
+      </div>
+    </div>
+    <div class="search-row">
+      <select class="search-inp" style="max-width:180px" onchange="_progFilter=this.value;renderTeacherProgress(document.getElementById('teacher-content'))">
+        <option value="">Tất cả lớp</option>
+        ${classes.map(cl => `<option value="${cl.ClassID}" ${_progFilter===cl.ClassID?'selected':''}>${cl.ClassID}</option>`).join('')}
+      </select>
+      <input class="search-inp" placeholder="Tên / MSSV / Topic…" id="prog-search" oninput="filterProgressTable()" style="max-width:280px">
+      <span style="font-size:12px;color:var(--g600)">${rows.length} kết quả</span>
+    </div>
+    <div class="tbl-wrap">
+      <table class="tbl" id="prog-tbl">
+        <thead><tr>
+          <th onclick="sortProg('StudentID')">Student ID ⇅</th>
+          <th onclick="sortProg('StudentName')">Full Name ⇅</th>
+          <th onclick="sortProg('ClassID')">Class ⇅</th>
+          <th onclick="sortProg('Part')">Mode ⇅</th>
+          <th onclick="sortProg('Topic')">Topic ⇅</th>
+          <th>Start</th><th>End</th><th>Duration</th>
+          <th>Q</th><th>Lần</th>
+          <th>Điểm các mốc ⇅</th><th>⚠</th>
+        </tr></thead>
+        <tbody id="prog-tbody">
+          ${renderProgressRows(rows)}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+function buildProgressRows(sessions, classFilter) {
+  // Group by studentId+topic
+  const map = {};
+  sessions.forEach(s => {
+    const key = s.StudentID + '|' + (s.Topic||'');
+    if (!map[key]) map[key] = { StudentID:s.StudentID, StudentName:s.StudentName, ClassID:s.ClassID, Part:s.Part, Topic:s.Topic, sessions:[] };
+    map[key].sessions.push(s);
+  });
+  let rows = Object.values(map);
+  if (classFilter) rows = rows.filter(r => String(r.ClassID||'').toUpperCase() === classFilter.toUpperCase());
+  // Sort by latest session
+  rows.sort((a,b) => {
+    const la = a.sessions.slice(-1)[0]?.StartTime || '';
+    const lb = b.sessions.slice(-1)[0]?.StartTime || '';
+    return lb.localeCompare(la);
+  });
+  return rows;
+}
+
+function renderProgressRows(rows) {
+  if (!rows.length) return '<tr><td colspan="12" class="empty">Chưa có dữ liệu</td></tr>';
+  return rows.map((r, ri) => {
+    const count    = r.sessions.length;
+    const lastSess = r.sessions.slice(-1)[0];
+    const start    = fmtDT(r.sessions[0]?.StartTime);
+    const end      = fmtDT(lastSess?.StartTime);
+    const dur      = lastSess?.DurationMin ? lastSess.DurationMin + 'm' : '—';
+    const qCount   = (() => { try { return (JSON.parse(lastSess?.QuestionsJSON || '[]')).length; } catch(e) { return '—'; } })();
+    // Milestones: find sessions where IsMilestone is true
+    const milestones = r.sessions.filter(s => String(s.IsMilestone) === 'true' && s.Overall);
+    const latestBatch = milestones.slice(-4);
+    const scoreStr = latestBatch.length
+      ? latestBatch.map(m => `<span style="color:${scoreColor(m.Overall)};font-weight:700">${m.Overall}</span>`).join(' · ')
+      : '<span style="color:var(--g400);font-style:italic;font-size:12px">chưa chấm</span>';
+    const hasUngraded = r.sessions.some(s => {
+      const an = parseInt(s.AttemptNo) || 0;
+      return [3,5,8,10,13,15,18,20].includes(an) && !s.Overall;
+    });
+    const sessionKey = ri;
+    return `<tr>
+      <td style="font-family:var(--fm);font-size:12px">${r.StudentID}</td>
+      <td style="font-weight:600">${r.StudentName||'—'}</td>
+      <td><span class="badge badge-grey">${r.ClassID||'—'}</span></td>
+      <td><span class="badge badge-blue">${r.Part||'—'}</span></td>
+      <td style="font-weight:600;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.Topic||''}">${r.Topic||'—'}</td>
+      <td style="font-size:12px">${start}</td>
+      <td style="font-size:12px">${end}</td>
+      <td style="font-size:12px">${dur}</td>
+      <td style="text-align:center">${qCount}</td>
+      <td style="text-align:center">
+        <span class="badge ${count>=10?'badge-green':count>=5?'badge-gold':'badge-grey'}">${count}x</span>
+      </td>
+      <td>${scoreStr}</td>
+      <td style="text-align:center">
+        ${hasUngraded ? '<span title="Có lần mốc chưa có điểm" style="cursor:help">⚠️</span>' : ''}
+      </td>
+    </tr>
+    <tr>
+      <td colspan="12" style="padding:0 12px 10px 12px;text-align:right">
+        <button class="btn btn-outline btn-sm" style="color:var(--red);font-weight:700" onclick="showProgressDetail(${sessionKey})">Detail</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+let _progRows = [];
+function sortProg(col) {
+  if (_sortCol === col) _sortDir *= -1; else { _sortCol = col; _sortDir = 1; }
+  _progRows.sort((a,b) => String(a[col]||'').localeCompare(String(b[col]||'')) * _sortDir);
+  document.getElementById('prog-tbody').innerHTML = renderProgressRows(_progRows);
+}
+
+function filterProgressTable() {
+  const q = (document.getElementById('prog-search')?.value || '').toLowerCase();
+  const filtered = _progRows.filter(r =>
+    !q || String(r.StudentName||'').toLowerCase().includes(q) ||
+    String(r.StudentID||'').toLowerCase().includes(q) ||
+    String(r.Topic||'').toLowerCase().includes(q)
+  );
+  document.getElementById('prog-tbody').innerHTML = renderProgressRows(filtered);
+}
+
+function showProgressDetail(rowIdx) {
+  const row = _progRows[rowIdx];
+  if (!row) return;
+  const milestones = row.sessions.filter(s => String(s.IsMilestone) === 'true');
+  const SCORE_LABS = [[3,'Lần 3'],[5,'Lần 5'],[8,'Lần 8'],[10,'Lần 10'],[13,'Lần 13'],[15,'Lần 15'],[18,'Lần 18'],[20,'Lần 20'],[23,'Lần 23'],[25,'Lần 25'],[28,'Lần 28'],[30,'Lần 30']];
+  const latestBatch = milestones.slice(-4);
+  const latestAttemptNo = latestBatch.slice(-1)[0]?.AttemptNo || '';
+  let dmHtml = `
+    <div class="score-strip">
+      ${latestBatch.length ? (() => {
+        const last = latestBatch.slice(-1)[0];
+        return ['Overall|overall','FC|fc','LR|lr','GR|gr','P|p'].map(k => {
+          const [lbl, field] = k.split('|');
+          const val = last[field.toUpperCase()] || last[field] || '—';
+          return `<div class="score-col"><div class="score-val s${String(val).replace('.','')}">${val}</div><div class="score-lbl">${lbl}</div></div>`;
+        }).join('');
+      })() : '<div class="score-col" style="padding:20px;color:var(--g400)">Chưa có điểm mốc</div>'}
+    </div>
+    <div style="padding:16px 20px">
+      <div style="font-size:12px;font-weight:700;color:var(--g600);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">📊 Điểm qua các mốc chấm</div>
+      <table class="milestone-tbl">
+        <thead><tr><th>Mốc</th><th>Overall</th><th>FC</th><th>LR</th><th>GR</th><th>P</th><th>Ngày</th></tr></thead>
+        <tbody>
+          ${milestones.map(m => `
+            <tr class="${String(m.AttemptNo) === String(latestAttemptNo) ? 'active-row' : ''}">
+              <td>▶ Lần ${m.AttemptNo}</td>
+              <td style="font-weight:700;color:${scoreColor(m.Overall)}">${m.Overall||'—'}</td>
+              <td>${m.FC||'—'}</td><td>${m.LR||'—'}</td><td>${m.GR||'—'}</td><td>${m.P||'—'}</td>
+              <td style="font-size:11px">${fmtDT(m.StartTime)}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+    <div style="padding:0 20px 16px">
+      <div style="font-size:12px;font-weight:700;color:var(--g600);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">🗣 All Sessions (${row.sessions.length} lần)</div>
+      ${row.sessions.slice().reverse().map((s, si) => {
+        let results = [];
+        try { results = JSON.parse(s.ResultsJSON || '[]'); } catch(e) {}
+        return `
+          <div class="qacc">
+            <div class="qacc-hdr" onclick="this.nextElementSibling.classList.toggle('open')">
+              <div class="qa-n">${s.AttemptNo||si+1}</div>
+              <div class="qa-q" style="flex:1">${fmtDT(s.StartTime)} · ${s.DurationMin||0} phút</div>
+              ${s.Overall ? `<div class="qa-band">${s.Overall}</div>` : `<span style="font-size:11px;color:var(--g400)">chưa chấm</span>`}
+            </div>
+            <div class="qacc-body" style="display:none">
+              ${results.map((r, qi) => `
+                <div style="margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--g100)">
+                  <div style="font-weight:700;font-size:13px;margin-bottom:6px">Q${qi+1}: ${r.question||''}</div>
+                  <div class="qs-lbl">Student's Answer</div>
+                  <div class="qs-student">"${r.studentAnswer||'(no answer)'}"</div>
+                  ${r.suggestion ? `<div class="qs-sugg" style="margin-top:6px">${r.suggestion}</div>` : ''}
+                  ${r.overall ? `<div style="margin-top:8px;font-size:12px">Band: <strong style="color:${scoreColor(r.overall)}">${r.overall}</strong> · FC:${r.scores?.fluency?.score||'—'} · LR:${r.scores?.lexical?.score||'—'} · GR:${r.scores?.grammar?.score||'—'} · P:${r.scores?.pronunciation?.score||'—'}</div>` : ''}
+                </div>`).join('') || '<div class="empty" style="padding:14px">No detail data</div>'}
+            </div>
+          </div>`;
+      }).join('')}
+    </div>`;
+  document.getElementById('dm-title').textContent = row.StudentName + ' · ' + (row.ClassID||'') + ' · 📌 ' + (row.Topic||'');
+  document.getElementById('dm-meta').textContent = (row.Part||'').toUpperCase() + ' · ' + row.sessions.length + ' lần luyện';
+  document.getElementById('dm-body').innerHTML = dmHtml;
+  openModal('detail-modal');
+}
+
+async function exportSessions() {
+  try {
+    toast('Đang xuất…', 'info');
+    const res = await gasCall('teacher.exportSessions', { classId: _progFilter || '' });
+    if (!res.success) { toast(res.error, 'error'); return; }
+    window.open(res.url, '_blank');
+    toast('Đã xuất thành công!', 'success');
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function renderTeacherSettings(c) {
+  const res = await gasCall('teacher.getSettings');
+  const s   = res.data || {};
+  c.innerHTML = `
+    <h2 style="margin-bottom:20px">⚙️ Settings</h2>
+    <div class="card">
+      <div class="card-title" style="margin-bottom:14px">Teacher Account</div>
+      <div class="form-group"><label class="form-label">Teacher Email (nhận thông báo đăng ký)</label>
+        <input class="form-input" id="set-email" value="${s.TeacherEmail||''}" placeholder="teacher@email.com">
+      </div>
+      <div class="divider"></div>
+      <div class="card-title" style="margin-bottom:14px">Change Password</div>
+      <div class="form-group"><label class="form-label">Current Password</label><input class="form-input" id="set-curpass" type="password"></div>
+      <div class="form-group"><label class="form-label">New Password</label><input class="form-input" id="set-newpass" type="password"></div>
+      <div class="divider"></div>
+      <div class="card-title" style="margin-bottom:14px">Audio Storage</div>
+      <div class="form-group"><label class="form-label">Google Drive Folder ID (cho audio upload)</label>
+        <input class="form-input" id="set-folder" value="${s.AudioFolderID||''}" placeholder="1abc...xyz">
+        <div class="form-hint">Thư mục Drive để lưu audio của sinh viên. Để trống = Root Drive của bạn.</div>
+      </div>
+      <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
+    </div>`;
+}
+
+async function saveSettings() {
+  const email  = document.getElementById('set-email')?.value.trim();
+  const folder = document.getElementById('set-folder')?.value.trim();
+  const curP   = document.getElementById('set-curpass')?.value;
+  const newP   = document.getElementById('set-newpass')?.value;
+  try {
+    if (email !== undefined) await gasCall('teacher.saveSetting', { key: 'TeacherEmail', value: email });
+    if (folder !== undefined) await gasCall('teacher.saveSetting', { key: 'AudioFolderID', value: folder });
+    if (curP && newP) {
+      const res = await gasCall('teacher.changePassword', { current: curP, newPassword: newP });
+      if (!res.success) { toast(res.error, 'error'); return; }
+    }
+    toast('Đã lưu cài đặt!', 'success');
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// ════════════════════════════════════════════
+// STUDENT DASHBOARD
+// ════════════════════════════════════════════
+async function studentTab(tab) {
+  document.querySelectorAll('#S-student .sidenav-item').forEach((el, i) => {
+    const tabs = ['overview','peer','homework','practice','history'];
+    el.classList.toggle('active', tabs[i] === tab);
+  });
+  const c = document.getElementById('student-content');
+  c.innerHTML = '<div class="spinner" style="margin-top:60px"></div>';
+  try {
+    if (tab === 'overview')  await renderStudentOverview(c);
+    if (tab === 'peer')      await renderPeerComparison(c);
+    if (tab === 'homework')  await renderStudentHomework(c);
+    if (tab === 'practice')  renderPracticeHome(c);
+    if (tab === 'history')   await renderMyHistory(c);
+  } catch(e) { c.innerHTML = '<div class="empty">Lỗi: ' + e.message + '</div>'; }
+}
+
+async function renderStudentOverview(c) {
+  const res = await gasCall('student.getOverview');
+  if (!res.success) { c.innerHTML = '<div class="empty">' + res.error + '</div>'; return; }
+  const { topics, totalSessions } = res.data;
+  c.innerHTML = `
+    <h2 style="margin-bottom:16px">📊 My Overview</h2>
+    <div class="stat-grid">
+      <div class="stat-box"><div class="stat-val">${topics.length}</div><div class="stat-lbl">Topics</div></div>
+      <div class="stat-box"><div class="stat-val">${totalSessions}</div><div class="stat-lbl">Sessions</div></div>
+      <div class="stat-box"><div class="stat-val">${topics.filter(t=>t.count>=10).length}</div><div class="stat-lbl">Completed (≥10)</div></div>
+      <div class="stat-box"><div class="stat-val">${topics.reduce((s,t)=>Math.max(s,t.latestScore||0),0)||'—'}</div><div class="stat-lbl">Best Score</div></div>
+    </div>
+    ${topics.length ? `
+      <div class="card">
+        <div class="card-title" style="margin-bottom:14px">My Topics</div>
+        ${topics.map(t => `
+          <div style="padding:12px 0;border-bottom:1px solid var(--g100)">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+              <div>
+                <span style="font-weight:700">${t.topic}</span>
+                <span class="badge badge-blue" style="margin-left:8px">${t.part||'—'}</span>
+              </div>
+              <div style="font-size:12px;color:var(--g600)">${t.count} lần · ${fmtDT(t.lastPractice)}</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px">
+              <div style="flex:1;height:6px;background:var(--g200);border-radius:3px;overflow:hidden">
+                <div style="height:100%;width:${Math.min(t.count/10*100,100)}%;background:linear-gradient(90deg,var(--blue-m),var(--green));border-radius:3px"></div>
+              </div>
+              <div style="font-size:11px;color:var(--g600);white-space:nowrap">${t.count}/10</div>
+              ${t.latestScore ? `<span style="font-weight:700;color:${scoreColor(t.latestScore)}">${t.latestScore}</span>` : ''}
+            </div>
+            ${t.scores.length ? `<div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
+              ${t.scores.map(m=>`<span style="font-size:11px;background:var(--g100);border-radius:6px;padding:2px 8px">Lần ${m.attemptNo}: <strong style="color:${scoreColor(m.overall)}">${m.overall}</strong></span>`).join('')}
+            </div>` : ''}
+          </div>`).join('')}
+      </div>` : '<div class="empty">Bạn chưa luyện tập lần nào. Vào Practice để bắt đầu!</div>'}`;
+}
+
+async function renderPeerComparison(c) {
+  const res = await gasCall('student.getPeerComparison');
+  if (!res.success) { c.innerHTML = '<div class="empty">' + res.error + '</div>'; return; }
+  const peers = res.data;
+  const myId  = A.user?.studentId;
+  c.innerHTML = `
+    <h2 style="margin-bottom:16px">👥 Peer Comparison — ${A.user?.classId || 'My Class'}</h2>
+    <div class="card">
+      <p style="font-size:13px;color:var(--g600);margin-bottom:16px">Bảng dưới đây cho thấy số lần luyện tập của các bạn trong lớp. Cố gắng lên nhé! 💪</p>
+      ${peers.map((p, i) => {
+        const isMe = String(p.studentId) === String(myId);
+        return `<div class="peer-row ${isMe ? 'peer-me' : ''}">
+          <div class="peer-rank ${i===0?'top1':i===1?'top2':i===2?'top3':''}">${i+1}</div>
+          <div>
+            <div class="peer-name">${p.name || p.studentId} ${isMe ? '<span class="badge badge-blue" style="margin-left:4px">You</span>' : ''}</div>
+            <div class="peer-last">${p.lastPractice ? 'Last: ' + fmtDT(p.lastPractice) : 'Not yet'}</div>
+          </div>
+          <div class="peer-count">${p.count} lần</div>
+          <div>
+            <div style="width:${Math.min(p.count/10*100,100)}px;max-width:100px;height:6px;background:var(--g200);border-radius:3px;overflow:hidden">
+              <div style="height:100%;width:${Math.min(p.count/10*100,100)}%;background:${isMe?'var(--blue)':'var(--g400)'};border-radius:3px"></div>
+            </div>
+          </div>
+        </div>`;
+      }).join('') || '<div class="empty">Chưa có dữ liệu</div>'}
+    </div>`;
+}
+
+let _studentHW = [];
+async function renderStudentHomework(c) {
+  const res = await gasCall('student.getHomework');
+  if (!res.success) { c.innerHTML = '<div class="empty">' + res.error + '</div>'; return; }
+  _studentHW = res.data || [];
+  const now  = new Date();
+  c.innerHTML = `
+    <h2 style="margin-bottom:16px">📚 Homework</h2>
+    ${_studentHW.length ? _studentHW.map(hw => {
+      const deadline = hw.Deadline ? new Date(hw.Deadline) : null;
+      const overdue  = deadline && deadline < now;
+      const daysLeft = deadline ? Math.ceil((deadline - now) / 86400000) : null;
+      return `
+        <div class="card" style="${overdue ? 'border-color:var(--red)' : ''}">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap">
+            <div>
+              <div style="font-weight:700;font-size:1rem">${hw.Title||'Assignment'}</div>
+              <div style="margin-top:4px;display:flex;gap:6px;flex-wrap:wrap">
+                <span class="badge badge-blue">${hw.Part||'—'}</span>
+                ${overdue ? '<span class="badge badge-red">Quá hạn</span>' : (daysLeft !== null ? `<span class="badge ${daysLeft<=3?'badge-red':'badge-gold'}">Còn ${daysLeft} ngày</span>` : '')}
+                ${hw.myAttempts ? `<span class="badge badge-green">${hw.myAttempts} lần luyện</span>` : '<span class="badge badge-grey">Chưa luyện</span>'}
+              </div>
+            </div>
+            ${deadline ? `<div style="font-size:12px;color:var(--g600)">Deadline: ${deadline.toLocaleDateString('vi-VN')}</div>` : ''}
+          </div>
+          <div style="margin-top:12px">
+            <button class="btn btn-primary btn-sm" onclick="startHWPractice('${hw.AssignID}','${(hw.Title||'').replace(/'/g,'`')}','${hw.Part||'part1'}')">
+              🎤 ${hw.myAttempts ? 'Continue Practice' : 'Start Practice'}
+            </button>
+          </div>
+        </div>`;
+    }).join('') : '<div class="empty">Chưa có bài tập nào được giao</div>'}`;
+}
+
+function renderPracticeHome(c) {
+  const gemKey   = localStorage.getItem('speak_gemini_key') || '';
+  const groqKey  = localStorage.getItem('speak_groq_key') || '';
+  A.gkey    = gemKey;
+  A.groqKey = groqKey;
+  c.innerHTML = `
+    <h2 style="margin-bottom:16px">🎤 Practice</h2>
+    <div class="key-wrap">
+      <div style="font-weight:700;margin-bottom:10px">🔑 Gemini API Key <small style="font-weight:400;color:var(--g600)">(chấm điểm)</small></div>
+      <div class="key-row">
+        <input class="form-input" id="gemini-key-inp" type="password" value="${gemKey}" placeholder="AIzaSy..." style="flex:1">
+        <button class="btn btn-gold btn-sm" onclick="saveKey('gemini')">Lưu</button>
+        ${gemKey ? '<span class="key-st key-ok">✓ Key OK</span>' : '<span class="key-st key-bad">Chưa có</span>'}
+      </div>
+      <div style="font-size:11px;color:var(--g600);margin-top:6px">Miễn phí tại <a href="https://aistudio.google.com" target="_blank">aistudio.google.com</a></div>
+    </div>
+    <div class="key-wrap">
+      <div style="font-weight:700;margin-bottom:10px">🔑 Groq API Key <small style="font-weight:400;color:var(--g600)">(chuyển giọng nói → chữ)</small></div>
+      <div class="key-row">
+        <input class="form-input" id="groq-key-inp" type="password" value="${groqKey}" placeholder="gsk_..." style="flex:1">
+        <button class="btn btn-gold btn-sm" onclick="saveKey('groq')">Lưu</button>
+        ${groqKey ? '<span class="key-st key-ok">✓ Key OK</span>' : '<span class="key-st key-bad">Chưa có</span>'}
+      </div>
+      <div style="font-size:11px;color:var(--g600);margin-top:6px">Miễn phí tại <a href="https://console.groq.com/keys" target="_blank">console.groq.com/keys</a></div>
+    </div>
+    <div class="mode-grid" style="margin-bottom:14px">
+      <div class="mode-tile" onclick="openFreeSetup()">
+        <div class="mode-icon">✏️</div>
+        <div class="mode-title">Free Practice</div>
+        <div class="mode-sub">Tự nhập câu hỏi, luyện tập</div>
+      </div>
+      <div class="mode-tile" onclick="studentTab('homework')">
+        <div class="mode-icon">📚</div>
+        <div class="mode-title">Homework</div>
+        <div class="mode-sub">Luyện bài tập của giáo viên</div>
+      </div>
+    </div>`;
+}
+
+function saveKey(type) {
+  const val = document.getElementById(type + '-key-inp')?.value.trim();
+  if (!val) return;
+  localStorage.setItem('speak_' + type + '_key', val);
+  if (type === 'gemini') A.gkey = val;
+  else A.groqKey = val;
+  toast('Đã lưu ' + type + ' key', 'success');
+  renderPracticeHome(document.getElementById('student-content'));
+}
+
+function openFreeSetup() {
+  A.assignId = '';
+  buildSetup('free', null);
+}
+
+function startHWPractice(assignId, title, part) {
+  const hw = _studentHW.find(h => h.AssignID === assignId);
+  if (!hw) return;
+  let questions = [];
+  try { questions = JSON.parse(hw.Questions || '[]'); } catch(e) {}
+  A.assignId = assignId;
+  buildSetup('homework', hw);
+}
+
+async function renderMyHistory(c) {
+  const res = await gasCall('student.getMyHistory');
+  if (!res.success) { c.innerHTML = '<div class="empty">' + res.error + '</div>'; return; }
+  const sessions = res.data || [];
+  // Group by topic+assignId
+  const map = {};
+  sessions.forEach(s => {
+    const key = (s.AssignID || '') + '|' + (s.Topic || '');
+    if (!map[key]) map[key] = { topic: s.Topic, part: s.Part, assignId: s.AssignID, sessions: [] };
+    map[key].sessions.push(s);
+  });
+  const groups = Object.values(map);
+  c.innerHTML = `
+    <h2 style="margin-bottom:16px">📋 My History</h2>
+    ${groups.length ? groups.map(g => {
+      const milestones = g.sessions.filter(s => String(s.IsMilestone) === 'true' && s.Overall);
+      return `
+        <div class="card">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+            <div>
+              <span style="font-weight:700">${g.topic||'Free Practice'}</span>
+              <span class="badge badge-blue" style="margin-left:8px">${g.part||'—'}</span>
+              <span class="badge badge-grey" style="margin-left:4px">${g.sessions.length} lần</span>
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="retryFromHistory('${g.topic}','${g.assignId||''}','${g.part||'part1'}')">Re-try</button>
+          </div>
+          ${milestones.length ? `
+            <div style="display:flex;gap:6px;flex-wrap:wrap">
+              ${milestones.map(m => `<span style="font-size:12px;background:var(--g100);border-radius:8px;padding:4px 10px">Lần ${m.AttemptNo}: <strong style="color:${scoreColor(m.Overall)}">${m.Overall}</strong></span>`).join('')}
+            </div>` : '<div style="font-size:12px;color:var(--g400)">Chưa có điểm mốc</div>'}
+        </div>`;
+    }).join('') : '<div class="empty">Chưa có lịch sử luyện tập</div>'}`;
+}
+
+function retryFromHistory(topic, assignId, part) {
+  if (assignId) {
+    const hw = _studentHW.find(h => h.AssignID === assignId);
+    if (hw) { startHWPractice(assignId, hw.Title, part); return; }
+  }
+  // Free practice retry
+  A.assignId = '';
+  A.topic    = topic;
+  buildSetup('free', null);
+}
+
+// ════════════════════════════════════════════
+// PRACTICE SETUP
+// ════════════════════════════════════════════
+function buildSetup(type, hwData) {
+  A.mode = hwData?.Part || 'part1';
+  const part  = A.mode;
+  const isP2  = part === 'part2';
+  const isHW  = type === 'homework';
+  let questions = [];
+  if (isHW && hwData) {
+    try { questions = JSON.parse(hwData.Questions || '[]'); } catch(e) {}
+  }
+
+  let hwTopic = hwData?.Title || A.topic || '';
+  let topicSel = '';
+  if (isHW && hwData) {
+    topicSel = `<div style="background:var(--blue-l);border:2px solid var(--blue-m);border-radius:var(--r);padding:12px 14px;margin-bottom:16px">
+      <span style="font-weight:700;color:var(--blue)">📌 Topic: ${hwData.Title}</span>
+      <span class="badge badge-blue" style="margin-left:8px">${hwData.Part?.toUpperCase()}</span>
+    </div>`;
+    A.topic = hwData.Title;
+  } else {
+    topicSel = `<div class="form-group">
+      <label class="form-label">📌 Topic / Chủ đề * <small style="color:var(--g400)">(bắt buộc)</small></label>
+      <input class="form-input topic-select" id="topic-inp" value="${hwTopic}" placeholder="VD: Shoes, Technology, Education…" oninput="checkTopic()">
+    </div>`;
+  }
+
+  const qHTML = isP2
+    ? `<div class="card">
+        <div class="form-group">
+          <label class="form-label" style="color:var(--red)">CUES / TOPIC</label>
+          <textarea class="form-input" id="qt-0" rows="3" placeholder="VD: Describe a person who has greatly influenced you.">${questions[0]||''}</textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">KEY WORDS <small style="font-weight:400;color:var(--g400)">(từ muốn dùng khi nói)</small></label>
+          <input class="form-input" id="kw-inp-0" placeholder="Nhập từ khoá, phân cách bằng dấu phẩy">
+        </div>
+      </div>`
+    : Array.from({length: isHW ? questions.length || 4 : 4}, (_, i) => `
+        <div class="card">
+          <div class="qlbl" style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--red);margin-bottom:7px">QUESTION ${i+1}${i < 3 && !isHW ? ' *' : ''}</div>
+          <textarea class="form-input" id="qt-${i}" rows="2" placeholder="Nhập câu hỏi…">${questions[i]||''}</textarea>
+          <div style="margin-top:8px">
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--gold);margin-bottom:5px">💡 KEY WORDS</div>
+            <input class="form-input" id="kw-inp-${i}" style="border-color:#FCD34D" placeholder="Nhập từ khoá + Enter, phân cách bằng dấu phẩy">
+          </div>
+        </div>`).join('');
+
+  const nQ = isP2 ? 1 : (isHW ? questions.length || 4 : 4);
+  document.getElementById('setup-tb').textContent = '/ ' + (isP2 ? 'Part 2 Setup' : isHW ? 'Homework Setup' : 'Free Practice Setup');
+  const main = document.getElementById('setup-main');
+  main.innerHTML = `
+    <div style="background:linear-gradient(135deg,var(--blue),var(--navy));border-radius:var(--rl);padding:18px;margin-bottom:20px;color:#fff;display:flex;align-items:center;gap:12px">
+      <div style="width:46px;height:46px;background:rgba(255,255,255,.15);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.6rem;flex-shrink:0">${isP2?'🗣️':isHW?'📚':'✏️'}</div>
+      <div>
+        <div style="font-size:1rem;font-weight:700">${isP2?'Part 2 — Long Turn':isHW?'Homework Practice':'Free Practice'}</div>
+        <div style="font-size:12px;opacity:.72;margin-top:1px">Add your questions and key words</div>
+      </div>
+    </div>
+    ${topicSel}
+    ${qHTML}
+    ${!isHW && !isP2 ? `<button class="btn btn-outline btn-sm" onclick="addSetupQ()" style="margin-bottom:14px">+ Add another question</button>` : ''}
+    <div style="display:flex;gap:10px;margin-top:8px">
+      <button class="btn btn-outline" onclick="SS('S-student');studentTab('practice')">← Back</button>
+      <button class="btn btn-primary btn-lg" style="flex:1" onclick="startSetup(${nQ},'${type}')">🚀 Start Session</button>
+    </div>`;
+  SS('S-setup');
+}
+
+let _extraQCount = 4;
+function addSetupQ() {
+  _extraQCount++;
+  const qhtml = `
+    <div class="card" id="extra-q-${_extraQCount}">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--red);margin-bottom:7px">QUESTION ${_extraQCount}</div>
+      <textarea class="form-input" id="qt-${_extraQCount-1}" rows="2" placeholder="Nhập câu hỏi…"></textarea>
+      <div style="margin-top:8px">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--gold);margin-bottom:5px">💡 KEY WORDS</div>
+        <input class="form-input" id="kw-inp-${_extraQCount-1}" style="border-color:#FCD34D" placeholder="Từ khoá…">
+      </div>
+    </div>`;
+  const startBtn = document.querySelector('#setup-main .btn-primary');
+  startBtn.insertAdjacentHTML('beforebegin', qhtml);
+  startBtn.onclick = () => startSetup(_extraQCount, 'free');
+}
+
+function checkTopic() {
+  const el = document.getElementById('topic-inp');
+  if (!el) return;
+  el.className = 'form-input topic-select ' + (el.value.trim().length >= 2 ? 'ok' : '');
+}
+
+function startSetup(nQ, type) {
+  if (!A.gkey)    { toast('Nhập Gemini API key trước', 'error'); return; }
+  if (!A.groqKey) { toast('Nhập Groq API key trước', 'error'); return; }
+
+  const topic = type === 'homework' ? A.topic : (document.getElementById('topic-inp')?.value.trim() || '');
+  if (!topic) { toast('Nhập tên Topic trước', 'error'); document.getElementById('topic-inp')?.focus(); return; }
+
+  const qs = [];
+  for (let i = 0; i < nQ; i++) {
+    const q   = document.getElementById('qt-' + i)?.value.trim();
+    const kwRaw = document.getElementById('kw-inp-' + i)?.value || '';
+    const kw  = kwRaw.split(',').map(s => s.trim()).filter(Boolean);
+    if (q) qs.push({ question: q, keywords: kw });
+  }
+  const isP2  = A.mode === 'part2';
+  const minQ  = isP2 ? 1 : 4;
+  if (qs.length < minQ) { toast(`Cần tối thiểu ${minQ} câu hỏi`, 'error'); return; }
+  A.topic = topic;
+  launch(A.mode, qs);
+}
+
+// ════════════════════════════════════════════
+// PRACTICE ENGINE  (ported from Fluentalk)
+// ════════════════════════════════════════════
+const MILESTONES = [3,5,8,10,13,15,18,20,23,25,28,30];
+function isMilestone(n) { return MILESTONES.includes(parseInt(n)); }
+function nextMilestone(n) { return MILESTONES.find(m => m > n) || null; }
+
+async function launch(mode, qs, retryCount) {
+  // Check if existing session for this topic
+  try {
+    const chk = await gasCall('speak.findExisting', { topic: A.topic, assignId: A.assignId || '' });
+    if (chk.success && chk.exists) {
+      A.retryCount = chk.attemptCount;
+    } else {
+      A.retryCount = retryCount || 0;
+    }
+  } catch(e) { A.retryCount = retryCount || 0; }
+
+  A.mode = mode;
+  A.qs   = qs;
+  A.recs = qs.map(q => ({ question: q.question, studentAnswer: '' }));
+  A.gradeP = new Array(qs.length).fill(null);
+  A.idx  = 0;
+  A.t0   = new Date().toISOString();
+  const QSEC = { part1: 0, part2: 120, part3: 45, free: 0, homework: 0 };
+  A.qSeconds = QSEC[mode] || 0;
+  const lbl = { part1: '/ IELTS Part 1', part2: '/ IELTS Part 2', part3: '/ IELTS Part 3', free: '/ Free Practice', homework: '/ Homework Practice' };
+  document.getElementById('sess-tb').textContent = lbl[mode] || '/ Speaking';
+  updProg();
+  SS('S-session');
+  loadQ(0);
+}
+
+function loadQ(idx) {
+  const qo = A.qs[idx]; if (!qo) return;
+  document.getElementById('q-txt').textContent  = qo.question;
+  document.getElementById('q-num').textContent  = idx + 1;
+  const lblMap = { part1: 'IELTS PART 1', part2: 'IELTS PART 2 — LONG TURN', part3: 'IELTS PART 3', free: 'QUESTION', homework: 'QUESTION' };
+  document.getElementById('q-lbl').textContent = (lblMap[A.mode] || 'QUESTION') + ' — Q' + (idx + 1);
+  updProg();
+  A.talking = false; A.curAnswer = '';
+  resetTalkUI();
+  document.getElementById('next-btn').textContent = (idx >= A.qs.length - 1) ? 'Hoàn thành ✓' : 'Next →';
+  document.getElementById('next-btn').className  = 'btn ' + (idx >= A.qs.length - 1 ? 'btn-green' : 'btn-outline');
+  document.getElementById('prev-btn').disabled   = (idx <= 0);
+  // Restore previous answer if navigating back
+  const prev = A.recs[idx];
+  if (prev?.studentAnswer) {
+    A.curAnswer = prev.studentAnswer;
+    document.getElementById('ptt-interim').textContent = A.curAnswer;
+    if (prev._audioBlob) {
+      const rb = document.getElementById('rec-btn');
+      rb.textContent = '✓'; rb.className = 'rec-btn done';
+      document.getElementById('rec-area').className = 'rec-area done';
+      document.getElementById('rec-st').textContent = 'Đã ghi câu trả lời ✓';
+      document.getElementById('rec-play-wrap').style.display = 'flex';
+    }
+  }
+  // Keywords
+  const hasKW = qo.keywords?.length > 0;
+  const kwBar  = document.getElementById('kw-bar');
+  const kwDisp = document.getElementById('kw-disp');
+  kwBar.style.display  = hasKW ? '' : 'none';
+  kwDisp.style.display = 'none';
+  if (hasKW) kwDisp.innerHTML = qo.keywords.map(k => `<div class="kw-pill">${k}</div>`).join('');
+  // Part 2 prep timer
+  if (A.mode === 'part2') startPrep();
+  else { document.getElementById('prep-wrap').style.display = 'none'; clearInterval(A.prepTm); }
+  startQCountdown(A.qSeconds);
+}
+
+function toggleKW() {
+  const d = document.getElementById('kw-disp');
+  const shown = d.style.display !== 'none';
+  d.style.display = shown ? 'none' : 'flex';
+  document.getElementById('kw-btn-txt').textContent = shown ? 'Show keywords' : 'Hide keywords';
+}
+
+function updProg() {
+  const tot = A.qs.length, idx = A.idx;
+  const pct = tot ? Math.round((idx / tot) * 100) : 0;
+  document.getElementById('prog-txt').textContent = 'Question ' + (idx + 1) + ' of ' + tot;
+  document.getElementById('prog-pct').textContent = pct + '%';
+  document.getElementById('prog-fill').style.width = pct + '%';
+}
+
+function startPrep() {
+  document.getElementById('prep-wrap').style.display = 'block';
+  A.prepLeft = 60; clearInterval(A.prepTm); updPrepUI();
+  A.prepTm = setInterval(() => {
+    A.prepLeft--;
+    updPrepUI();
+    if (A.prepLeft <= 0) { clearInterval(A.prepTm); document.getElementById('prep-wrap').style.display = 'none'; toast('Prep time over!', 'info'); }
+  }, 1000);
+}
+function updPrepUI() {
+  const m = Math.floor(A.prepLeft / 60), s = A.prepLeft % 60;
+  document.getElementById('prep-cd').textContent = m + ':' + String(s).padStart(2, '0');
+  document.getElementById('prep-fill').style.width = (A.prepLeft / 60 * 100) + '%';
+}
+
+function startQCountdown(sec) {
+  clearInterval(A.qcdTm);
+  if (!sec) return;
+  A.qcdLeft = sec;
+  A.qcdTm = setInterval(() => {
+    A.qcdLeft--;
+    if (A.qcdLeft <= 0) { clearInterval(A.qcdTm); toast('Hết giờ câu này', 'info'); (async () => { if (A.talking) await stopTalk(); nextQ(); })(); }
+  }, 1000);
+}
+
+// ── PUSH-TO-TALK ──────────────────────────
+function toggleTalk() { if (A.talkBusy) return; if (A.talking) stopTalk(); else startTalk(); }
+async function startTalk() {
+  if (A.talking || A.talkBusy) return;
+  if (!A.groqKey) { toast('Cần Groq API key — vào Practice để nhập', 'error'); return; }
+  A.talkBusy = true; A.talking = true; A.recStartTs = Date.now();
+  const rb = document.getElementById('rec-btn');
+  rb.textContent = '⏹'; rb.className = 'rec-btn act';
+  document.getElementById('rec-area').className = 'rec-area recording';
+  document.getElementById('rec-st').innerHTML = '🔴 Đang ghi âm… nói tự nhiên';
+  document.getElementById('rec-hint').textContent = 'Nhấn SPACE để chốt câu';
+  document.getElementById('rec-play-wrap').style.display = 'none';
+  await startAudioCapture();
+  A.talkBusy = false;
+}
+async function stopTalk() {
+  if (!A.talking || A.talkBusy) return;
+  A.talkBusy = true; A.talking = false;
+  const rb = document.getElementById('rec-btn');
+  rb.textContent = '⏳'; rb.className = 'rec-btn'; rb.disabled = true;
+  const ok = await stopCaptureAndTranscribe();
+  if (ok) {
+    rb.textContent = '✓'; rb.className = 'rec-btn done'; rb.disabled = false;
+    document.getElementById('rec-area').className = 'rec-area done';
+    document.getElementById('rec-st').textContent = 'Đã ghi câu trả lời ✓';
+    document.getElementById('rec-hint').textContent = 'Bấm Next, hoặc SPACE để nói thêm';
+    if (A.recs[A.idx]?._audioBlob) document.getElementById('rec-play-wrap').style.display = 'flex';
+  } else {
+    rb.textContent = '🎤'; rb.className = 'rec-btn'; rb.disabled = false;
+    document.getElementById('rec-area').className = 'rec-area';
+    document.getElementById('rec-st').innerHTML = 'Nhấn <b>SPACE</b> (hoặc 🎤) để thử lại';
+  }
+  A.talkBusy = false;
+}
+function resetTalkUI() {
+  const rb = document.getElementById('rec-btn');
+  rb.textContent = '🎤'; rb.className = 'rec-btn'; rb.disabled = false;
+  document.getElementById('rec-area').className = 'rec-area';
+  document.getElementById('rec-st').innerHTML = 'Nhấn <b>SPACE</b> (hoặc 🎤) để bắt đầu';
+  document.getElementById('rec-hint').textContent = 'Nhấn SPACE lần nữa để chốt câu';
+  document.getElementById('rec-time').style.display = 'none';
+  document.getElementById('ptt-interim').textContent = '';
+  document.getElementById('rec-play-wrap').style.display = 'none';
+}
+function playLastRec() {
+  const rec = A.recs[A.idx];
+  if (!rec?._audioBlob) { toast('Chưa có bản ghi', 'error'); return; }
+  const audio = new Audio(URL.createObjectURL(rec._audioBlob));
+  audio.play().catch(() => toast('Không phát được', 'error'));
+}
+function retryRec() {
+  const rec = A.recs[A.idx];
+  if (rec) { rec.studentAnswer = ''; rec._audioBlob = null; rec._audioMime = null; }
+  A.curAnswer = '';
+  document.getElementById('ptt-interim').textContent = '';
+  document.getElementById('rec-play-wrap').style.display = 'none';
+  resetTalkUI();
+  toast('Đã xóa — thu lại câu trả lời', 'info');
+}
+
+// ── AUDIO CAPTURE ─────────────────────────
+function pickMime() {
+  const ua = navigator.userAgent;
+  const isSafari = /^((?!chrome|android).)*safari/i.test(ua) || (/iP(hone|ad)/.test(ua) && !/CriOS|FxiOS/.test(ua));
+  const candidates = isSafari
+    ? ['audio/mp4;codecs=mp4a.40.2','audio/mp4','audio/aac','audio/webm;codecs=opus','audio/webm']
+    : ['audio/webm;codecs=opus','audio/webm','audio/mp4;codecs=mp4a.40.2','audio/mp4','audio/ogg;codecs=opus'];
+  return candidates.find(t => { try { return MediaRecorder.isTypeSupported(t); } catch(_) { return false; } }) || '';
+}
+async function startAudioCapture() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const mime   = pickMime();
+    A.mr = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+    A.chunks = [];
+    A.mr.ondataavailable = e => { if (e.data.size > 0) A.chunks.push(e.data); };
+    A.mr.stream = stream;
+    A.mr.start(100);
+  } catch(e) { toast('Không mở được microphone: ' + e.message, 'error'); }
+}
+function stopMediaRecorder() {
+  return new Promise(resolve => {
+    if (!A.mr || A.mr.state === 'inactive') { resolve(null); return; }
+    A.mr.onstop = () => {
+      const mime = A.mr.mimeType || 'audio/webm';
+      const blob = new Blob(A.chunks, { type: mime });
+      A.mr.stream.getTracks().forEach(t => t.stop());
+      resolve({ blob, mime });
+    };
+    A.mr.stop();
+  });
+}
+async function stopCaptureAndTranscribe() {
+  const rec = await stopMediaRecorder();
+  if (!rec) { toast('Không ghi được audio', 'error'); return false; }
+  const durMs = Date.now() - (A.recStartTs || Date.now());
+  if (rec.blob.size < 1500 || durMs < 400) {
+    toast('Bản ghi quá ngắn — giữ SPACE lâu hơn rồi thử lại', 'error', 4000);
+    return false;
+  }
+  A.lastBlob = rec.blob; A.lastMime = rec.mime;
+  if (A.recs[A.idx]) { A.recs[A.idx]._audioBlob = rec.blob; A.recs[A.idx]._audioMime = rec.mime; }
+  document.getElementById('rec-st').textContent = 'Đang phiên âm…';
+  try {
+    const txt = await transcribeGroq(rec.blob, rec.mime);
+    A.curAnswer = (A.curAnswer + ' ' + txt).trim();
+    document.getElementById('ptt-interim').textContent = A.curAnswer;
+    return true;
+  } catch(e) { toast('Lỗi phiên âm: ' + e.message, 'error', 6000); return false; }
+}
+
+// ── GROQ TRANSCRIBE ───────────────────────
+function mimeToExt(mime) {
+  const m = String(mime||'').toLowerCase();
+  if (m.includes('webm')) return 'webm';
+  if (m.includes('ogg') || m.includes('opus')) return 'ogg';
+  if (m.includes('mp4') || m.includes('m4a') || m.includes('aac')) return 'm4a';
+  if (m.includes('mpeg') || m.includes('mp3')) return 'mp3';
+  if (m.includes('wav')) return 'wav';
+  return 'webm';
+}
+async function transcribeGroq(blob, mime) {
+  if (!A.groqKey) throw new Error('Chưa có Groq key');
+  if (!blob || blob.size < 1200) throw new Error('File ghi âm quá ngắn');
+  const ext = mimeToExt(mime);
+  const fd  = new FormData();
+  fd.append('file', blob, 'answer.' + ext);
+  fd.append('model', 'whisper-large-v3-turbo');
+  fd.append('language', 'en');
+  fd.append('response_format', 'verbose_json');
+  fd.append('temperature', '0');
+  fd.append('timestamp_granularities[]', 'word');
+  fd.append('prompt', 'Transcribe exactly what is spoken. Do not add, predict, or correct any words.');
+  const r = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+    method: 'POST',
+    headers: { 'Authorization': 'Bearer ' + A.groqKey },
+    body: fd
+  });
+  if (!r.ok) {
+    const e = await r.json().catch(() => ({}));
+    const msg = e.error?.message || 'Groq lỗi ' + r.status;
+    if (/could not process file|valid media file/i.test(msg))
+      throw new Error('Không đọc được file ghi âm. Hãy thử lại hoặc dùng Chrome.');
+    if (r.status === 429) throw new Error('Groq hết lượt — đợi ít phút rồi thử lại');
+    if (r.status === 401) throw new Error('Groq API key không hợp lệ');
+    throw new Error(msg);
+  }
+  const j = await r.json();
+  return (j.text || '').trim();
+}
+
+// ── NAVIGATION ────────────────────────────
+async function nextQ() {
+  if (A.talking) await stopTalk();
+  clearInterval(A.qcdTm);
+  const idx = A.idx;
+  const ans = (A.curAnswer || '').trim();
+  A.recs[idx].studentAnswer = ans;
+  A.recs[idx].question      = A.qs[idx].question;
+  A.recs[idx].keywords      = A.qs[idx].keywords || [];
+  const next = idx + 1;
+  if (next < A.qs.length) { A.idx = next; loadQ(next); }
+  else finishSession();
+}
+async function prevQ() {
+  if (A.idx <= 0) return;
+  if (A.talking) await stopTalk();
+  clearInterval(A.qcdTm);
+  const ans = (A.curAnswer || '').trim();
+  if (ans) A.recs[A.idx].studentAnswer = ans;
+  A.idx--;
+  loadQ(A.idx);
+}
+async function confirmEndSession() {
+  if (A.talking) await stopTalk();
+  clearInterval(A.qcdTm);
+  const done = A.recs.filter(r => r.studentAnswer?.trim()).length;
+  if (!done) { SS('S-student'); studentTab('practice'); return; }
+  if (confirm('Kết thúc và xem kết quả ' + done + ' câu đã trả lời?')) finishSession();
+}
+
+// ════════════════════════════════════════════
+// GRADING
+// ════════════════════════════════════════════
+const GM = 'gemini-2.5-flash-lite';
+const GM2= 'gemini-2.5-flash';
+
+async function gemFetch(sys, usr, mx, attempt, jsonMode) {
+  mx = mx || 1024; attempt = attempt || 1;
+  if (!A.gkey) throw new Error('Chưa có Gemini API key');
+  const gc = { maxOutputTokens: mx, temperature: 0.45 };
+  if (jsonMode) gc.responseMimeType = 'application/json';
+  const body = { contents: [{ parts: [{ text: usr }] }], generationConfig: gc };
+  if (sys) body.systemInstruction = { parts: [{ text: sys }] };
+  const model = attempt === 1 ? GM : GM2;
+  const url   = 'https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent?key=' + A.gkey;
+  const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  if (!r.ok) {
+    let msg = 'Gemini lỗi ' + r.status;
+    try { const ej = await r.json(); msg = ej.error?.message?.split('\n')[0]?.substring(0, 120) || msg; } catch(_) {}
+    if (r.status === 429 && attempt <= 2) {
+      const el = document.getElementById('g-title');
+      for (let i = 20; i > 0; i--) { if (el) el.textContent = '⏳ Rate limit — thử lại sau ' + i + 's…'; await new Promise(res => setTimeout(res, 1000)); }
+      return gemFetch(sys, usr, mx, attempt + 1, jsonMode);
+    }
+    throw new Error(msg);
+  }
+  const j = await r.json();
+  const text = j.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  if (!text) throw new Error('Gemini trả về kết quả rỗng');
+  return text.trim();
+}
+
+function gStep(txt, done) {
+  const wrap = document.getElementById('g-steps');
+  const div  = document.createElement('div');
+  div.className = 'gstep ' + (done ? 'done' : 'now');
+  div.innerHTML = `<div class="dot">${done ? '✓' : '…'}</div><span>${txt}</span>`;
+  wrap.appendChild(div);
+  // mark previous step done
+  if (!done) {
+    const prev = wrap.querySelectorAll('.gstep.now');
+    prev.forEach((p, i) => { if (i < prev.length - 1) { p.className = 'gstep done'; p.querySelector('.dot').textContent = '✓'; } });
+  }
+}
+
+const FILLER_RE = /\b(uh+m*|um+|er+m*|erm+|ah+|hmm+)\b/gi;
+function localMetrics(text) {
+  const ws    = String(text||'').toLowerCase().match(/\b[a-z']+\b/g) || [];
+  const uniq  = new Set(ws);
+  const fillers = String(text||'').match(FILLER_RE) || [];
+  return { wordCount: ws.length, uniqueWords: uniq.size, ttr: ws.length ? Math.round(uniq.size/ws.length*100)/100 : 0, fillerCount: fillers.length };
+}
+function estimateBand(m, answerLen) {
+  const wc = m.wordCount || 0;
+  let base = 5.0;
+  if (wc >= 80) base = 6.0;
+  if (wc >= 120) base = 6.5;
+  if (wc >= 60 && m.ttr >= 0.5) base = Math.max(base, 5.5);
+  if (m.fillerCount > wc * 0.1) base = Math.max(4.0, base - 0.5);
+  return { overall: base, scores: { fluency:{ score:base }, lexical:{ score: wc>=80?6:5 }, grammar:{ score: base }, pronunciation:{ score: base } } };
+}
+
+function buildGradePrompt(qaBlock, n) {
+  return `Grade these ${n} IELTS Speaking answers. Return ONLY valid JSON:
+{
+  "qs": [
+    {
+      "overall": 5.5,
+      "fc": 5, "lr": 6, "gr": 5, "p": 5,
+      "errors": [{"wrong":"X","correct":"Y","type":"grammar","reason":"..."}],
+      "suggestion": "one line improvement tip in Vietnamese"
+    }
+  ],
+  "r": {
+    "good": ["phrase1","phrase2"],
+    "weak": "main weakness",
+    "up": "Band 8 upgraded version of best answer",
+    "adv": "one paragraph advice in Vietnamese"
+  }
+}
+
+Q&A to grade:
+${qaBlock}`;
+}
+
+function _parseGradeJSON(raw) {
+  try { return JSON.parse(raw); } catch(_) {}
+  try { const m = raw.match(/\{[\s\S]*\}/); return m ? JSON.parse(m[0]) : null; } catch(_) { return null; }
+}
+
+async function finishSession() {
+  if (A.talking) await stopTalk();
+  clearInterval(A.qcdTm);
+  const lastAns = (A.curAnswer || '').trim();
+  if (lastAns && A.recs[A.idx]) A.recs[A.idx].studentAnswer = lastAns;
+  const answered = A.recs.filter(r => r.studentAnswer?.trim()?.length >= 2);
+  if (!answered.length) { if (confirm('Chưa có câu trả lời nào. Thoát?')) { SS('S-student'); studentTab('practice'); } return; }
+  if (!A.gkey) { toast('Cần Gemini key để chấm điểm', 'error'); return; }
+  SS('S-grading');
+  document.getElementById('g-steps').innerHTML = '';
+
+  try {
+    // Local metrics
+    answered.forEach(r => { r._m = localMetrics(r.studentAnswer); });
+
+    // Determine attempt number
+    const attemptNo = A.retryCount + 1;
+    const shouldGrade = isMilestone(attemptNo);
+
+    let rpt = null;
+    let gradeFailed = false;
+
+    if (shouldGrade) {
+      gStep('Lần luyện thứ ' + attemptNo + ' — MỐC chấm điểm, đang chấm…');
+      try {
+        const qaBlock = answered.map((r, i) => {
+          const kw = (r.keywords || []).join(', ');
+          return `Q${i+1}: "${r.question}"\nA${i+1}: "${r.studentAnswer}"${kw ? '\nKeywords: ' + kw : ''}`;
+        }).join('\n\n');
+        const cap = Math.min(900 * answered.length + 700, 8192);
+        const rawGrade = await gemFetch('IELTS Speaking examiner. Return ONLY valid JSON.', buildGradePrompt(qaBlock, answered.length), cap, 1, true);
+        const parsed = _parseGradeJSON(rawGrade);
+        if (!parsed?.qs) throw new Error('JSON không hợp lệ');
+        parsed.qs.forEach((g, i) => {
+          if (!answered[i]) return;
+          answered[i].overall = g.overall;
+          answered[i].scores  = { fluency:{ score:g.fc||g.fluency }, lexical:{ score:g.lr||g.lexical }, grammar:{ score:g.gr||g.grammar }, pronunciation:{ score:g.p||g.pronunciation } };
+          answered[i].errors  = g.errors || [];
+          answered[i].suggestion = g.suggestion || '';
+        });
+        rpt = parsed.r || null;
+      } catch(eg) {
+        console.warn('Grade failed:', eg);
+        gradeFailed = true;
+        toast('AI chấm điểm gặp lỗi — dùng điểm ước tính', 'error', 5000);
+      }
+    } else {
+      gStep('Lần luyện thứ ' + attemptNo + ' — ghi nhận (chấm điểm ở lần 3, 5, 8, 10)', true);
+    }
+
+    // Fallback estimates
+    answered.forEach(r => {
+      if (shouldGrade && !r.overall) { const est = estimateBand(r._m); Object.assign(r, est); r._estimated = true; }
+    });
+
+    gStep(gradeFailed ? '⚠ Dùng điểm ước tính' : shouldGrade ? 'Chấm điểm xong ✓' : 'Lưu kết quả…', true);
+
+    // Upload audio
+    gStep('Đang lưu ghi âm…');
+    await Promise.all(answered.map(async (r, qi) => {
+      if (!r._audioBlob) return;
+      try {
+        const b64 = await new Promise((res, rej) => { const rd = new FileReader(); rd.onloadend = () => res(rd.result.split(',')[1]); rd.onerror = rej; rd.readAsDataURL(r._audioBlob); });
+        const up = await gasCall('speak.uploadAudio', { audioBase64: b64, mimeType: r._audioMime || 'audio/webm', topic: A.topic || 'practice', attemptNum: attemptNo, qIdx: qi + 1 });
+        if (up?.success) r.audioUrl = up.url;
+      } catch(e) {}
+    }));
+    gStep('Lưu ghi âm xong ✓', true);
+
+    // Build overall
+    const overall = calcOverall(answered);
+    const fc = avg(answered, 'fluency'), lr = avg(answered, 'lexical'), gr = avg(answered, 'grammar'), p = avg(answered, 'pronunciation');
+
+    // Save to GAS
+    gStep('Đang lưu kết quả…');
+    const saved = await gasCall('speak.saveResult', {
+      assignId: A.assignId || '',
+      topic:    A.topic || '',
+      part:     A.mode || 'part1',
+      mode:     'record',
+      startTime: A.t0,
+      endTime:   new Date().toISOString(),
+      durationMin: A.t0 ? Math.round((Date.now() - new Date(A.t0)) / 60000) : 0,
+      retryCount: A.retryCount,
+      attemptNo,
+      isMilestone: shouldGrade,
+      overall: shouldGrade ? overall : '',
+      fc: shouldGrade ? fc : '',
+      lr: shouldGrade ? lr : '',
+      gr: shouldGrade ? gr : '',
+      p:  shouldGrade ? p : '',
+      questionsJSON: A.qs.map(q => ({ question: q.question, keywords: q.keywords || [] })),
+      resultsJSON:   answered.map(r => ({
+        question: r.question, keywords: r.keywords || [],
+        studentAnswer: r.studentAnswer, overall: r.overall || '',
+        scores: r.scores || null, errors: r.errors || [],
+        suggestion: r.suggestion || '', audioUrl: r.audioUrl || ''
+      })),
+      reportText: buildReport(answered, rpt, shouldGrade, attemptNo),
+      type: A.assignId ? 'homework' : 'free'
+    });
+    A.retryCount = attemptNo;
+    gStep('Lưu xong ✓', true);
+
+    setTimeout(() => renderResults(answered, rpt, shouldGrade, attemptNo, overall, fc, lr, gr, p), 400);
+  } catch(e) {
+    gStep('Lỗi: ' + e.message);
+    toast('Lỗi: ' + e.message, 'error', 6000);
+    setTimeout(() => SS('S-session'), 3000);
+  }
+}
+
+function avg(answered, field) {
+  const vals = answered.map(r => parseFloat(r.scores?.[field]?.score) || 0).filter(v => v > 0);
+  if (!vals.length) return '';
+  const a = vals.reduce((s, v) => s + v, 0) / vals.length;
+  return Math.round(a * 2) / 2;
+}
+function calcOverall(answered) {
+  const vals = answered.map(r => parseFloat(r.overall) || 0).filter(v => v > 0);
+  if (!vals.length) return '';
+  const a = vals.reduce((s, v) => s + v, 0) / vals.length;
+  return Math.round(a * 2) / 2;
+}
+
+function buildReport(answered, r, isMilestone, attemptNo) {
+  const lines = [];
+  if (!isMilestone) {
+    lines.push('### ✅ Đã ghi nhận lần luyện thứ ' + attemptNo);
+    const next = nextMilestone(attemptNo);
+    lines.push(next ? `> 🎯 Còn **${next - attemptNo} lần** nữa (lần ${next}) sẽ được chấm điểm.` : '> 🎉 Hoàn thành!');
+    return lines.join('\n');
+  }
+  lines.push('### 📝 KẾT QUẢ IELTS SPEAKING');
+  if (answered.some(x => x._estimated)) lines.push('> ⚠️ Một số điểm là ước tính (AI gặp lỗi). Nên luyện lại để nhận điểm chính xác.');
+  if (r) {
+    if (r.good?.length) lines.push('- **Cụm từ dùng tốt:** ' + r.good.join(' · '));
+    if (r.weak)         lines.push('- **Vùng cần cải thiện:** ' + r.weak);
+    if (r.up)           { lines.push(''); lines.push('### 🚀 BẢN NÂNG CẤP (Band 8+)'); lines.push(r.up); }
+    if (r.adv)          { lines.push(''); lines.push('### 💡 LỜI KHUYÊN'); lines.push(r.adv); }
+  }
+  return lines.join('\n');
+}
+
+// ════════════════════════════════════════════
+// RESULTS RENDER
+// ════════════════════════════════════════════
+function renderResults(answered, rpt, isMilestone, attemptNo, overall, fc, lr, gr, p) {
+  SS('S-results');
+  const main = document.getElementById('results-main');
+  const next = nextMilestone(attemptNo);
+
+  main.innerHTML = `
+    ${isMilestone ? `
+      <div class="res-hero">
+        <div style="font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.35);margin-bottom:6px">Lần ${attemptNo} · Overall</div>
+        <div class="res-score">${overall || '—'}</div>
+        <div class="res-label">IELTS Speaking Band Score</div>
+        <div class="crit-grid">
+          ${[['FC',fc],['LR',lr],['GR',gr],['P',p]].map(([n,v])=>`<div class="crit-box"><div class="crit-score">${v||'—'}</div><div class="crit-name">${n}</div></div>`).join('')}
+        </div>
+      </div>` : `
+      <div class="card" style="background:var(--green-l);border-color:var(--green)">
+        <div style="font-weight:700;color:var(--green-d);font-size:1rem">✅ Lần luyện thứ ${attemptNo} đã được ghi nhận!</div>
+        ${next ? `<p style="margin-top:6px;font-size:13px;color:var(--green-d)">Còn <strong>${next - attemptNo} lần</strong> nữa đến mốc chấm điểm (lần ${next}).</p>` : ''}
+      </div>`}
+
+    ${isMilestone ? answered.map((r, i) => `
+      <div class="qacc">
+        <div class="qacc-hdr" onclick="this.nextElementSibling.classList.toggle('open')">
+          <div class="qa-n">${i+1}</div>
+          <div class="qa-q">${r.question}</div>
+          <div class="qa-band">${r.overall || '—'}</div>
+          <span style="color:var(--g400);font-size:12px;margin-left:4px">▾</span>
+        </div>
+        <div class="qacc-body">
+          <div>
+            <div class="qs-lbl">Student's Answer</div>
+            <div class="qs-student">"${r.studentAnswer||'(no answer)'}"</div>
+            ${r.suggestion ? `<div class="qs-sugg" style="margin-top:8px">${r.suggestion}</div>` : ''}
+            ${r.errors?.length ? `
+              <div class="qs-lbl" style="margin-top:10px">Errors to fix</div>
+              ${r.errors.map(e=>`<div style="font-size:12px;margin-bottom:4px">❌ <s style="color:var(--red)">${e.wrong}</s> → ✅ <strong>${e.correct}</strong>${e.reason?' — '+e.reason:''}</div>`).join('')}` : ''}
+          </div>
+          <div>
+            <div class="qs-lbl">Scores</div>
+            <div class="score-grid">
+              ${[['Fluency & Coherence','fluency'],['Lexical Resource','lexical'],['Grammatical Range','grammar'],['Pronunciation','pronunciation']].map(([n,k])=>{
+                const v = r.scores?.[k]?.score || '—';
+                const cls = v >= 6 ? 'hi' : v >= 5 ? 'mid' : 'lo';
+                return `<div class="score-row"><div class="score-badge ${cls}">${v}</div><div><div class="score-nm">${n}</div>${r._estimated?'<div class="score-cm">ước tính</div>':''}</div></div>`;
+              }).join('')}
+            </div>
+            ${r.audioUrl ? `<audio controls src="${r.audioUrl}" style="width:100%;margin-top:10px;border-radius:8px"></audio>` : ''}
+          </div>
+        </div>
+      </div>`).join('') : ''}
+
+    ${rpt ? `
+      <div class="card">
+        <div class="card-title" style="margin-bottom:12px">📊 Phân tích chi tiết</div>
+        ${rpt.adv ? `<div class="rpt-box" style="margin-bottom:12px">${rpt.adv.replace(/\n/g,'<br>')}</div>` : ''}
+        ${rpt.good?.length ? `<div style="margin-bottom:10px"><strong>Cụm từ dùng tốt:</strong> ${rpt.good.join(' · ')}</div>` : ''}
+        ${rpt.weak ? `<div style="font-size:13px;color:var(--g600)"><strong>Vùng yếu nhất:</strong> ${rpt.weak}</div>` : ''}
+      </div>` : ''}
+
+    <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap">
+      <button class="btn btn-primary" onclick="retryFromHistory('${A.topic}','${A.assignId||''}','${A.mode}')">🔄 Luyện lại topic này</button>
+      <button class="btn btn-outline" onclick="SS('S-student');studentTab('history')">📋 My History</button>
+    </div>`;
+}
+
+// ════════════════════════════════════════════
+// KEYBOARD SHORTCUT (SPACE = PTT)
+// ════════════════════════════════════════════
+document.addEventListener('keydown', e => {
+  if (e.code !== 'Space' || e.repeat) return;
+  const sess = document.getElementById('S-session');
+  if (!sess || !sess.classList.contains('active')) return;
+  const tag = (e.target.tagName || '').toLowerCase();
+  if (tag === 'input' || tag === 'textarea' || e.target.isContentEditable) return;
+  e.preventDefault();
+  toggleTalk();
+});
+
+// ════════════════════════════════════════════
+// UTILITIES
+// ════════════════════════════════════════════
+function fmtDT(dt) {
+  if (!dt) return '—';
+  try {
+    const d = new Date(dt);
+    return d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' }) + ' ' + d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false });
+  } catch(_) { return String(dt).substring(0, 16); }
+}
+function scoreColor(v) {
+  const n = parseFloat(v);
+  if (!n) return 'var(--g400)';
+  if (n >= 6) return 'var(--green)';
+  if (n >= 5) return 'var(--gold)';
+  return 'var(--red)';
+}
+
+// ════════════════════════════════════════════
+// INIT
+// ════════════════════════════════════════════
+window.addEventListener('load', () => {
+  // Restore session
+  try {
+    const saved = JSON.parse(localStorage.getItem('speak_session') || 'null');
+    if (saved?.token && saved?.user) { A.user = saved.user; A.sessionToken = saved.token; }
+  } catch(_) {}
+  try {
+    const tTok = localStorage.getItem('speak_teacher');
+    if (tTok) A.teacherToken = tTok;
+  } catch(_) {}
+  A.gkey    = localStorage.getItem('speak_gemini_key') || '';
+  A.groqKey = localStorage.getItem('speak_groq_key') || '';
+
+  // Store rows for progress table after load
+  const origRenderTeacherProgress = renderTeacherProgress;
+
+  // Hide loading after animation
+  setTimeout(() => {
+    const loading = document.getElementById('S-loading');
+    loading.style.opacity = '0';
+    setTimeout(() => {
+      loading.style.display = 'none';
+      if (A.teacherToken) { SS('S-teacher'); teacherTab('overview'); }
+      else if (A.user) { SS('S-student'); studentTab('overview'); }
+      else SS('S-auth');
+    }, 600);
+  }, 1800);
+});
+
+// Patch renderTeacherProgress to store rows
+const _origRenderProgress = renderTeacherProgress;
+async function renderTeacherProgress(c) {
+  const [sessRes, clsRes] = await Promise.all([
+    gasCall('teacher.getAllSessions', {}),
+    gasCall('teacher.getClasses')
+  ]);
+  _progSessions = sessRes.data || [];
+  const classes = (clsRes.data || []).filter(cl => cl.Status !== 'Archived');
+  _progRows = buildProgressRows(_progSessions, _progFilter);
+  renderProgressUI(c, classes);
+}
+</script>
+</body>
+</html>
