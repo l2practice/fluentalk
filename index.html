@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="vi">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -71,8 +71,8 @@ body{font-family:var(--f);background:var(--bg);color:var(--black);min-height:100
 /* ── FORMS ── */
 .form-group{margin-bottom:14px}
 .form-label{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--g600);margin-bottom:6px}
-.form-input{width:100%;padding:10px 13px;border:1.5px solid var(--g200);border-radius:var(--r);font-family:var(--f);font-size:14px;outline:none;background:#fff;transition:var(--tr);color:var(--black)}
-.form-input:focus{border-color:var(--blue-m);box-shadow:0 0 0 3px rgba(79,110,247,.12)}
+.form-input{width:100%;padding:12px 14px;border:1.5px solid var(--g200);border-radius:var(--rl);font-family:var(--f);font-size:14px;outline:none;background:#EEF1F8;transition:var(--tr);color:var(--black)}
+.form-input:focus{border-color:var(--red);background:#fff;box-shadow:0 0 0 3px rgba(200,16,46,.1)}
 .form-select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%239CA3AF' stroke-width='1.8' fill='none'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:34px}
 .form-hint{font-size:11px;color:var(--g400);margin-top:4px;line-height:1.5}
 textarea.form-input{resize:vertical;min-height:72px;line-height:1.6}
@@ -148,25 +148,26 @@ textarea.form-input{resize:vertical;min-height:72px;line-height:1.6}
 /* LEFT panel — dark gradient with illustration feel */
 .auth-left{
   width:44%;flex-shrink:0;
-  background:linear-gradient(160deg,#0F172A 0%,#1E2D5A 45%,#0C1A3E 100%);
-  position:relative;display:flex;flex-direction:column;justify-content:space-between;
+  background:linear-gradient(160deg,#1a0a0a 0%,#2d0a0a 45%,#1a0a0a 100%);
+  position:relative;display:flex;flex-direction:column;justify-content:flex-end;
   padding:40px;overflow:hidden
 }
-/* Decorative blobs */
+/* Red glow blob — center */
 .auth-left::before{
-  content:'';position:absolute;inset:0;
-  background:radial-gradient(ellipse 60% 50% at 30% 40%,rgba(79,110,247,.18) 0%,transparent 70%),
-             radial-gradient(ellipse 40% 40% at 70% 70%,rgba(6,182,212,.12) 0%,transparent 70%);
+  content:'';position:absolute;
+  width:420px;height:420px;
+  background:radial-gradient(circle,rgba(200,16,46,.22) 0%,transparent 70%);
+  top:30%;left:50%;transform:translate(-50%,-50%);
   pointer-events:none
 }
 /* Grid texture */
 .auth-left::after{
   content:'';position:absolute;inset:0;
-  background-image:linear-gradient(rgba(255,255,255,.03) 1px,transparent 1px),
-                   linear-gradient(90deg,rgba(255,255,255,.03) 1px,transparent 1px);
-  background-size:44px 44px;pointer-events:none
+  background-image:linear-gradient(rgba(255,255,255,.04) 1px,transparent 1px),
+                   linear-gradient(90deg,rgba(255,255,255,.04) 1px,transparent 1px);
+  background-size:60px 60px;pointer-events:none
 }
-.auth-left-top{position:relative;z-index:1}
+.auth-left-top{position:relative;z-index:1;flex:1}
 .auth-brand{display:flex;align-items:center;gap:12px;margin-bottom:48px}
 .auth-brand-icon{width:44px;height:44px;background:linear-gradient(135deg,var(--blue),var(--teal));border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;box-shadow:0 4px 14px rgba(79,110,247,.35)}
 .auth-brand-name{font-size:1.15rem;font-weight:800;color:#fff;letter-spacing:-.02em}
@@ -185,19 +186,19 @@ textarea.form-input{resize:vertical;min-height:72px;line-height:1.6}
 .auth-stat-lbl{font-size:10px;color:rgba(255,255,255,.35);text-transform:uppercase;letter-spacing:.08em;margin-top:3px;font-weight:600}
 
 /* RIGHT panel */
-.auth-right{flex:1;display:flex;align-items:center;justify-content:center;padding:48px 40px;overflow-y:auto}
+.auth-right{flex:1;display:flex;align-items:center;justify-content:center;padding:48px 40px;overflow-y:auto;background:#F5F0EB}
 .auth-box{width:100%;max-width:400px}
-.auth-title{font-size:1.75rem;font-weight:800;color:var(--black);letter-spacing:-.03em;margin-bottom:4px}
+.auth-title{font-size:1.9rem;font-weight:700;color:var(--black);letter-spacing:-.01em;margin-bottom:4px;font-family:Georgia,'Times New Roman',serif}
 .auth-sub{font-size:14px;color:var(--g600);margin-bottom:28px}
 /* Segmented control */
 .auth-tabs{display:flex;background:var(--g100);border-radius:var(--rl);padding:4px;margin-bottom:26px}
 .auth-tab{flex:1;padding:9px;text-align:center;font-weight:600;font-size:13px;cursor:pointer;border-radius:10px;transition:var(--tr);color:var(--g600)}
 .auth-tab.active{background:#fff;color:var(--blue);box-shadow:0 1px 4px rgba(0,0,0,.1),0 0 0 1px rgba(0,0,0,.04)}
 /* Sign-in button */
-.btn-signin{width:100%;padding:13px;background:linear-gradient(135deg,var(--blue),var(--blue-d));color:#fff;border:none;border-radius:var(--rl);font-size:15px;font-weight:700;cursor:pointer;transition:var(--tr);letter-spacing:-.01em;font-family:var(--f)}
-.btn-signin:hover{box-shadow:0 6px 20px rgba(79,110,247,.4);transform:translateY(-1px)}
-.teacher-btn{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-radius:var(--rl);background:var(--g50);border:1.5px solid var(--g200);color:var(--g700);cursor:pointer;margin-top:12px;transition:var(--tr)}
-.teacher-btn:hover{border-color:var(--blue-m);background:var(--blue-l);color:var(--blue)}
+.btn-signin{width:100%;padding:14px;background:var(--red-d);color:#fff;border:none;border-radius:var(--rl);font-size:15px;font-weight:700;cursor:pointer;transition:var(--tr);letter-spacing:-.01em;font-family:var(--f)}
+.btn-signin:hover{background:var(--red);box-shadow:0 6px 20px rgba(200,16,46,.35);transform:translateY(-1px)}
+.teacher-btn{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-radius:var(--rl);background:var(--black);color:#fff;cursor:pointer;margin-top:12px;transition:var(--tr)}
+.teacher-btn:hover{background:#1f2937}
 .teacher-btn-icon{width:36px;height:36px;background:linear-gradient(135deg,var(--navy),var(--blue-d));border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px}
 .forgot-link{font-size:12px;color:var(--blue);cursor:pointer;font-weight:600}
 .forgot-link:hover{text-decoration:underline}
@@ -388,38 +389,22 @@ textarea.form-input{resize:vertical;min-height:72px;line-height:1.6}
 <!-- ══════ AUTH ══════ -->
 <div class="screen" id="S-auth">
 
-  <!-- LEFT: Brand / hero panel -->
+  <!-- LEFT: Brand / hero panel — minimal like Language Hub screenshot -->
   <div class="auth-left">
     <div class="auth-left-top">
-      <div class="auth-brand">
-        <div class="auth-brand-icon">🎤</div>
-        <div>
-          <div class="auth-brand-name">Speaking <em>App</em></div>
-          <div style="font-size:10px;color:rgba(255,255,255,.3);letter-spacing:.1em;text-transform:uppercase;font-weight:600">IELTS Practice</div>
-        </div>
-      </div>
-      <div class="auth-headline">Master IELTS<br>Speaking with <em>AI</em></div>
-      <div class="auth-tagline">Practice Part 1, 2 & 3 with instant AI feedback. Track your progress. Reach Band 7+.</div>
+      <!-- empty top spacer -->
     </div>
     <div class="auth-left-bottom">
-      <div class="auth-features">
-        <div class="auth-feat">
-          <div class="auth-feat-icon">🎙️</div>
-          <div class="auth-feat-txt"><strong>Groq Whisper STT</strong>Real-time transcription với độ chính xác cao</div>
+      <div style="position:relative;z-index:1">
+        <div style="font-family:var(--f);font-size:3rem;font-weight:800;color:#fff;letter-spacing:-.04em;line-height:1.1;margin-bottom:6px">
+          Speaking <em style="color:var(--red-m);font-style:normal">App</em>
         </div>
-        <div class="auth-feat">
-          <div class="auth-feat-icon">🤖</div>
-          <div class="auth-feat-txt"><strong>Gemini AI Grading</strong>Chấm điểm FC · LR · GR · P tự động</div>
+        <div style="font-size:11px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:rgba(255,255,255,.32);margin-bottom:28px">ENGLISH PRACTICE &amp; BEYOND</div>
+        <div class="auth-stats-row">
+          <div><div class="auth-stat-val">4</div><div class="auth-stat-lbl">Parts</div></div>
+          <div><div class="auth-stat-val">AI</div><div class="auth-stat-lbl">Powered</div></div>
+          <div><div class="auth-stat-val">∞</div><div class="auth-stat-lbl">Practice</div></div>
         </div>
-        <div class="auth-feat">
-          <div class="auth-feat-icon">📈</div>
-          <div class="auth-feat-txt"><strong>Progress Tracking</strong>Theo dõi điểm qua các mốc 3 · 5 · 8 · 10</div>
-        </div>
-      </div>
-      <div class="auth-stats-row">
-        <div><div class="auth-stat-val">3</div><div class="auth-stat-lbl">IELTS Parts</div></div>
-        <div><div class="auth-stat-val">AI</div><div class="auth-stat-lbl">Powered</div></div>
-        <div><div class="auth-stat-val">∞</div><div class="auth-stat-lbl">Practice</div></div>
       </div>
     </div>
   </div>
@@ -458,8 +443,8 @@ textarea.form-input{resize:vertical;min-height:72px;line-height:1.6}
           <div style="display:flex;align-items:center;gap:12px">
             <div class="teacher-btn-icon">👩‍🏫</div>
             <div>
-              <div style="font-weight:700;font-size:13px">Teacher Portal</div>
-              <div style="font-size:11px;color:var(--g600);margin-top:1px">Manage classes & view progress</div>
+              <div style="font-weight:700;font-size:13px;color:#fff">Teacher Portal</div>
+              <div style="font-size:11px;color:rgba(255,255,255,.5);margin-top:1px">Access with teacher password</div>
             </div>
           </div>
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -476,12 +461,12 @@ textarea.form-input{resize:vertical;min-height:72px;line-height:1.6}
           <div class="form-group">
             <label class="form-label">Class ID</label>
             <input class="form-input" id="reg-class" placeholder="IELTS41">
-            <div class="form-hint">Lấy từ giáo viên</div>
+            <div class="form-hint">Provided by your teacher</div>
           </div>
         </div>
         <div class="form-group">
           <label class="form-label">Full Name *</label>
-          <input class="form-input" id="reg-name" placeholder="Nguyễn Văn A">
+          <input class="form-input" id="reg-name" placeholder="Full Name">
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
           <div class="form-group">
@@ -499,11 +484,11 @@ textarea.form-input{resize:vertical;min-height:72px;line-height:1.6}
         </div>
         <div class="form-group">
           <label class="form-label">Password *</label>
-          <input class="form-input" id="reg-pass" type="password" placeholder="Tối thiểu 6 ký tự">
+          <input class="form-input" id="reg-pass" type="password" placeholder="At least 6 characters">
         </div>
         <button class="btn-signin" onclick="doRegister()">Create Account →</button>
         <p style="font-size:11px;color:var(--g400);margin-top:12px;text-align:center;line-height:1.6">
-          Tài khoản cần được giáo viên kích hoạt trước khi đăng nhập.
+          Your account needs to be activated by your teacher before you can sign in.
         </p>
       </div>
     </div>
@@ -618,13 +603,13 @@ textarea.form-input{resize:vertical;min-height:72px;line-height:1.6}
         <div class="wb"></div><div class="wb"></div><div class="wb"></div>
         <div class="wb"></div><div class="wb"></div><div class="wb"></div><div class="wb"></div>
       </div>
-      <div class="rec-status" id="rec-st">Nhấn <b>SPACE</b> (hoặc 🎤) để bắt đầu</div>
+      <div class="rec-status" id="rec-st">Press <b>SPACE</b> (or 🎤) to start</div>
       <div class="rec-timer" id="rec-time" style="display:none">0:00</div>
-      <div style="font-size:11px;color:var(--g400);margin-top:3px" id="rec-hint">Nhấn SPACE lần nữa để chốt câu</div>
+      <div style="font-size:11px;color:var(--g400);margin-top:3px" id="rec-hint">Press SPACE again to stop</div>
       <div id="ptt-interim" style="font-size:13px;color:var(--g600);margin-top:8px;min-height:18px;font-style:italic"></div>
       <div id="rec-play-wrap" style="display:none;gap:8px;justify-content:center;margin-top:10px">
-        <button class="btn btn-outline btn-sm" onclick="playLastRec()">🔊 Nghe lại</button>
-        <button class="btn btn-outline btn-sm" onclick="retryRec()">🔄 Thu lại</button>
+        <button class="btn btn-outline btn-sm" onclick="playLastRec()">🔊 Play back</button>
+        <button class="btn btn-outline btn-sm" onclick="retryRec()">🔄 Re-record</button>
       </div>
     </div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-bottom:14px">
@@ -642,7 +627,7 @@ textarea.form-input{resize:vertical;min-height:72px;line-height:1.6}
   </div>
   <div class="grading-wrap">
     <div class="spinner" style="margin-bottom:20px"></div>
-    <div style="font-size:1rem;font-weight:700;color:var(--black)" id="g-title">Đang chấm điểm…</div>
+    <div style="font-size:1rem;font-weight:700;color:var(--black)" id="g-title">Grading…</div>
     <div style="max-width:400px;margin-top:20px;width:100%" id="g-steps"></div>
   </div>
 </div>
@@ -730,8 +715,8 @@ textarea.form-input{resize:vertical;min-height:72px;line-height:1.6}
       <button class="btn btn-ghost btn-sm" onclick="closeModal('create-class-modal')">✕</button>
     </div>
     <div class="modal-body">
-      <div class="form-group"><label class="form-label">Class ID * <small style="color:var(--g400)">(sinh viên sẽ dùng khi đăng ký)</small></label><input class="form-input" id="cc-id" placeholder="VD: IELTS41" style="text-transform:uppercase"></div>
-      <div class="form-group"><label class="form-label">Class Name</label><input class="form-input" id="cc-name" placeholder="VD: IELTS Speaking Class 41"></div>
+      <div class="form-group"><label class="form-label">Class ID * <small style="color:var(--g400)">(students use this when registering)</small></label><input class="form-input" id="cc-id" placeholder="e.g. IELTS41" style="text-transform:uppercase"></div>
+      <div class="form-group"><label class="form-label">Class Name</label><input class="form-input" id="cc-name" placeholder="e.g. IELTS Speaking Class 41"></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
         <div class="form-group"><label class="form-label">Academic Year</label><input class="form-input" id="cc-year" placeholder="2025-2026"></div>
         <div class="form-group"><label class="form-label">Semester</label><input class="form-input" id="cc-sem" placeholder="HK1"></div>
@@ -927,17 +912,17 @@ function switchAuthTab(tab) {
 async function doLogin() {
   const email = document.getElementById('login-email').value.trim();
   const pass  = document.getElementById('login-pass').value;
-  if (!email || !pass) { toast('Nhập đầy đủ thông tin', 'error'); return; }
+  if (!email || !pass) { toast('Please fill in all required fields', 'error'); return; }
   try {
     const res = await gasCall('auth.login', { email, password: pass });
     if (!res.success) { toast(res.error, 'error'); return; }
     A.user = res.user;
     A.sessionToken = res.sessionToken;
     localStorage.setItem('speak_session', JSON.stringify({ user: A.user, token: A.sessionToken }));
-    toast('Xin chào, ' + A.user.fullName + '!', 'success');
+    toast('Welcome, ' + A.user.fullName + '!', 'success');
     SS('S-student');
     studentTab('overview');
-  } catch(e) { toast('Lỗi: ' + e.message, 'error'); }
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
 }
 
 async function doRegister() {
@@ -948,14 +933,14 @@ async function doRegister() {
   const classId   = document.getElementById('reg-class').value.trim();
   const dob       = document.getElementById('reg-dob').value;
   const phone     = document.getElementById('reg-phone').value.trim();
-  if (!studentId || !fullName || !email || !password) { toast('Điền đầy đủ các trường bắt buộc', 'error'); return; }
-  if (password.length < 6) { toast('Mật khẩu tối thiểu 6 ký tự', 'error'); return; }
+  if (!studentId || !fullName || !email || !password) { toast('Please fill in all required fields', 'error'); return; }
+  if (password.length < 6) { toast('Password must be at least 6 characters', 'error'); return; }
   try {
     const res = await gasCall('auth.register', { studentId, fullName, email, password, classId: classId.toUpperCase(), dob, phone });
     if (!res.success) { toast(res.error, 'error'); return; }
     toast(res.message, 'success', 5000);
     switchAuthTab('login');
-  } catch(e) { toast('Lỗi: ' + e.message, 'error'); }
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
 }
 
 function showTeacherLogin() { openModal('teacher-login-modal'); document.getElementById('teacher-pass').focus(); }
@@ -972,7 +957,7 @@ async function doTeacherLogin() {
     toast('Teacher portal loaded', 'success');
     SS('S-teacher');
     teacherTab('overview');
-  } catch(e) { toast('Lỗi: ' + e.message, 'error'); }
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
 }
 
 function showForgot() { openModal('forgot-modal'); }
@@ -983,7 +968,7 @@ async function sendForgot() {
     const res = await gasCall('auth.forgotPassword', { email });
     if (!res.success) { toast(res.error, 'error'); return; }
     document.getElementById('forgot-body').innerHTML = `
-      <p style="margin-bottom:14px;color:var(--g600)">Code đã gửi đến ${email}. Nhập code để tiếp tục.</p>
+      <p style="margin-bottom:14px;color:var(--g600)">A reset code has been sent to ${email}. Enter the code below to continue.</p>
       <div class="form-group"><label class="form-label">Code</label><input class="form-input" id="forgot-code" maxlength="6"></div>
       <div class="form-group"><label class="form-label">New Password</label><input class="form-input" id="forgot-newpass" type="password"></div>
       <button class="btn btn-primary btn-full" onclick="doResetPass('${email}')">Reset Password</button>`;
@@ -996,7 +981,7 @@ async function doResetPass(email) {
   try {
     const res = await gasCall('auth.resetPassword', { email, code, newPassword });
     if (!res.success) { toast(res.error, 'error'); return; }
-    toast('Đặt lại mật khẩu thành công!', 'success');
+    toast('Password reset successfully!', 'success');
     closeModal('forgot-modal');
   } catch(e) { toast(e.message, 'error'); }
 }
@@ -1028,7 +1013,7 @@ async function teacherTab(tab) {
     if (tab === 'homework')  await renderTeacherHomework(c);
     if (tab === 'progress')  await renderTeacherProgress(c);
     if (tab === 'settings')  await renderTeacherSettings(c);
-  } catch(e) { c.innerHTML = '<div class="empty">Lỗi: ' + e.message + '</div>'; }
+  } catch(e) { c.innerHTML = '<div class="empty">Error: ' + e.message + '</div>'; }
 }
 
 async function renderTeacherOverview(c) {
@@ -1104,10 +1089,10 @@ function renderClassroomUI(c) {
       </div>
     </div>
     ${pending.length ? `<div class="card" style="border-color:var(--gold);background:var(--gold-l)">
-      <div style="font-weight:700;color:var(--gold);margin-bottom:10px">⏳ ${pending.length} sinh viên chờ kích hoạt</div>
+      <div style="font-weight:700;color:var(--gold);margin-bottom:10px">⏳ ${pending.length} students pending activation</div>
       ${pending.map(s => `
         <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(0,0,0,.06)">
-          <div><div style="font-weight:600">${s.FullName}</div><div style="font-size:11px;color:var(--g600)">${s.StudentID} · ${s.Email} · Lớp: ${s.ClassID||'chưa có'}</div></div>
+          <div><div style="font-weight:600">${s.FullName}</div><div style="font-size:11px;color:var(--g600)">${s.StudentID} · ${s.Email} · Class: ${s.ClassID||'—'}</div></div>
           <button class="btn btn-green btn-sm" onclick="showActivate('${s.StudentID}','${s.FullName}','${s.ClassID||''}')">Activate</button>
         </div>`).join('')}
     </div>` : ''}
@@ -1134,7 +1119,7 @@ function renderClassroomUI(c) {
                 <button class="btn btn-outline btn-sm" onclick="showActivate('${s.StudentID}','${s.FullName}','${s.ClassID||''}')">Edit</button>
                 ${s.Status !== 'Archived' ? `<button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="archiveStudent('${s.StudentID}')">Archive</button>` : ''}
               </td>
-            </tr>`).join('') : '<tr><td colspan="6" class="empty">Không có sinh viên nào</td></tr>'}
+            </tr>`).join('') : '<tr><td colspan="6" class="empty">No students found</td></tr>'}
         </tbody>
       </table>
     </div>`;
@@ -1156,17 +1141,17 @@ async function doActivate() {
   try {
     const res = await gasCall('teacher.activateUser', { studentId, status, classId });
     if (!res.success) { toast(res.error, 'error'); return; }
-    toast('Cập nhật thành công!', 'success');
+    toast('Updated successfully!', 'success');
     closeModal('activate-modal');
     teacherTab('classroom');
   } catch(e) { toast(e.message, 'error'); }
 }
 
 async function archiveStudent(studentId) {
-  if (!confirm('Archive sinh viên này?')) return;
+  if (!confirm('Archive this student?')) return;
   try {
     await gasCall('teacher.archiveStudent', { studentId });
-    toast('Đã archive', 'success');
+    toast('Archived successfully', 'success');
     teacherTab('classroom');
   } catch(e) { toast(e.message, 'error'); }
 }
@@ -1177,11 +1162,11 @@ async function doCreateClass() {
   const academicYear= document.getElementById('cc-year').value.trim();
   const semester    = document.getElementById('cc-sem').value.trim();
   const teacherName = document.getElementById('cc-teacher').value.trim();
-  if (!classId) { toast('ClassID không được để trống', 'error'); return; }
+  if (!classId) { toast('Class ID cannot be empty', 'error'); return; }
   try {
     const res = await gasCall('teacher.createClass', { classId, className, academicYear, semester, teacherName });
     if (!res.success) { toast(res.error, 'error'); return; }
-    toast('Tạo lớp ' + classId + ' thành công!', 'success');
+    toast('Class ' + classId + ' created successfully!', 'success');
     closeModal('create-class-modal');
     teacherTab('classroom');
   } catch(e) { toast(e.message, 'error'); }
@@ -1193,11 +1178,11 @@ async function doAddStudent() {
   const classId   = document.getElementById('as-class').value.trim().toUpperCase();
   const email     = document.getElementById('as-email').value.trim();
   const phone     = document.getElementById('as-phone').value.trim();
-  if (!studentId || !fullName) { toast('Student ID và tên là bắt buộc', 'error'); return; }
+  if (!studentId || !fullName) { toast('Student ID and full name are required', 'error'); return; }
   try {
     const res = await gasCall('teacher.addStudent', { studentId, fullName, classId, email, phone });
     if (!res.success) { toast(res.error, 'error'); return; }
-    toast('Đã thêm ' + fullName, 'success');
+    toast('Added ' + fullName, 'success');
     closeModal('add-student-modal');
     teacherTab('classroom');
   } catch(e) { toast(e.message, 'error'); }
@@ -1263,7 +1248,7 @@ async function renderTeacherHomework(c) {
               <td>
                 <button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="deleteAsn('${a.AssignID}','${(a.Title||'').replace(/'/g,'`')}')">Delete</button>
               </td>
-            </tr>`).join('') : '<tr><td colspan="6" class="empty">Chưa có bài tập nào</td></tr>'}
+            </tr>`).join('') : '<tr><td colspan="6" class="empty">No assignments yet</td></tr>'}
         </tbody>
       </table>
     </div>`;
@@ -1280,30 +1265,30 @@ async function doCreateAssignment() {
   const part     = document.getElementById('asn-part').value;
   const deadline = document.getElementById('asn-deadline').value;
   const classes  = document.getElementById('asn-classes').value.trim().toUpperCase();
-  if (!title) { toast('Nhập tiêu đề bài tập', 'error'); return; }
+  if (!title) { toast('Please enter an assignment title', 'error'); return; }
   const questions = [];
   for (let i = 0; i < _asnQCount; i++) {
     const q = document.getElementById('asn-q-' + i);
     if (q && q.value.trim()) questions.push(q.value.trim());
   }
-  if (part !== 'part2' && questions.length < 4) { toast('Cần tối thiểu 4 câu hỏi cho Part 1/3', 'error'); return; }
-  if (part === 'part2' && questions.length < 1) { toast('Cần ít nhất 1 câu hỏi cho Part 2', 'error'); return; }
+  if (part !== 'part2' && questions.length < 4) { toast('At least 4 questions required for Part 1/3', 'error'); return; }
+  if (part === 'part2' && questions.length < 1) { toast('At least 1 question required for Part 2', 'error'); return; }
   try {
     const assignedClasses = classes ? classes.split(',').map(s => s.trim()).filter(Boolean) : ['ALL'];
     const res = await gasCall('teacher.createAssignment', { title, part, questions, deadline, assignedClasses });
     if (!res.success) { toast(res.error, 'error'); return; }
-    toast('Tạo bài tập thành công!', 'success');
+    toast('Assignment created successfully!', 'success');
     closeModal('create-asn-modal');
     teacherTab('homework');
   } catch(e) { toast(e.message, 'error'); }
 }
 
 async function deleteAsn(assignId, title) {
-  if (!confirm('Xóa bài tập "' + title + '"?')) return;
+  if (!confirm('Delete assignment "' + title + '"?')) return;
   try {
     const res = await gasCall('teacher.deleteAssignment', { assignId });
     if (!res.success) { toast(res.error, 'error'); return; }
-    toast('Đã xóa', 'success');
+    toast('Deleted', 'success');
     teacherTab('homework');
   } catch(e) { toast(e.message, 'error'); }
 }
@@ -1343,8 +1328,8 @@ function renderProgressUI(c, classes) {
         <option value="">Tất cả lớp</option>
         ${classes.map(cl => `<option value="${cl.ClassID}" ${_progFilter===cl.ClassID?'selected':''}>${cl.ClassID}</option>`).join('')}
       </select>
-      <input class="search-inp" placeholder="Tên / MSSV / Topic…" id="prog-search" oninput="filterProgressTable()" style="max-width:280px">
-      <span style="font-size:12px;color:var(--g600)">${rows.length} kết quả</span>
+      <input class="search-inp" placeholder="Name / ID / Topic…" id="prog-search" oninput="filterProgressTable()" style="max-width:280px">
+      <span style="font-size:12px;color:var(--g600)">${rows.length} results</span>
     </div>
     <div class="tbl-wrap">
       <table class="tbl" id="prog-tbl">
@@ -1355,8 +1340,8 @@ function renderProgressUI(c, classes) {
           <th onclick="sortProg('Part')">Mode ⇅</th>
           <th onclick="sortProg('Topic')">Topic ⇅</th>
           <th>Start</th><th>End</th><th>Duration</th>
-          <th>Q</th><th>Lần</th>
-          <th>Điểm các mốc ⇅</th><th>⚠</th>
+          <th>Q</th><th>Date</th>
+          <th>Milestone Scores ⇅</th><th>⚠</th>
         </tr></thead>
         <tbody id="prog-tbody">
           ${renderProgressRows(rows)}
@@ -1385,7 +1370,7 @@ function buildProgressRows(sessions, classFilter) {
 }
 
 function renderProgressRows(rows) {
-  if (!rows.length) return '<tr><td colspan="12" class="empty">Chưa có dữ liệu</td></tr>';
+  if (!rows.length) return '<tr><td colspan="12" class="empty">No data yet</td></tr>';
   return rows.map((r, ri) => {
     const count    = r.sessions.length;
     const lastSess = r.sessions.slice(-1)[0];
@@ -1398,7 +1383,7 @@ function renderProgressRows(rows) {
     const latestBatch = milestones.slice(-4);
     const scoreStr = latestBatch.length
       ? latestBatch.map(m => `<span style="color:${scoreColor(m.Overall)};font-weight:700">${m.Overall}</span>`).join(' · ')
-      : '<span style="color:var(--g400);font-style:italic;font-size:12px">chưa chấm</span>';
+      : '<span style="color:var(--g400);font-style:italic;font-size:12px">not graded</span>';
     const hasUngraded = r.sessions.some(s => {
       const an = parseInt(s.AttemptNo) || 0;
       return [3,5,8,10,13,15,18,20].includes(an) && !s.Overall;
@@ -1419,7 +1404,7 @@ function renderProgressRows(rows) {
       </td>
       <td>${scoreStr}</td>
       <td style="text-align:center">
-        ${hasUngraded ? '<span title="Có lần mốc chưa có điểm" style="cursor:help">⚠️</span>' : ''}
+        ${hasUngraded ? '<span title="Milestone attempts without a score" style="cursor:help">⚠️</span>' : ''}
       </td>
     </tr>
     <tr>
@@ -1463,12 +1448,12 @@ function showProgressDetail(rowIdx) {
           const val = last[field.toUpperCase()] || last[field] || '—';
           return `<div class="score-col"><div class="score-val s${String(val).replace('.','')}">${val}</div><div class="score-lbl">${lbl}</div></div>`;
         }).join('');
-      })() : '<div class="score-col" style="padding:20px;color:var(--g400)">Chưa có điểm mốc</div>'}
+      })() : '<div class="score-col" style="padding:20px;color:var(--g400)">No milestone scores</div>'}
     </div>
     <div style="padding:16px 20px">
-      <div style="font-size:12px;font-weight:700;color:var(--g600);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">📊 Điểm qua các mốc chấm</div>
+      <div style="font-size:12px;font-weight:700;color:var(--g600);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">📊 Milestone Scores</div>
       <table class="milestone-tbl">
-        <thead><tr><th>Mốc</th><th>Overall</th><th>FC</th><th>LR</th><th>GR</th><th>P</th><th>Ngày</th></tr></thead>
+        <thead><tr><th>Attempt</th><th>Overall</th><th>FC</th><th>LR</th><th>GR</th><th>P</th><th>Date</th></tr></thead>
         <tbody>
           ${milestones.map(m => `
             <tr class="${String(m.AttemptNo) === String(latestAttemptNo) ? 'active-row' : ''}">
@@ -1481,7 +1466,7 @@ function showProgressDetail(rowIdx) {
       </table>
     </div>
     <div style="padding:0 20px 16px">
-      <div style="font-size:12px;font-weight:700;color:var(--g600);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">🗣 All Sessions (${row.sessions.length} lần)</div>
+      <div style="font-size:12px;font-weight:700;color:var(--g600);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">🗣 All Sessions (${row.sessions.length})</div>
       ${row.sessions.slice().reverse().map((s, si) => {
         let results = [];
         try { results = JSON.parse(s.ResultsJSON || '[]'); } catch(e) {}
@@ -1489,8 +1474,8 @@ function showProgressDetail(rowIdx) {
           <div class="qacc">
             <div class="qacc-hdr" onclick="this.nextElementSibling.classList.toggle('open')">
               <div class="qa-n">${s.AttemptNo||si+1}</div>
-              <div class="qa-q" style="flex:1">${fmtDT(s.StartTime)} · ${s.DurationMin||0} phút</div>
-              ${s.Overall ? `<div class="qa-band">${s.Overall}</div>` : `<span style="font-size:11px;color:var(--g400)">chưa chấm</span>`}
+              <div class="qa-q" style="flex:1">${fmtDT(s.StartTime)} · ${s.DurationMin||0}  min</div>
+              ${s.Overall ? `<div class="qa-band">${s.Overall}</div>` : `<span style="font-size:11px;color:var(--g400)">not graded</span>`}
             </div>
             <div class="qacc-body" style="display:none">
               ${results.map((r, qi) => `
@@ -1506,18 +1491,18 @@ function showProgressDetail(rowIdx) {
       }).join('')}
     </div>`;
   document.getElementById('dm-title').textContent = row.StudentName + ' · ' + (row.ClassID||'') + ' · 📌 ' + (row.Topic||'');
-  document.getElementById('dm-meta').textContent = (row.Part||'').toUpperCase() + ' · ' + row.sessions.length + ' lần luyện';
+  document.getElementById('dm-meta').textContent = (row.Part||'').toUpperCase() + ' · ' + row.sessions.length + ' sessions';
   document.getElementById('dm-body').innerHTML = dmHtml;
   openModal('detail-modal');
 }
 
 async function exportSessions() {
   try {
-    toast('Đang xuất…', 'info');
+    toast('Exporting…', 'info');
     const res = await gasCall('teacher.exportSessions', { classId: _progFilter || '' });
     if (!res.success) { toast(res.error, 'error'); return; }
     window.open(res.url, '_blank');
-    toast('Đã xuất thành công!', 'success');
+    toast('Export successful!', 'success');
   } catch(e) { toast(e.message, 'error'); }
 }
 
@@ -1528,7 +1513,7 @@ async function renderTeacherSettings(c) {
     <h2 style="margin-bottom:20px">⚙️ Settings</h2>
     <div class="card">
       <div class="card-title" style="margin-bottom:14px">Teacher Account</div>
-      <div class="form-group"><label class="form-label">Teacher Email (nhận thông báo đăng ký)</label>
+      <div class="form-group"><label class="form-label">Teacher Email (receives registration notifications)</label>
         <input class="form-input" id="set-email" value="${s.TeacherEmail||''}" placeholder="teacher@email.com">
       </div>
       <div class="divider"></div>
@@ -1537,9 +1522,9 @@ async function renderTeacherSettings(c) {
       <div class="form-group"><label class="form-label">New Password</label><input class="form-input" id="set-newpass" type="password"></div>
       <div class="divider"></div>
       <div class="card-title" style="margin-bottom:14px">Audio Storage</div>
-      <div class="form-group"><label class="form-label">Google Drive Folder ID (cho audio upload)</label>
+      <div class="form-group"><label class="form-label">Google Drive Folder ID (for audio storage)</label>
         <input class="form-input" id="set-folder" value="${s.AudioFolderID||''}" placeholder="1abc...xyz">
-        <div class="form-hint">Thư mục Drive để lưu audio của sinh viên. Để trống = Root Drive của bạn.</div>
+        <div class="form-hint">Drive folder to store student audio. Leave empty to use your root Drive.</div>
       </div>
       <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
     </div>`;
@@ -1557,7 +1542,7 @@ async function saveSettings() {
       const res = await gasCall('teacher.changePassword', { current: curP, newPassword: newP });
       if (!res.success) { toast(res.error, 'error'); return; }
     }
-    toast('Đã lưu cài đặt!', 'success');
+    toast('Settings saved!', 'success');
   } catch(e) { toast(e.message, 'error'); }
 }
 
@@ -1577,7 +1562,7 @@ async function studentTab(tab) {
     if (tab === 'homework')  await renderStudentHomework(c);
     if (tab === 'practice')  renderPracticeHome(c);
     if (tab === 'history')   await renderMyHistory(c);
-  } catch(e) { c.innerHTML = '<div class="empty">Lỗi: ' + e.message + '</div>'; }
+  } catch(e) { c.innerHTML = '<div class="empty">Error: ' + e.message + '</div>'; }
 }
 
 async function renderStudentOverview(c) {
@@ -1602,7 +1587,7 @@ async function renderStudentOverview(c) {
                 <span style="font-weight:700">${t.topic}</span>
                 <span class="badge badge-blue" style="margin-left:8px">${t.part||'—'}</span>
               </div>
-              <div style="font-size:12px;color:var(--g600)">${t.count} lần · ${fmtDT(t.lastPractice)}</div>
+              <div style="font-size:12px;color:var(--g600)">${t.count} sessions · ${fmtDT(t.lastPractice)}</div>
             </div>
             <div style="display:flex;align-items:center;gap:10px">
               <div style="flex:1;height:6px;background:var(--g200);border-radius:3px;overflow:hidden">
@@ -1615,7 +1600,7 @@ async function renderStudentOverview(c) {
               ${t.scores.map(m=>`<span style="font-size:11px;background:var(--g100);border-radius:6px;padding:2px 8px">Lần ${m.attemptNo}: <strong style="color:${scoreColor(m.overall)}">${m.overall}</strong></span>`).join('')}
             </div>` : ''}
           </div>`).join('')}
-      </div>` : '<div class="empty">Bạn chưa luyện tập lần nào. Vào Practice để bắt đầu!</div>'}`;
+      </div>` : '<div class="empty">You haven't practiced yet. Go to Practice to get started!</div>'}`;
 }
 
 async function renderPeerComparison(c) {
@@ -1626,7 +1611,7 @@ async function renderPeerComparison(c) {
   c.innerHTML = `
     <h2 style="margin-bottom:16px">👥 Peer Comparison — ${A.user?.classId || 'My Class'}</h2>
     <div class="card">
-      <p style="font-size:13px;color:var(--g600);margin-bottom:16px">Bảng dưới đây cho thấy số lần luyện tập của các bạn trong lớp. Cố gắng lên nhé! 💪</p>
+      <p style="font-size:13px;color:var(--g600);margin-bottom:16px">This leaderboard shows how many times each classmate has practiced. Keep it up! 💪</p>
       ${peers.map((p, i) => {
         const isMe = String(p.studentId) === String(myId);
         return `<div class="peer-row ${isMe ? 'peer-me' : ''}">
@@ -1635,14 +1620,14 @@ async function renderPeerComparison(c) {
             <div class="peer-name">${p.name || p.studentId} ${isMe ? '<span class="badge badge-blue" style="margin-left:4px">You</span>' : ''}</div>
             <div class="peer-last">${p.lastPractice ? 'Last: ' + fmtDT(p.lastPractice) : 'Not yet'}</div>
           </div>
-          <div class="peer-count">${p.count} lần</div>
+          <div class="peer-count">${p.count}  sessions</div>
           <div>
             <div style="width:${Math.min(p.count/10*100,100)}px;max-width:100px;height:6px;background:var(--g200);border-radius:3px;overflow:hidden">
               <div style="height:100%;width:${Math.min(p.count/10*100,100)}%;background:${isMe?'var(--blue)':'var(--g400)'};border-radius:3px"></div>
             </div>
           </div>
         </div>`;
-      }).join('') || '<div class="empty">Chưa có dữ liệu</div>'}
+      }).join('') || '<div class="empty">No data yet</div>'}
     </div>`;
 }
 
@@ -1665,8 +1650,8 @@ async function renderStudentHomework(c) {
               <div style="font-weight:700;font-size:1rem">${hw.Title||'Assignment'}</div>
               <div style="margin-top:4px;display:flex;gap:6px;flex-wrap:wrap">
                 <span class="badge badge-blue">${hw.Part||'—'}</span>
-                ${overdue ? '<span class="badge badge-red">Quá hạn</span>' : (daysLeft !== null ? `<span class="badge ${daysLeft<=3?'badge-red':'badge-gold'}">Còn ${daysLeft} ngày</span>` : '')}
-                ${hw.myAttempts ? `<span class="badge badge-green">${hw.myAttempts} lần luyện</span>` : '<span class="badge badge-grey">Chưa luyện</span>'}
+                ${overdue ? '<span class="badge badge-red">Overdue</span>' : (daysLeft !== null ? `<span class="badge ${daysLeft<=3?'badge-red':'badge-gold'}">${daysLeft} days left</span>` : '')}
+                ${hw.myAttempts ? `<span class="badge badge-green">${hw.myAttempts}  attempts</span>` : '<span class="badge badge-grey">Not started</span>'}
               </div>
             </div>
             ${deadline ? `<div style="font-size:12px;color:var(--g600)">Deadline: ${deadline.toLocaleDateString('vi-VN')}</div>` : ''}
@@ -1677,7 +1662,7 @@ async function renderStudentHomework(c) {
             </button>
           </div>
         </div>`;
-    }).join('') : '<div class="empty">Chưa có bài tập nào được giao</div>'}`;
+    }).join('') : '<div class="empty">No assignments yet</div>'}`;
 }
 
 function renderPracticeHome(c) {
@@ -1688,33 +1673,33 @@ function renderPracticeHome(c) {
   c.innerHTML = `
     <h2 style="margin-bottom:16px">🎤 Practice</h2>
     <div class="key-wrap">
-      <div style="font-weight:700;margin-bottom:10px">🔑 Gemini API Key <small style="font-weight:400;color:var(--g600)">(chấm điểm)</small></div>
+      <div style="font-weight:700;margin-bottom:10px">🔑 Gemini API Key <small style="font-weight:400;color:var(--g600)">(for grading)</small></div>
       <div class="key-row">
         <input class="form-input" id="gemini-key-inp" type="password" value="${gemKey}" placeholder="AIzaSy..." style="flex:1">
-        <button class="btn btn-gold btn-sm" onclick="saveKey('gemini')">Lưu</button>
-        ${gemKey ? '<span class="key-st key-ok">✓ Key OK</span>' : '<span class="key-st key-bad">Chưa có</span>'}
+        <button class="btn btn-gold btn-sm" onclick="saveKey('gemini')">Save</button>
+        ${gemKey ? '<span class="key-st key-ok">✓ Key OK</span>' : '<span class="key-st key-bad">Not set</span>'}
       </div>
-      <div style="font-size:11px;color:var(--g600);margin-top:6px">Miễn phí tại <a href="https://aistudio.google.com" target="_blank">aistudio.google.com</a></div>
+      <div style="font-size:11px;color:var(--g600);margin-top:6px">Free at <a href="https://aistudio.google.com" target="_blank">aistudio.google.com</a></div>
     </div>
     <div class="key-wrap">
-      <div style="font-weight:700;margin-bottom:10px">🔑 Groq API Key <small style="font-weight:400;color:var(--g600)">(chuyển giọng nói → chữ)</small></div>
+      <div style="font-weight:700;margin-bottom:10px">🔑 Groq API Key <small style="font-weight:400;color:var(--g600)">(for transcription)</small></div>
       <div class="key-row">
         <input class="form-input" id="groq-key-inp" type="password" value="${groqKey}" placeholder="gsk_..." style="flex:1">
-        <button class="btn btn-gold btn-sm" onclick="saveKey('groq')">Lưu</button>
-        ${groqKey ? '<span class="key-st key-ok">✓ Key OK</span>' : '<span class="key-st key-bad">Chưa có</span>'}
+        <button class="btn btn-gold btn-sm" onclick="saveKey('groq')">Save</button>
+        ${groqKey ? '<span class="key-st key-ok">✓ Key OK</span>' : '<span class="key-st key-bad">Not set</span>'}
       </div>
-      <div style="font-size:11px;color:var(--g600);margin-top:6px">Miễn phí tại <a href="https://console.groq.com/keys" target="_blank">console.groq.com/keys</a></div>
+      <div style="font-size:11px;color:var(--g600);margin-top:6px">Free at <a href="https://console.groq.com/keys" target="_blank">console.groq.com/keys</a></div>
     </div>
     <div class="mode-grid" style="margin-bottom:14px">
       <div class="mode-tile" onclick="openFreeSetup()">
         <div class="mode-icon">✏️</div>
         <div class="mode-title">Free Practice</div>
-        <div class="mode-sub">Tự nhập câu hỏi, luyện tập</div>
+        <div class="mode-sub">Enter your own questions to practice</div>
       </div>
       <div class="mode-tile" onclick="studentTab('homework')">
         <div class="mode-icon">📚</div>
         <div class="mode-title">Homework</div>
-        <div class="mode-sub">Luyện bài tập của giáo viên</div>
+        <div class="mode-sub">Practice your teacher's assignments</div>
       </div>
     </div>`;
 }
@@ -1725,7 +1710,7 @@ function saveKey(type) {
   localStorage.setItem('speak_' + type + '_key', val);
   if (type === 'gemini') A.gkey = val;
   else A.groqKey = val;
-  toast('Đã lưu ' + type + ' key', 'success');
+  toast('' + type[0].toUpperCase()+type.slice(1) + ' key saved', 'success');
   renderPracticeHome(document.getElementById('student-content'));
 }
 
@@ -1765,16 +1750,16 @@ async function renderMyHistory(c) {
             <div>
               <span style="font-weight:700">${g.topic||'Free Practice'}</span>
               <span class="badge badge-blue" style="margin-left:8px">${g.part||'—'}</span>
-              <span class="badge badge-grey" style="margin-left:4px">${g.sessions.length} lần</span>
+              <span class="badge badge-grey" style="margin-left:4px">${g.sessions.length}  sessions</span>
             </div>
             <button class="btn btn-primary btn-sm" onclick="retryFromHistory('${g.topic}','${g.assignId||''}','${g.part||'part1'}')">Re-try</button>
           </div>
           ${milestones.length ? `
             <div style="display:flex;gap:6px;flex-wrap:wrap">
               ${milestones.map(m => `<span style="font-size:12px;background:var(--g100);border-radius:8px;padding:4px 10px">Lần ${m.AttemptNo}: <strong style="color:${scoreColor(m.Overall)}">${m.Overall}</strong></span>`).join('')}
-            </div>` : '<div style="font-size:12px;color:var(--g400)">Chưa có điểm mốc</div>'}
+            </div>` : '<div style="font-size:12px;color:var(--g400)">No milestone scores</div>'}
         </div>`;
-    }).join('') : '<div class="empty">Chưa có lịch sử luyện tập</div>'}`;
+    }).join('') : '<div class="empty">Not set lịch sử luyện tập</div>'}`;
 }
 
 function retryFromHistory(topic, assignId, part) {
@@ -1811,7 +1796,7 @@ function buildSetup(type, hwData) {
     A.topic = hwData.Title;
   } else {
     topicSel = `<div class="form-group">
-      <label class="form-label">📌 Topic / Chủ đề * <small style="color:var(--g400)">(bắt buộc)</small></label>
+      <label class="form-label">📌 Topic *</label>
       <input class="form-input topic-select" id="topic-inp" value="${hwTopic}" placeholder="VD: Shoes, Technology, Education…" oninput="checkTopic()">
     </div>`;
   }
@@ -1823,17 +1808,17 @@ function buildSetup(type, hwData) {
           <textarea class="form-input" id="qt-0" rows="3" placeholder="VD: Describe a person who has greatly influenced you.">${questions[0]||''}</textarea>
         </div>
         <div class="form-group">
-          <label class="form-label">KEY WORDS <small style="font-weight:400;color:var(--g400)">(từ muốn dùng khi nói)</small></label>
-          <input class="form-input" id="kw-inp-0" placeholder="Nhập từ khoá, phân cách bằng dấu phẩy">
+          <label class="form-label">💡 KEY WORDS <small style="font-weight:400;color:var(--g400)">(words you want to use)</small></label>
+          <input class="form-input" id="kw-inp-0" placeholder="Keywords, comma-separated">
         </div>
       </div>`
     : Array.from({length: isHW ? questions.length || 4 : 4}, (_, i) => `
         <div class="card">
           <div class="qlbl" style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--red);margin-bottom:7px">QUESTION ${i+1}${i < 3 && !isHW ? ' *' : ''}</div>
-          <textarea class="form-input" id="qt-${i}" rows="2" placeholder="Nhập câu hỏi…">${questions[i]||''}</textarea>
+          <textarea class="form-input" id="qt-${i}" rows="2" placeholder="Enter question…">${questions[i]||''}</textarea>
           <div style="margin-top:8px">
             <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--gold);margin-bottom:5px">💡 KEY WORDS</div>
-            <input class="form-input" id="kw-inp-${i}" style="border-color:#FCD34D" placeholder="Nhập từ khoá + Enter, phân cách bằng dấu phẩy">
+            <input class="form-input" id="kw-inp-${i}" style="border-color:#FCD34D" placeholder="Keywords, comma-separated phẩy">
           </div>
         </div>`).join('');
 
@@ -1864,10 +1849,10 @@ function addSetupQ() {
   const qhtml = `
     <div class="card" id="extra-q-${_extraQCount}">
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--red);margin-bottom:7px">QUESTION ${_extraQCount}</div>
-      <textarea class="form-input" id="qt-${_extraQCount-1}" rows="2" placeholder="Nhập câu hỏi…"></textarea>
+      <textarea class="form-input" id="qt-${_extraQCount-1}" rows="2" placeholder="Enter question…"></textarea>
       <div style="margin-top:8px">
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--gold);margin-bottom:5px">💡 KEY WORDS</div>
-        <input class="form-input" id="kw-inp-${_extraQCount-1}" style="border-color:#FCD34D" placeholder="Từ khoá…">
+        <input class="form-input" id="kw-inp-${_extraQCount-1}" style="border-color:#FCD34D" placeholder="Keyword…">
       </div>
     </div>`;
   const startBtn = document.querySelector('#setup-main .btn-primary');
@@ -1882,11 +1867,11 @@ function checkTopic() {
 }
 
 function startSetup(nQ, type) {
-  if (!A.gkey)    { toast('Nhập Gemini API key trước', 'error'); return; }
-  if (!A.groqKey) { toast('Nhập Groq API key trước', 'error'); return; }
+  if (!A.gkey)    { toast('Please enter your Gemini API key first', 'error'); return; }
+  if (!A.groqKey) { toast('Please enter your Groq API key first', 'error'); return; }
 
   const topic = type === 'homework' ? A.topic : (document.getElementById('topic-inp')?.value.trim() || '');
-  if (!topic) { toast('Nhập tên Topic trước', 'error'); document.getElementById('topic-inp')?.focus(); return; }
+  if (!topic) { toast('Please enter a topic name first', 'error'); document.getElementById('topic-inp')?.focus(); return; }
 
   const qs = [];
   for (let i = 0; i < nQ; i++) {
@@ -1897,7 +1882,7 @@ function startSetup(nQ, type) {
   }
   const isP2  = A.mode === 'part2';
   const minQ  = isP2 ? 1 : 4;
-  if (qs.length < minQ) { toast(`Cần tối thiểu ${minQ} câu hỏi`, 'error'); return; }
+  if (qs.length < minQ) { toast(`At least ${minQ} questions required`, 'error'); return; }
   A.topic = topic;
   launch(A.mode, qs);
 }
@@ -1944,7 +1929,7 @@ function loadQ(idx) {
   updProg();
   A.talking = false; A.curAnswer = '';
   resetTalkUI();
-  document.getElementById('next-btn').textContent = (idx >= A.qs.length - 1) ? 'Hoàn thành ✓' : 'Next →';
+  document.getElementById('next-btn').textContent = (idx >= A.qs.length - 1) ? 'Finish ✓' : 'Next →';
   document.getElementById('next-btn').className  = 'btn ' + (idx >= A.qs.length - 1 ? 'btn-green' : 'btn-outline');
   document.getElementById('prev-btn').disabled   = (idx <= 0);
   // Restore previous answer if navigating back
@@ -1956,7 +1941,7 @@ function loadQ(idx) {
       const rb = document.getElementById('rec-btn');
       rb.textContent = '✓'; rb.className = 'rec-btn done';
       document.getElementById('rec-area').className = 'rec-area done';
-      document.getElementById('rec-st').textContent = 'Đã ghi câu trả lời ✓';
+      document.getElementById('rec-st').textContent = 'Answer recorded ✓';
       document.getElementById('rec-play-wrap').style.display = 'flex';
     }
   }
@@ -2009,7 +1994,7 @@ function startQCountdown(sec) {
   A.qcdLeft = sec;
   A.qcdTm = setInterval(() => {
     A.qcdLeft--;
-    if (A.qcdLeft <= 0) { clearInterval(A.qcdTm); toast('Hết giờ câu này', 'info'); (async () => { if (A.talking) await stopTalk(); nextQ(); })(); }
+    if (A.qcdLeft <= 0) { clearInterval(A.qcdTm); toast('Time\'s up for this question', 'info'); (async () => { if (A.talking) await stopTalk(); nextQ(); })(); }
   }, 1000);
 }
 
@@ -2017,13 +2002,13 @@ function startQCountdown(sec) {
 function toggleTalk() { if (A.talkBusy) return; if (A.talking) stopTalk(); else startTalk(); }
 async function startTalk() {
   if (A.talking || A.talkBusy) return;
-  if (!A.groqKey) { toast('Cần Groq API key — vào Practice để nhập', 'error'); return; }
+  if (!A.groqKey) { toast('Groq API key required — go to Practice to add it', 'error'); return; }
   A.talkBusy = true; A.talking = true; A.recStartTs = Date.now();
   const rb = document.getElementById('rec-btn');
   rb.textContent = '⏹'; rb.className = 'rec-btn act';
   document.getElementById('rec-area').className = 'rec-area recording';
-  document.getElementById('rec-st').innerHTML = '🔴 Đang ghi âm… nói tự nhiên';
-  document.getElementById('rec-hint').textContent = 'Nhấn SPACE để chốt câu';
+  document.getElementById('rec-st').innerHTML = '🔴 Recording… speak naturally';
+  document.getElementById('rec-hint').textContent = 'Press SPACE to stop';
   document.getElementById('rec-play-wrap').style.display = 'none';
   await startAudioCapture();
   A.talkBusy = false;
@@ -2037,13 +2022,13 @@ async function stopTalk() {
   if (ok) {
     rb.textContent = '✓'; rb.className = 'rec-btn done'; rb.disabled = false;
     document.getElementById('rec-area').className = 'rec-area done';
-    document.getElementById('rec-st').textContent = 'Đã ghi câu trả lời ✓';
-    document.getElementById('rec-hint').textContent = 'Bấm Next, hoặc SPACE để nói thêm';
+    document.getElementById('rec-st').textContent = 'Answer recorded ✓';
+    document.getElementById('rec-hint').textContent = 'Press Next, or SPACE to add more';
     if (A.recs[A.idx]?._audioBlob) document.getElementById('rec-play-wrap').style.display = 'flex';
   } else {
     rb.textContent = '🎤'; rb.className = 'rec-btn'; rb.disabled = false;
     document.getElementById('rec-area').className = 'rec-area';
-    document.getElementById('rec-st').innerHTML = 'Nhấn <b>SPACE</b> (hoặc 🎤) để thử lại';
+    document.getElementById('rec-st').innerHTML = 'Press <b>SPACE</b> (or 🎤) to try again';
   }
   A.talkBusy = false;
 }
@@ -2051,17 +2036,17 @@ function resetTalkUI() {
   const rb = document.getElementById('rec-btn');
   rb.textContent = '🎤'; rb.className = 'rec-btn'; rb.disabled = false;
   document.getElementById('rec-area').className = 'rec-area';
-  document.getElementById('rec-st').innerHTML = 'Nhấn <b>SPACE</b> (hoặc 🎤) để bắt đầu';
-  document.getElementById('rec-hint').textContent = 'Nhấn SPACE lần nữa để chốt câu';
+  document.getElementById('rec-st').innerHTML = 'Press <b>SPACE</b> (or 🎤) to start';
+  document.getElementById('rec-hint').textContent = 'Press SPACE again to stop';
   document.getElementById('rec-time').style.display = 'none';
   document.getElementById('ptt-interim').textContent = '';
   document.getElementById('rec-play-wrap').style.display = 'none';
 }
 function playLastRec() {
   const rec = A.recs[A.idx];
-  if (!rec?._audioBlob) { toast('Chưa có bản ghi', 'error'); return; }
+  if (!rec?._audioBlob) { toast('Not set bản ghi', 'error'); return; }
   const audio = new Audio(URL.createObjectURL(rec._audioBlob));
-  audio.play().catch(() => toast('Không phát được', 'error'));
+  audio.play().catch(() => toast('Could not play recording', 'error'));
 }
 function retryRec() {
   const rec = A.recs[A.idx];
@@ -2070,7 +2055,7 @@ function retryRec() {
   document.getElementById('ptt-interim').textContent = '';
   document.getElementById('rec-play-wrap').style.display = 'none';
   resetTalkUI();
-  toast('Đã xóa — thu lại câu trả lời', 'info');
+  toast('Recording cleared — record again', 'info');
 }
 
 // ── AUDIO CAPTURE ─────────────────────────
@@ -2091,7 +2076,7 @@ async function startAudioCapture() {
     A.mr.ondataavailable = e => { if (e.data.size > 0) A.chunks.push(e.data); };
     A.mr.stream = stream;
     A.mr.start(100);
-  } catch(e) { toast('Không mở được microphone: ' + e.message, 'error'); }
+  } catch(e) { toast('Could not access microphone: ' + e.message, 'error'); }
 }
 function stopMediaRecorder() {
   return new Promise(resolve => {
@@ -2107,21 +2092,21 @@ function stopMediaRecorder() {
 }
 async function stopCaptureAndTranscribe() {
   const rec = await stopMediaRecorder();
-  if (!rec) { toast('Không ghi được audio', 'error'); return false; }
+  if (!rec) { toast('Could not record audio', 'error'); return false; }
   const durMs = Date.now() - (A.recStartTs || Date.now());
   if (rec.blob.size < 1500 || durMs < 400) {
-    toast('Bản ghi quá ngắn — giữ SPACE lâu hơn rồi thử lại', 'error', 4000);
+    toast('Recording too short — hold SPACE longer and try again', 'error', 4000);
     return false;
   }
   A.lastBlob = rec.blob; A.lastMime = rec.mime;
   if (A.recs[A.idx]) { A.recs[A.idx]._audioBlob = rec.blob; A.recs[A.idx]._audioMime = rec.mime; }
-  document.getElementById('rec-st').textContent = 'Đang phiên âm…';
+  document.getElementById('rec-st').textContent = 'Transcribing…';
   try {
     const txt = await transcribeGroq(rec.blob, rec.mime);
     A.curAnswer = (A.curAnswer + ' ' + txt).trim();
     document.getElementById('ptt-interim').textContent = A.curAnswer;
     return true;
-  } catch(e) { toast('Lỗi phiên âm: ' + e.message, 'error', 6000); return false; }
+  } catch(e) { toast('Transcription error: ' + e.message, 'error', 6000); return false; }
 }
 
 // ── GROQ TRANSCRIBE ───────────────────────
@@ -2135,8 +2120,8 @@ function mimeToExt(mime) {
   return 'webm';
 }
 async function transcribeGroq(blob, mime) {
-  if (!A.groqKey) throw new Error('Chưa có Groq key');
-  if (!blob || blob.size < 1200) throw new Error('File ghi âm quá ngắn');
+  if (!A.groqKey) throw new Error('Not set Groq key');
+  if (!blob || blob.size < 1200) throw new Error('Recording too short');
   const ext = mimeToExt(mime);
   const fd  = new FormData();
   fd.append('file', blob, 'answer.' + ext);
@@ -2155,9 +2140,9 @@ async function transcribeGroq(blob, mime) {
     const e = await r.json().catch(() => ({}));
     const msg = e.error?.message || 'Groq lỗi ' + r.status;
     if (/could not process file|valid media file/i.test(msg))
-      throw new Error('Không đọc được file ghi âm. Hãy thử lại hoặc dùng Chrome.');
-    if (r.status === 429) throw new Error('Groq hết lượt — đợi ít phút rồi thử lại');
-    if (r.status === 401) throw new Error('Groq API key không hợp lệ');
+      throw new Error('Could not read audio file. Please try again or use Chrome.');
+    if (r.status === 429) throw new Error('Groq rate limit — please wait a moment and try again');
+    if (r.status === 401) throw new Error('Invalid Groq API key');
     throw new Error(msg);
   }
   const j = await r.json();
@@ -2191,7 +2176,7 @@ async function confirmEndSession() {
   clearInterval(A.qcdTm);
   const done = A.recs.filter(r => r.studentAnswer?.trim()).length;
   if (!done) { SS('S-student'); studentTab('practice'); return; }
-  if (confirm('Kết thúc và xem kết quả ' + done + ' câu đã trả lời?')) finishSession();
+  if (confirm('End session and view results for ' + done + ' answered question(s)?')) finishSession();
 }
 
 // ════════════════════════════════════════════
@@ -2202,7 +2187,7 @@ const GM2= 'gemini-2.5-flash';
 
 async function gemFetch(sys, usr, mx, attempt, jsonMode) {
   mx = mx || 1024; attempt = attempt || 1;
-  if (!A.gkey) throw new Error('Chưa có Gemini API key');
+  if (!A.gkey) throw new Error('Not set Gemini API key');
   const gc = { maxOutputTokens: mx, temperature: 0.45 };
   if (jsonMode) gc.responseMimeType = 'application/json';
   const body = { contents: [{ parts: [{ text: usr }] }], generationConfig: gc };
@@ -2222,7 +2207,7 @@ async function gemFetch(sys, usr, mx, attempt, jsonMode) {
   }
   const j = await r.json();
   const text = j.candidates?.[0]?.content?.parts?.[0]?.text || '';
-  if (!text) throw new Error('Gemini trả về kết quả rỗng');
+  if (!text) throw new Error('Gemini trả về results rỗng');
   return text.trim();
 }
 
@@ -2290,8 +2275,8 @@ async function finishSession() {
   const lastAns = (A.curAnswer || '').trim();
   if (lastAns && A.recs[A.idx]) A.recs[A.idx].studentAnswer = lastAns;
   const answered = A.recs.filter(r => r.studentAnswer?.trim()?.length >= 2);
-  if (!answered.length) { if (confirm('Chưa có câu trả lời nào. Thoát?')) { SS('S-student'); studentTab('practice'); } return; }
-  if (!A.gkey) { toast('Cần Gemini key để chấm điểm', 'error'); return; }
+  if (!answered.length) { if (confirm('No answers recorded. Exit?')) { SS('S-student'); studentTab('practice'); } return; }
+  if (!A.gkey) { toast('Gemini API key required for grading', 'error'); return; }
   SS('S-grading');
   document.getElementById('g-steps').innerHTML = '';
 
@@ -2307,7 +2292,7 @@ async function finishSession() {
     let gradeFailed = false;
 
     if (shouldGrade) {
-      gStep('Lần luyện thứ ' + attemptNo + ' — MỐC chấm điểm, đang chấm…');
+      gStep('Attempt ' + attemptNo + ' — milestone, grading now…');
       try {
         const qaBlock = answered.map((r, i) => {
           const kw = (r.keywords || []).join(', ');
@@ -2316,7 +2301,7 @@ async function finishSession() {
         const cap = Math.min(900 * answered.length + 700, 8192);
         const rawGrade = await gemFetch('IELTS Speaking examiner. Return ONLY valid JSON.', buildGradePrompt(qaBlock, answered.length), cap, 1, true);
         const parsed = _parseGradeJSON(rawGrade);
-        if (!parsed?.qs) throw new Error('JSON không hợp lệ');
+        if (!parsed?.qs) throw new Error('Invalid grading JSON');
         parsed.qs.forEach((g, i) => {
           if (!answered[i]) return;
           answered[i].overall = g.overall;
@@ -2328,10 +2313,10 @@ async function finishSession() {
       } catch(eg) {
         console.warn('Grade failed:', eg);
         gradeFailed = true;
-        toast('AI chấm điểm gặp lỗi — dùng điểm ước tính', 'error', 5000);
+        toast('AI grading failed — using estimated scores', 'error', 5000);
       }
     } else {
-      gStep('Lần luyện thứ ' + attemptNo + ' — ghi nhận (chấm điểm ở lần 3, 5, 8, 10)', true);
+      gStep('Attempt ' + attemptNo + ' recorded (graded at attempts 3, 5, 8, 10)', true);
     }
 
     // Fallback estimates
@@ -2339,10 +2324,10 @@ async function finishSession() {
       if (shouldGrade && !r.overall) { const est = estimateBand(r._m); Object.assign(r, est); r._estimated = true; }
     });
 
-    gStep(gradeFailed ? '⚠ Dùng điểm ước tính' : shouldGrade ? 'Chấm điểm xong ✓' : 'Lưu kết quả…', true);
+    gStep(gradeFailed ? '⚠ Using estimated scores' : shouldGrade ? 'Grading complete ✓' : 'Saving…', true);
 
     // Upload audio
-    gStep('Đang lưu ghi âm…');
+    gStep('Saving audio…');
     await Promise.all(answered.map(async (r, qi) => {
       if (!r._audioBlob) return;
       try {
@@ -2351,14 +2336,14 @@ async function finishSession() {
         if (up?.success) r.audioUrl = up.url;
       } catch(e) {}
     }));
-    gStep('Lưu ghi âm xong ✓', true);
+    gStep('Audio saved ✓', true);
 
     // Build overall
     const overall = calcOverall(answered);
     const fc = avg(answered, 'fluency'), lr = avg(answered, 'lexical'), gr = avg(answered, 'grammar'), p = avg(answered, 'pronunciation');
 
     // Save to GAS
-    gStep('Đang lưu kết quả…');
+    gStep('Saving results…');
     const saved = await gasCall('speak.saveResult', {
       assignId: A.assignId || '',
       topic:    A.topic || '',
@@ -2386,12 +2371,12 @@ async function finishSession() {
       type: A.assignId ? 'homework' : 'free'
     });
     A.retryCount = attemptNo;
-    gStep('Lưu xong ✓', true);
+    gStep('Saved ✓', true);
 
     setTimeout(() => renderResults(answered, rpt, shouldGrade, attemptNo, overall, fc, lr, gr, p), 400);
   } catch(e) {
-    gStep('Lỗi: ' + e.message);
-    toast('Lỗi: ' + e.message, 'error', 6000);
+    gStep('Error: ' + e.message);
+    toast('Error: ' + e.message, 'error', 6000);
     setTimeout(() => SS('S-session'), 3000);
   }
 }
@@ -2412,18 +2397,18 @@ function calcOverall(answered) {
 function buildReport(answered, r, isMilestone, attemptNo) {
   const lines = [];
   if (!isMilestone) {
-    lines.push('### ✅ Đã ghi nhận lần luyện thứ ' + attemptNo);
+    lines.push('### ✅ Attempt ' + attemptNo + ' recorded);
     const next = nextMilestone(attemptNo);
-    lines.push(next ? `> 🎯 Còn **${next - attemptNo} lần** nữa (lần ${next}) sẽ được chấm điểm.` : '> 🎉 Hoàn thành!');
+    lines.push(next ? `> 🎯 **${next - attemptNo} more attempt(s)** to go — attempt ${next} will be graded.` : '> 🎉 You've completed all 10 attempts for this topic!');
     return lines.join('\n');
   }
   lines.push('### 📝 KẾT QUẢ IELTS SPEAKING');
-  if (answered.some(x => x._estimated)) lines.push('> ⚠️ Một số điểm là ước tính (AI gặp lỗi). Nên luyện lại để nhận điểm chính xác.');
+  if (answered.some(x => x._estimated)) lines.push('> ⚠️ Some scores are estimated (AI grading failed). Re-practice to get accurate graded feedback.');
   if (r) {
-    if (r.good?.length) lines.push('- **Cụm từ dùng tốt:** ' + r.good.join(' · '));
-    if (r.weak)         lines.push('- **Vùng cần cải thiện:** ' + r.weak);
-    if (r.up)           { lines.push(''); lines.push('### 🚀 BẢN NÂNG CẤP (Band 8+)'); lines.push(r.up); }
-    if (r.adv)          { lines.push(''); lines.push('### 💡 LỜI KHUYÊN'); lines.push(r.adv); }
+    if (r.good?.length) lines.push('- **Good phrases:** ' + r.good.join(' · '));
+    if (r.weak)         lines.push('- **Area to improve:** ' + r.weak);
+    if (r.up)           { lines.push(''); lines.push('### 🚀 UPGRADED VERSION (Band 8+)'); lines.push(r.up); }
+    if (r.adv)          { lines.push(''); lines.push('### 💡 ADVICE'); lines.push(r.adv); }
   }
   return lines.join('\n');
 }
@@ -2447,8 +2432,8 @@ function renderResults(answered, rpt, isMilestone, attemptNo, overall, fc, lr, g
         </div>
       </div>` : `
       <div class="card" style="background:var(--green-l);border-color:var(--green)">
-        <div style="font-weight:700;color:var(--green-d);font-size:1rem">✅ Lần luyện thứ ${attemptNo} đã được ghi nhận!</div>
-        ${next ? `<p style="margin-top:6px;font-size:13px;color:var(--green-d)">Còn <strong>${next - attemptNo} lần</strong> nữa đến mốc chấm điểm (lần ${next}).</p>` : ''}
+        <div style="font-weight:700;color:var(--green-d);font-size:1rem">✅ Attempt ${attemptNo} recorded!</div>
+        ${next ? `<p style="margin-top:6px;font-size:13px;color:var(--green-d)"><strong>${next - attemptNo} more</strong> attempt(s) until the next graded milestone (attempt ${next}).</p>` : ''}
       </div>`}
 
     ${isMilestone ? answered.map((r, i) => `
@@ -2474,7 +2459,7 @@ function renderResults(answered, rpt, isMilestone, attemptNo, overall, fc, lr, g
               ${[['Fluency & Coherence','fluency'],['Lexical Resource','lexical'],['Grammatical Range','grammar'],['Pronunciation','pronunciation']].map(([n,k])=>{
                 const v = r.scores?.[k]?.score || '—';
                 const cls = v >= 6 ? 'hi' : v >= 5 ? 'mid' : 'lo';
-                return `<div class="score-row"><div class="score-badge ${cls}">${v}</div><div><div class="score-nm">${n}</div>${r._estimated?'<div class="score-cm">ước tính</div>':''}</div></div>`;
+                return `<div class="score-row"><div class="score-badge ${cls}">${v}</div><div><div class="score-nm">${n}</div>${r._estimated?'<div class="score-cm">estimated</div>':''}</div></div>`;
               }).join('')}
             </div>
             ${r.audioUrl ? `<audio controls src="${r.audioUrl}" style="width:100%;margin-top:10px;border-radius:8px"></audio>` : ''}
@@ -2484,14 +2469,14 @@ function renderResults(answered, rpt, isMilestone, attemptNo, overall, fc, lr, g
 
     ${rpt ? `
       <div class="card">
-        <div class="card-title" style="margin-bottom:12px">📊 Phân tích chi tiết</div>
+        <div class="card-title" style="margin-bottom:12px">📊 Detailed Analysis</div>
         ${rpt.adv ? `<div class="rpt-box" style="margin-bottom:12px">${rpt.adv.replace(/\n/g,'<br>')}</div>` : ''}
-        ${rpt.good?.length ? `<div style="margin-bottom:10px"><strong>Cụm từ dùng tốt:</strong> ${rpt.good.join(' · ')}</div>` : ''}
-        ${rpt.weak ? `<div style="font-size:13px;color:var(--g600)"><strong>Vùng yếu nhất:</strong> ${rpt.weak}</div>` : ''}
+        ${rpt.good?.length ? `<div style="margin-bottom:10px"><strong>Good phrases:</strong> ${rpt.good.join(' · ')}</div>` : ''}
+        ${rpt.weak ? `<div style="font-size:13px;color:var(--g600)"><strong>Weakest area:</strong> ${rpt.weak}</div>` : ''}
       </div>` : ''}
 
     <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap">
-      <button class="btn btn-primary" onclick="retryFromHistory('${A.topic}','${A.assignId||''}','${A.mode}')">🔄 Luyện lại topic này</button>
+      <button class="btn btn-primary" onclick="retryFromHistory('${A.topic}','${A.assignId||''}','${A.mode}')">🔄 Practice Again</button>
       <button class="btn btn-outline" onclick="SS('S-student');studentTab('history')">📋 My History</button>
     </div>`;
 }
