@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Speaking App</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%234F6EF7'/%3E%3Ctext x='50' y='68' font-size='56' text-anchor='middle'%3E%F0%9F%8E%A4%3C/text%3E%3C/svg%3E">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
 /* ── TOKENS ── */
@@ -143,7 +144,10 @@ textarea.form-input{resize:vertical;min-height:72px;line-height:1.6}
 /* ═══════════════════════════════════════
    AUTH — SPLIT SCREEN
 ══════════════════════════════════════ */
-#S-auth{display:flex;min-height:100vh;background:#fff}
+/* NOTE: do NOT set `display` here — an id rule would beat `.screen{display:none}`
+   and the auth screen would stay visible on top of every other screen.
+   Visibility is controlled solely by .screen / .screen.active + SS(). */
+#S-auth{flex-direction:row;min-height:100vh;background:#fff}
 
 /* LEFT panel — dark gradient with illustration feel */
 .auth-left{
@@ -721,7 +725,7 @@ textarea.form-input{resize:vertical;min-height:72px;line-height:1.6}
         <div class="form-group"><label class="form-label">Academic Year</label><input class="form-input" id="cc-year" placeholder="2025-2026"></div>
         <div class="form-group"><label class="form-label">Semester</label><input class="form-input" id="cc-sem" placeholder="HK1"></div>
       </div>
-      <div class="form-group"><label class="form-label">Teacher Name</label><input class="form-input" id="cc-teacher" placeholder="Nguyễn Thị B"></div>
+      <div class="form-group"><label class="form-label">Teacher Name</label><input class="form-input" id="cc-teacher" placeholder="Teacher name"></div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal('create-class-modal')">Cancel</button>
@@ -1295,20 +1299,9 @@ async function deleteAsn(assignId, title) {
 
 // ── STUDY PROGRESS ───────────────────────────
 let _progSessions = [], _progFilter = '';
-async function renderTeacherProgress(c) {
-  const [sessRes, clsRes] = await Promise.all([
-    gasCall('teacher.getAllSessions', {}),
-    gasCall('teacher.getClasses')
-  ]);
-  _progSessions = sessRes.data || [];
-  const classes = (clsRes.data || []).filter(c => c.Status !== 'Archived');
-  renderProgressUI(c, classes);
-}
 
 function filterProgressByClass(classId) {
   _progFilter = classId;
-  const c = document.getElementById('teacher-content');
-  const classes = []; // re-render with filter
   teacherTab('progress');
 }
 
@@ -1325,7 +1318,7 @@ function renderProgressUI(c, classes) {
     </div>
     <div class="search-row">
       <select class="search-inp" style="max-width:180px" onchange="_progFilter=this.value;renderTeacherProgress(document.getElementById('teacher-content'))">
-        <option value="">Tất cả lớp</option>
+        <option value="">All classes</option>
         ${classes.map(cl => `<option value="${cl.ClassID}" ${_progFilter===cl.ClassID?'selected':''}>${cl.ClassID}</option>`).join('')}
       </select>
       <input class="search-inp" placeholder="Name / ID / Topic…" id="prog-search" oninput="filterProgressTable()" style="max-width:280px">
@@ -1370,6 +1363,7 @@ function buildProgressRows(sessions, classFilter) {
 }
 
 function renderProgressRows(rows) {
+  _progView = rows;   // keep Detail button indices aligned with what is on screen
   if (!rows.length) return '<tr><td colspan="12" class="empty">No data yet</td></tr>';
   return rows.map((r, ri) => {
     const count    = r.sessions.length;
@@ -1415,11 +1409,13 @@ function renderProgressRows(rows) {
   }).join('');
 }
 
-let _progRows = [];
+let _progRows = [];   // full dataset
+let _progView = [];   // what is currently rendered (sorted/filtered) — Detail buttons index into this
+
 function sortProg(col) {
   if (_sortCol === col) _sortDir *= -1; else { _sortCol = col; _sortDir = 1; }
   _progRows.sort((a,b) => String(a[col]||'').localeCompare(String(b[col]||'')) * _sortDir);
-  document.getElementById('prog-tbody').innerHTML = renderProgressRows(_progRows);
+  filterProgressTable();
 }
 
 function filterProgressTable() {
@@ -1429,14 +1425,14 @@ function filterProgressTable() {
     String(r.StudentID||'').toLowerCase().includes(q) ||
     String(r.Topic||'').toLowerCase().includes(q)
   );
-  document.getElementById('prog-tbody').innerHTML = renderProgressRows(filtered);
+  const tb = document.getElementById('prog-tbody');
+  if (tb) tb.innerHTML = renderProgressRows(filtered);
 }
 
 function showProgressDetail(rowIdx) {
-  const row = _progRows[rowIdx];
+  const row = _progView[rowIdx];
   if (!row) return;
   const milestones = row.sessions.filter(s => String(s.IsMilestone) === 'true');
-  const SCORE_LABS = [[3,'Lần 3'],[5,'Lần 5'],[8,'Lần 8'],[10,'Lần 10'],[13,'Lần 13'],[15,'Lần 15'],[18,'Lần 18'],[20,'Lần 20'],[23,'Lần 23'],[25,'Lần 25'],[28,'Lần 28'],[30,'Lần 30']];
   const latestBatch = milestones.slice(-4);
   const latestAttemptNo = latestBatch.slice(-1)[0]?.AttemptNo || '';
   let dmHtml = `
@@ -1457,7 +1453,7 @@ function showProgressDetail(rowIdx) {
         <tbody>
           ${milestones.map(m => `
             <tr class="${String(m.AttemptNo) === String(latestAttemptNo) ? 'active-row' : ''}">
-              <td>▶ Lần ${m.AttemptNo}</td>
+              <td>▶ Attempt ${m.AttemptNo}</td>
               <td style="font-weight:700;color:${scoreColor(m.Overall)}">${m.Overall||'—'}</td>
               <td>${m.FC||'—'}</td><td>${m.LR||'—'}</td><td>${m.GR||'—'}</td><td>${m.P||'—'}</td>
               <td style="font-size:11px">${fmtDT(m.StartTime)}</td>
@@ -1756,10 +1752,10 @@ async function renderMyHistory(c) {
           </div>
           ${milestones.length ? `
             <div style="display:flex;gap:6px;flex-wrap:wrap">
-              ${milestones.map(m => `<span style="font-size:12px;background:var(--g100);border-radius:8px;padding:4px 10px">Lần ${m.AttemptNo}: <strong style="color:${scoreColor(m.Overall)}">${m.Overall}</strong></span>`).join('')}
+              ${milestones.map(m => `<span style="font-size:12px;background:var(--g100);border-radius:8px;padding:4px 10px">Attempt ${m.AttemptNo}: <strong style="color:${scoreColor(m.Overall)}">${m.Overall}</strong></span>`).join('')}
             </div>` : '<div style="font-size:12px;color:var(--g400)">No milestone scores</div>'}
         </div>`;
-    }).join('') : '<div class="empty">Not set lịch sử luyện tập</div>'}`;
+    }).join('') : '<div class="empty">No practice history yet</div>'}`;
 }
 
 function retryFromHistory(topic, assignId, part) {
@@ -1818,7 +1814,7 @@ function buildSetup(type, hwData) {
           <textarea class="form-input" id="qt-${i}" rows="2" placeholder="Enter question…">${questions[i]||''}</textarea>
           <div style="margin-top:8px">
             <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--gold);margin-bottom:5px">💡 KEY WORDS</div>
-            <input class="form-input" id="kw-inp-${i}" style="border-color:#FCD34D" placeholder="Keywords, comma-separated phẩy">
+            <input class="form-input" id="kw-inp-${i}" style="border-color:#FCD34D" placeholder="Keywords, comma-separated">
           </div>
         </div>`).join('');
 
@@ -1994,7 +1990,7 @@ function startQCountdown(sec) {
   A.qcdLeft = sec;
   A.qcdTm = setInterval(() => {
     A.qcdLeft--;
-    if (A.qcdLeft <= 0) { clearInterval(A.qcdTm); toast('Time\'s up for this question', 'info'); (async () => { if (A.talking) await stopTalk(); nextQ(); })(); }
+    if (A.qcdLeft <= 0) { clearInterval(A.qcdTm); toast('Time is up for this question', 'info'); (async () => { if (A.talking) await stopTalk(); nextQ(); })(); }
   }, 1000);
 }
 
@@ -2044,7 +2040,7 @@ function resetTalkUI() {
 }
 function playLastRec() {
   const rec = A.recs[A.idx];
-  if (!rec?._audioBlob) { toast('Not set bản ghi', 'error'); return; }
+  if (!rec?._audioBlob) { toast('No recording available', 'error'); return; }
   const audio = new Audio(URL.createObjectURL(rec._audioBlob));
   audio.play().catch(() => toast('Could not play recording', 'error'));
 }
@@ -2138,7 +2134,7 @@ async function transcribeGroq(blob, mime) {
   });
   if (!r.ok) {
     const e = await r.json().catch(() => ({}));
-    const msg = e.error?.message || 'Groq lỗi ' + r.status;
+    const msg = e.error?.message || 'Groq error ' + r.status;
     if (/could not process file|valid media file/i.test(msg))
       throw new Error('Could not read audio file. Please try again or use Chrome.');
     if (r.status === 429) throw new Error('Groq rate limit — please wait a moment and try again');
@@ -2196,18 +2192,18 @@ async function gemFetch(sys, usr, mx, attempt, jsonMode) {
   const url   = 'https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent?key=' + A.gkey;
   const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   if (!r.ok) {
-    let msg = 'Gemini lỗi ' + r.status;
+    let msg = 'Gemini error ' + r.status;
     try { const ej = await r.json(); msg = ej.error?.message?.split('\n')[0]?.substring(0, 120) || msg; } catch(_) {}
     if (r.status === 429 && attempt <= 2) {
       const el = document.getElementById('g-title');
-      for (let i = 20; i > 0; i--) { if (el) el.textContent = '⏳ Rate limit — thử lại sau ' + i + 's…'; await new Promise(res => setTimeout(res, 1000)); }
+      for (let i = 20; i > 0; i--) { if (el) el.textContent = '⏳ Rate limit — retrying in ' + i + 's…'; await new Promise(res => setTimeout(res, 1000)); }
       return gemFetch(sys, usr, mx, attempt + 1, jsonMode);
     }
     throw new Error(msg);
   }
   const j = await r.json();
   const text = j.candidates?.[0]?.content?.parts?.[0]?.text || '';
-  if (!text) throw new Error('Gemini trả về results rỗng');
+  if (!text) throw new Error('Gemini returned an empty response');
   return text.trim();
 }
 
@@ -2397,12 +2393,12 @@ function calcOverall(answered) {
 function buildReport(answered, r, isMilestone, attemptNo) {
   const lines = [];
   if (!isMilestone) {
-    lines.push('### ✅ Attempt ' + attemptNo + ' recorded);
+    lines.push('### ✅ Attempt ' + attemptNo + ' recorded');
     const next = nextMilestone(attemptNo);
-    lines.push(next ? `> 🎯 **${next - attemptNo} more attempt(s)** to go — attempt ${next} will be graded.` : '> 🎉 You've completed all 10 attempts for this topic!');
+    lines.push(next ? `> 🎯 **${next - attemptNo} more attempt(s)** to go — attempt ${next} will be graded.` : '> 🎉 You have completed all 10 attempts for this topic!');
     return lines.join('\n');
   }
-  lines.push('### 📝 KẾT QUẢ IELTS SPEAKING');
+  lines.push('### 📝 IELTS SPEAKING RESULT');
   if (answered.some(x => x._estimated)) lines.push('> ⚠️ Some scores are estimated (AI grading failed). Re-practice to get accurate graded feedback.');
   if (r) {
     if (r.good?.length) lines.push('- **Good phrases:** ' + r.good.join(' · '));
@@ -2424,7 +2420,7 @@ function renderResults(answered, rpt, isMilestone, attemptNo, overall, fc, lr, g
   main.innerHTML = `
     ${isMilestone ? `
       <div class="res-hero">
-        <div style="font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.35);margin-bottom:6px">Lần ${attemptNo} · Overall</div>
+        <div style="font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.35);margin-bottom:6px">Attempt ${attemptNo} · Overall</div>
         <div class="res-score">${overall || '—'}</div>
         <div class="res-label">IELTS Speaking Band Score</div>
         <div class="crit-grid">
