@@ -839,6 +839,7 @@ textarea.form-input{resize:vertical;min-height:72px;line-height:1.6}
 <!-- Toast -->
 <div class="toast-wrap" id="toast-wrap"></div>
 
+<script src="cefr-dict.js"></script>
 <script>
 // ════════════════════════════════════════════
 // CONFIG
@@ -880,7 +881,7 @@ function SS(id) {
   }
   if (id === 'S-student') {
     document.getElementById('std-tb-user').textContent = A.user?.fullName || '';
-    document.getElementById('std-tb-sub').textContent = '/ ' + (A.user?.classId || 'Student');
+    document.getElementById('std-tb-sub').textContent = '/ ' + (A.user?.className || A.user?.classId || 'Student');
   }
   if (id === 'S-results') {
     document.getElementById('u-res').textContent = A.user?.fullName || '';
@@ -1065,7 +1066,7 @@ async function renderTeacherOverview(c) {
               <div style="font-weight:800;font-size:1.05rem;color:var(--black);letter-spacing:-.02em">${cl.className || cl.classId}</div>
               <div style="font-size:11px;color:var(--g400);margin-top:2px">${[cl.academicYear,cl.semester].filter(Boolean).join(' · ')}</div>
             </div>
-            <span class="badge badge-blue">${cl.classId}</span>
+            <span class="badge badge-grey" style="font-family:var(--fm)">${cl.classId}</span>
           </div>
           <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center;margin-bottom:12px">
             <div style="padding:8px;background:var(--g50);border-radius:10px;border:1px solid var(--g100)">
@@ -1154,7 +1155,7 @@ function renderClassroomUI(c) {
             <tr>
               <td style="font-family:var(--fm)">${s.StudentID}</td>
               <td style="font-weight:600">${s.FullName}</td>
-              <td>${s.ClassID||'—'}</td>
+              <td>${s.ClassID ? `<div style="font-weight:600">${classNameOf(s.ClassID)}</div><div style="font-size:10px;color:var(--g400);font-family:var(--fm)">${s.ClassID}</div>` : '—'}</td>
               <td style="font-size:12px">${s.Email}</td>
               <td><span class="badge ${s.Status==='Active'?'badge-green':s.Status==='Pending'?'badge-gold':'badge-grey'}">${s.Status}</span></td>
               <td style="display:flex;gap:6px">
@@ -1458,7 +1459,7 @@ function buildProgressRows(sessions, classFilter) {
   const map = {};
   sessions.forEach(s => {
     const key = s.StudentID + '|' + (s.Topic||'');
-    if (!map[key]) map[key] = { StudentID:s.StudentID, StudentName:s.StudentName, ClassID:s.ClassID, Part:s.Part, Topic:s.Topic, sessions:[] };
+    if (!map[key]) map[key] = { StudentID:s.StudentID, StudentName:s.StudentName, ClassID:s.ClassID, ClassName:s.ClassName, Part:s.Part, Topic:s.Topic, sessions:[] };
     map[key].sessions.push(s);
   });
   let rows = Object.values(map);
@@ -1496,7 +1497,7 @@ function renderProgressRows(rows) {
     return `<tr>
       <td style="font-family:var(--fm);font-size:12px">${r.StudentID}</td>
       <td style="font-weight:600">${r.StudentName||'—'}</td>
-      <td><span class="badge badge-grey">${r.ClassID||'—'}</span></td>
+      <td>${r.ClassID ? `<div style="font-weight:600;font-size:12px">${r.ClassName || classNameOf(r.ClassID)}</div><div style="font-size:10px;color:var(--g400);font-family:var(--fm)">${r.ClassID}</div>` : '—'}</td>
       <td><span class="badge badge-blue">${r.Part||'—'}</span></td>
       <td style="font-weight:600;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.Topic||''}">${r.Topic||'—'}</td>
       <td style="font-size:12px">${start}</td>
@@ -1578,10 +1579,12 @@ function showProgressDetail(rowIdx) {
         try { results = JSON.parse(s.ResultsJSON || '[]'); } catch(e) {}
         return `
           <div class="qacc">
-            <div class="qacc-hdr" onclick="this.nextElementSibling.classList.toggle('open')">
-              <div class="qa-n">${s.AttemptNo||si+1}</div>
-              <div class="qa-q" style="flex:1">${fmtDT(s.StartTime)} · ${s.DurationMin||0}  min</div>
-              ${s.Overall ? `<div class="qa-band">${s.Overall}</div>` : `<span style="font-size:11px;color:var(--g400)">not graded</span>`}
+            <div class="qacc-hdr">
+              <div class="qa-n" style="cursor:pointer" onclick="this.parentElement.nextElementSibling.classList.toggle('open')">${s.AttemptNo||si+1}</div>
+              <div class="qa-q" style="flex:1;cursor:pointer" onclick="this.parentElement.nextElementSibling.classList.toggle('open')">${fmtDT(s.StartTime)} · ${s.DurationMin||0} min</div>
+              ${s.Overall ? `<div class="qa-band">${s.Overall}</div>
+                <button class="btn btn-outline btn-sm doc-export-btn" style="color:var(--green-d)" onclick="event.stopPropagation();exportToDoc('${s.SessionID}',true)">📄 Export to Google Doc</button>`
+                : `<span style="font-size:11px;color:var(--g400)">not graded</span>`}
             </div>
             <div class="qacc-body" style="display:none">
               ${results.map((r, qi) => `
@@ -1596,7 +1599,7 @@ function showProgressDetail(rowIdx) {
           </div>`;
       }).join('')}
     </div>`;
-  document.getElementById('dm-title').textContent = row.StudentName + ' · ' + (row.ClassID||'') + ' · 📌 ' + (row.Topic||'');
+  document.getElementById('dm-title').textContent = row.StudentName + ' · ' + (row.ClassName || classNameOf(row.ClassID) || '') + ' · 📌 ' + (row.Topic||'');
   document.getElementById('dm-meta').textContent = (row.Part||'').toUpperCase() + ' · ' + row.sessions.length + ' sessions';
   document.getElementById('dm-body').innerHTML = dmHtml;
   openModal('detail-modal');
@@ -1632,6 +1635,10 @@ async function renderTeacherSettings(c) {
         <input class="form-input" id="set-folder" value="${s.AudioFolderID||''}" placeholder="1abc...xyz">
         <div class="form-hint">Drive folder to store student audio. Leave empty to use your root Drive.</div>
       </div>
+      <div class="form-group"><label class="form-label">Google Drive Folder ID (for feedback documents)</label>
+        <input class="form-input" id="set-docfolder" value="${s.DocsFolderID||''}" placeholder="1abc...xyz">
+        <div class="form-hint">Where exported feedback docs are filed. Each student gets one document per topic, shared as view-only by link.</div>
+      </div>
       <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
     </div>`;
 }
@@ -1644,6 +1651,8 @@ async function saveSettings() {
   try {
     if (email !== undefined) await gasCall('teacher.saveSetting', { key: 'TeacherEmail', value: email });
     if (folder !== undefined) await gasCall('teacher.saveSetting', { key: 'AudioFolderID', value: folder });
+    const docFolder = document.getElementById('set-docfolder')?.value.trim();
+    if (docFolder !== undefined) await gasCall('teacher.saveSetting', { key: 'DocsFolderID', value: docFolder });
     if (curP && newP) {
       const res = await gasCall('teacher.changePassword', { current: curP, newPassword: newP });
       if (!res.success) { toast(res.error, 'error'); return; }
@@ -1714,8 +1723,10 @@ async function renderPeerComparison(c) {
   if (!res.success) { c.innerHTML = '<div class="empty">' + res.error + '</div>'; return; }
   const peers = res.data;
   const myId  = A.user?.studentId;
+  const clsName = res.className || A.user?.className || A.user?.classId || 'My Class';
   c.innerHTML = `
-    <h2 style="margin-bottom:16px">👥 Peer Comparison — ${A.user?.classId || 'My Class'}</h2>
+    <h2 style="margin-bottom:4px">👥 Peer Comparison</h2>
+    <div style="font-size:13px;color:var(--g600);margin-bottom:16px">${clsName}${A.user?.classId ? ` <span style="font-family:var(--fm);font-size:11px;color:var(--g400)">· ${A.user.classId}</span>` : ''}</div>
     <div class="card">
       <p style="font-size:13px;color:var(--g600);margin-bottom:16px">This leaderboard shows how many times each classmate has practiced. Keep it up! 💪</p>
       ${peers.map((p, i) => {
@@ -1858,7 +1869,10 @@ async function renderMyHistory(c) {
               <span class="badge badge-blue" style="margin-left:8px">${g.part||'—'}</span>
               <span class="badge badge-grey" style="margin-left:4px">${g.sessions.length}  sessions</span>
             </div>
-            <button class="btn btn-primary btn-sm" onclick="retryFromHistory('${g.topic}','${g.assignId||''}','${g.part||'part1'}')">Re-try</button>
+            <div style="display:flex;gap:6px">
+              ${milestones.length ? `<button class="btn btn-outline btn-sm doc-export-btn" style="color:var(--green-d)" onclick="exportToDoc('${milestones[milestones.length-1].SessionID}')">📄 Google Doc</button>` : ''}
+              <button class="btn btn-primary btn-sm" onclick="retryFromHistory('${g.topic}','${g.assignId||''}','${g.part||'part1'}')">Re-try</button>
+            </div>
           </div>
           ${milestones.length ? `
             <div style="display:flex;gap:6px;flex-wrap:wrap">
@@ -2208,7 +2222,12 @@ async function stopCaptureAndTranscribe() {
   if (A.recs[A.idx]) { A.recs[A.idx]._audioBlob = rec.blob; A.recs[A.idx]._audioMime = rec.mime; }
   document.getElementById('rec-st').textContent = 'Transcribing…';
   try {
-    const txt = await transcribeGroq(rec.blob, rec.mime);
+    const tr = await transcribeGroq(rec.blob, rec.mime);
+    if (A.recs[A.idx]) {
+      A.recs[A.idx]._words = (A.recs[A.idx]._words || []).concat(tr.words || []);
+      A.recs[A.idx]._dur   = (A.recs[A.idx]._dur || 0) + (tr.duration || 0);
+    }
+    const txt = tr.text;
     A.curAnswer = (A.curAnswer + ' ' + txt).trim();
     document.getElementById('ptt-interim').textContent = A.curAnswer;
     return true;
@@ -2252,7 +2271,32 @@ async function transcribeGroq(blob, mime) {
     throw new Error(msg);
   }
   const j = await r.json();
-  return (j.text || '').trim();
+  return { text: (j.text || '').trim(), words: j.words || [], duration: j.duration || 0 };
+}
+
+// Prosody from Whisper word timestamps. Without this, Fluency and Pronunciation
+// are judged from a transcript that has had every trace of delivery normalised
+// out of it — Whisper spells words correctly no matter how they were said.
+function prosodyFrom(words, duration) {
+  if (!words || words.length < 5) return null;
+  const gaps = [];
+  for (let i = 1; i < words.length; i++) {
+    const g = (words[i].start || 0) - (words[i - 1].end || 0);
+    if (g > 0.01) gaps.push(g);
+  }
+  const span = duration || ((words[words.length - 1].end || 0) - (words[0].start || 0));
+  const pauses = gaps.filter(g => g >= 0.5);
+  const longPauses = gaps.filter(g => g >= 1.5);
+  const silence = gaps.reduce((a, g) => a + g, 0);
+  return {
+    words: words.length,
+    seconds: Math.round(span * 10) / 10,
+    wpm: span > 0 ? Math.round(words.length / span * 60) : 0,
+    pauses: pauses.length,
+    longPauses: longPauses.length,
+    longestPause: gaps.length ? Math.round(Math.max(...gaps) * 10) / 10 : 0,
+    silencePct: span > 0 ? Math.round(silence / span * 100) : 0
+  };
 }
 
 // ── NAVIGATION ────────────────────────────
@@ -2347,22 +2391,113 @@ function estimateBand(m, answerLen) {
   return { overall: base, scores: { fluency:{ score:base }, lexical:{ score: wc>=80?6:5 }, grammar:{ score: base }, pronunciation:{ score: base } } };
 }
 
-function buildGradePrompt(qaBlock, n) {
-  return `Grade these ${n} IELTS Speaking answers. Return ONLY valid JSON:
+function buildGradePrompt(qaBlock, n, evidence, part) {
+  // The evidence block is deterministic output from a local CEFR/grammar/timing
+  // pass. It is labelled as measurement, never as a verdict: stated as a
+  // conclusion, the model anchors on it and stops reading the answers.
+  const ev = evidence ? `
+=== AUTOMATED MEASUREMENTS (facts, not scores) ===
+Computed locally from the transcript and the audio timings. Use them so you do
+not have to count; do NOT convert them into a band on their own. A figure can
+be low and the answer still fine for the question asked.
+${evidence}
+
+How to read them:
+- Only the B1+ and B2+ shares matter. Everyone's speech is mostly A1/A2, so
+  that share separates nobody. Mid- and high-level words appearing AT ALL is
+  the signal. A healthy Band 6.5-7 answer shows roughly 12-20% B1+.
+- The B1+ word list is there to be checked. Reward those words only where they
+  are used naturally and in the right context. A misused C1 word is a Lexical
+  Resource problem, not a credit.
+- For Grammatical Range, weight the variety of structures and the share of
+  complex sentences above raw sentence count. Complex sentences in SPOKEN
+  English carry more weight than in writing and should be rewarded.
+- If content words are flagged TOO FEW, ignore the percentages entirely and
+  judge from the answers.
+=== END MEASUREMENTS ===
+` : '';
+
+  const p3 = part === 'part3' ? `
+PART 3 NOTE: this is the abstract discussion section. If the candidate answers
+only with personal anecdotes, tell them to address the topic at a general or
+societal level first, then use a personal example as support.
+` : '';
+
+  return `You are an experienced IELTS Speaking examiner. Grade these ${n} answers.
+${ev}${p3}
+Apply these rules when scoring. Each one is IF-THEN; only fire it when the
+condition is genuinely met.
+
+FLUENCY & COHERENCE
+- No logical flow, off topic, or missing linking words -> lower FC and point out
+  where a transitional phrase belongs.
+- Answer is short or abrupt ("No, not at all" with no elaboration) -> lower FC
+  hard, and tell them to expand using What / When / Why / Where / Who / How.
+- Rambling, repeating the same idea without progressing -> lower FC and tell
+  them to stay focused.
+- The DELIVERY line above is your evidence for delivery. Around 120-150 wpm is
+  natural; markedly slower or faster, frequent pauses over 1.5s, or a high
+  silence share all indicate hesitation. Do not invent delivery problems that
+  the numbers do not show.
+
+LEXICAL RESOURCE
+- Unnatural phrasing or word-for-word translation from the first language ->
+  lower LR and give the natural English equivalent.
+- Reliance on basic overused vocabulary ("I like", "I don't like", "happy",
+  "beautiful") -> suggest topic-specific Band 6.5+ alternatives.
+- A solid B1+ share made of words used correctly -> credit it in LR.
+
+GRAMMATICAL RANGE & ACCURACY
+- Fails to mix simple, compound and complex sentences, or shows little clause
+  variety -> lower GR and name specific ways to combine sentences.
+- Basic errors, especially verb tense or core sentence structure -> lower
+  accuracy hard and give the direct correction.
+- Minor slips but an otherwise flexible, accurate mix of simple, compound and
+  complex structures -> do NOT penalise heavily; that pattern is a high-band
+  characteristic.
+
+PRONUNCIATION
+- You are reading a Whisper transcript, so segmental accuracy is invisible to
+  you: Whisper spells words correctly however they were pronounced. Never claim
+  a specific word was mispronounced. Score P from what you can actually see —
+  pacing, pausing and rhythm in the DELIVERY line — and keep P close to FC
+  unless the timings say otherwise. Say plainly that P is provisional.
+
+NATURALNESS & INTERACTION
+- Sounds scripted, memorised or essay-like -> warn that examiners penalise
+  memorised answers and say how to sound spontaneous.
+- Too formal or robotic -> suggest natural fillers ("you know", "well", "to be
+  honest"), while warning against drifting into heavy slang.
+
+FEEDBACK TONE
+- If the overall band lands at 5.5 or below, keep an encouraging tone and raise
+  only the 2-3 biggest issues. Do not bury the student.
+- Every mistake you name MUST come with a correct, usable example.
+- Write all feedback in English.
+
+Return ONLY valid JSON, no markdown fence:
 {
   "qs": [
     {
       "overall": 5.5,
       "fc": 5, "lr": 6, "gr": 5, "p": 5,
-      "errors": [{"wrong":"X","correct":"Y","type":"grammar","reason":"..."}],
-      "suggestion": "one line improvement tip in Vietnamese"
+      "errors": [{"wrong":"what they said","correct":"the fix","type":"grammar|vocab|collocation","reason":"short why"}],
+      "suggestion": "one actionable line, with a usable example",
+      "natural": "their best sentence rewritten as a fluent speaker would say it"
     }
   ],
   "r": {
-    "good": ["phrase1","phrase2"],
-    "weak": "main weakness",
-    "up": "Band 8 upgraded version of best answer",
-    "adv": "one paragraph advice in Vietnamese"
+    "good": ["phrase they used well","another"],
+    "weak": "the single biggest weakness",
+    "up": "Band 8 rewrite of their strongest answer",
+    "adv": "one short paragraph of advice, encouraging if the band is 5.5 or below",
+    "flags": {
+      "tooShort": false,
+      "offTopic": false,
+      "memorised": false,
+      "tooFormal": false,
+      "l1Transfer": false
+    }
   }
 }
 
@@ -2390,6 +2525,16 @@ async function finishSession() {
     // Local metrics
     answered.forEach(r => { r._m = localMetrics(r.studentAnswer); });
 
+    // Deterministic CEFR + grammar pass over the whole session. Costs nothing,
+    // so it runs on every attempt, not just the graded milestones.
+    A.langText = answered.map(r => r.studentAnswer).join(' ');
+    const allWords = answered.reduce((a, r) => a.concat(r._words || []), []);
+    const allDur   = answered.reduce((a, r) => a + (r._dur || 0), 0);
+    A.prosody = prosodyFrom(allWords, allDur);
+    try {
+      A.langEvidence = analyzeLanguage(A.langText, A.prosody).evidence;
+    } catch (e) { A.langEvidence = ''; console.warn('Language analysis failed:', e); }
+
     // Determine attempt number
     const attemptNo = A.retryCount + 1;
     const shouldGrade = isMilestone(attemptNo);
@@ -2405,7 +2550,7 @@ async function finishSession() {
           return `Q${i+1}: "${r.question}"\nA${i+1}: "${r.studentAnswer}"${kw ? '\nKeywords: ' + kw : ''}`;
         }).join('\n\n');
         const cap = Math.min(900 * answered.length + 700, 8192);
-        const rawGrade = await gemFetch('IELTS Speaking examiner. Return ONLY valid JSON.', buildGradePrompt(qaBlock, answered.length), cap, 1, true);
+        const rawGrade = await gemFetch('IELTS Speaking examiner. Return ONLY valid JSON.', buildGradePrompt(qaBlock, answered.length, A.langEvidence, A.mode), cap, 1, true);
         const parsed = _parseGradeJSON(rawGrade);
         if (!parsed?.qs) throw new Error('Invalid grading JSON');
         parsed.qs.forEach((g, i) => {
@@ -2414,6 +2559,7 @@ async function finishSession() {
           answered[i].scores  = { fluency:{ score:g.fc||g.fluency }, lexical:{ score:g.lr||g.lexical }, grammar:{ score:g.gr||g.grammar }, pronunciation:{ score:g.p||g.pronunciation } };
           answered[i].errors  = g.errors || [];
           answered[i].suggestion = g.suggestion || '';
+          answered[i].natural = g.natural || '';
         });
         rpt = parsed.r || null;
       } catch(eg) {
@@ -2471,11 +2617,15 @@ async function finishSession() {
         question: r.question, keywords: r.keywords || [],
         studentAnswer: r.studentAnswer, overall: r.overall || '',
         scores: r.scores || null, errors: r.errors || [],
-        suggestion: r.suggestion || '', audioUrl: r.audioUrl || ''
+        suggestion: r.suggestion || '', natural: r.natural || '',
+        audioUrl: r.audioUrl || ''
       })),
       reportText: buildReport(answered, rpt, shouldGrade, attemptNo),
-      type: A.assignId ? 'homework' : 'free'
+      type: A.assignId ? 'homework' : 'free',
+      analysis: buildAnalysisPayload()
     });
+    A.lastSessionId = saved?.sessionId || '';
+    A.lastGraded    = shouldGrade;
     A.retryCount = attemptNo;
     gStep('Saved ✓', true);
 
@@ -2555,6 +2705,8 @@ function renderResults(answered, rpt, isMilestone, attemptNo, overall, fc, lr, g
             <div class="qs-lbl">Student's Answer</div>
             <div class="qs-student">"${r.studentAnswer||'(no answer)'}"</div>
             ${r.suggestion ? `<div class="qs-sugg" style="margin-top:8px">${r.suggestion}</div>` : ''}
+            ${r.natural ? `<div class="qs-lbl" style="margin-top:10px">How a fluent speaker would say it</div>
+              <div class="qs-sugg" style="border-left-color:var(--green)">${r.natural}</div>` : ''}
             ${r.errors?.length ? `
               <div class="qs-lbl" style="margin-top:10px">Errors to fix</div>
               ${r.errors.map(e=>`<div style="font-size:12px;margin-bottom:4px">❌ <s style="color:var(--red)">${e.wrong}</s> → ✅ <strong>${e.correct}</strong>${e.reason?' — '+e.reason:''}</div>`).join('')}` : ''}
@@ -2573,6 +2725,8 @@ function renderResults(answered, rpt, isMilestone, attemptNo, overall, fc, lr, g
         </div>
       </div>`).join('') : ''}
 
+    ${A.langText ? renderLanguageAnalysis(A.langText, A.prosody) : ''}
+
     ${rpt ? `
       <div class="card">
         <div class="card-title" style="margin-bottom:12px">📊 Detailed Analysis</div>
@@ -2582,6 +2736,7 @@ function renderResults(answered, rpt, isMilestone, attemptNo, overall, fc, lr, g
       </div>` : ''}
 
     <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap">
+      ${isMilestone && A.lastSessionId ? `<button class="btn btn-green doc-export-btn" onclick="exportToDoc()">📄 Export to Google Doc</button>` : ''}
       <button class="btn btn-primary" onclick="retryFromHistory('${A.topic}','${A.assignId||''}','${A.mode}')">🔄 Practice Again</button>
       <button class="btn btn-outline" onclick="SS('S-student');studentTab('history')">📋 My History</button>
     </div>`;
@@ -2601,8 +2756,404 @@ document.addEventListener('keydown', e => {
 });
 
 // ════════════════════════════════════════════
+// LOCAL LANGUAGE ANALYSIS  (no AI — runs in browser)
+//
+// Scope note: this measures RANGE, not ACCURACY.
+// It can tell that a learner used the present perfect; it cannot tell
+// whether they used it correctly ("I have went" still matches).
+// Accuracy is left to the AI grader. Keep that split in mind before
+// showing any of these numbers as if they were a score.
+// ════════════════════════════════════════════
+
+const CEFR_LEVELS = ['A1','A2','B1','B2','C1','C2'];
+const CEFR_COLORS = {
+  A1:'#10B981', A2:'#34D399', B1:'#4F6EF7',
+  B2:'#8B5CF6', C1:'#F59E0B', C2:'#E8284A'
+};
+
+function cefrReady() {
+  return typeof CEFR_MAP !== 'undefined' && typeof cefrOf === 'function';
+}
+
+// Past participles / past forms that are not -ed
+function irregularSet() {
+  return (typeof CEFR_IRREGULAR !== 'undefined') ? CEFR_IRREGULAR : {};
+}
+
+// ── VOCABULARY PROFILE ──────────────────────
+// Function-word classes are almost all A1 and appear in every utterance;
+// counting them makes every learner look ~90% A1. Standard lexical
+// profiling looks at content words, counted once per lemma (types, not tokens).
+const CONTENT_POS = { noun:1, verb:1, adj:1, adv:1 };
+
+function cefrProfile(text) {
+  const counts = { A1:0, A2:0, B1:0, B2:0, C1:0, C2:0 };
+  const offList = [];
+  const seenByLevel = { A1:new Set(), A2:new Set(), B1:new Set(), B2:new Set(), C1:new Set(), C2:new Set() };
+  const tokens = String(text || '').toLowerCase().match(/\b[a-z][a-z'-]*\b/g) || [];
+  if (!cefrReady()) return null;
+
+  const seenLemma = new Set();
+  let counted = 0, functionWords = 0;
+
+  tokens.forEach(w => {
+    const hit = cefrOf(w);
+    if (!hit) { if (w.length > 2) offList.push(w); return; }
+    if (!CONTENT_POS[hit.pos]) { functionWords++; return; }
+    if (seenLemma.has(hit.lemma)) return;   // types, not tokens
+    seenLemma.add(hit.lemma);
+    if (counts[hit.level] !== undefined) {
+      counts[hit.level]++;
+      seenByLevel[hit.level].add(hit.lemma);
+      counted++;
+    }
+  });
+
+  const pct = {};
+  CEFR_LEVELS.forEach(L => {
+    pct[L] = counted ? Math.round(counts[L] / counted * 1000) / 10 : 0;
+  });
+
+  // B2+ share is the figure that actually tracks Lexical Resource
+  const advancedPct = Math.round((pct.B2 + pct.C1 + pct.C2) * 10) / 10;
+  const uniq = new Set(tokens);
+
+  return {
+    counts, pct, counted, advancedPct, functionWords,
+    totalWords: tokens.length,
+    uniqueWords: uniq.size,
+    ttr: tokens.length ? Math.round(uniq.size / tokens.length * 100) / 100 : 0,
+    offList: [...new Set(offList)].slice(0, 25),
+    samples: Object.fromEntries(CEFR_LEVELS.map(L => [L, [...seenByLevel[L]].slice(0, 12)]))
+  };
+}
+
+// ── GRAMMAR FEATURE INVENTORY ───────────────
+function grammarProfile(text) {
+  const raw = String(text || '');
+  const t = ' ' + raw.toLowerCase().replace(/\s+/g, ' ') + ' ';
+  const IRR = irregularSet();
+
+  // Past participles / irregular past forms, for perfect + passive detection
+  const irrForms = Object.keys(IRR).filter(k => IRR[k] && !/^(children|men|women|feet|teeth|geese|mice|people|lives|knives|wives|leaves|halves|better|best|worse|worst|more|most)$/.test(k));
+  const PP = irrForms.length ? '(?:' + irrForms.join('|') + '|\\w+ed)' : '\\w+ed';
+
+  const count = re => (t.match(re) || []).length;
+
+  const f = {
+    presentCont:    count(/\b(?:am|is|are|'m|'re|'s) (?:not )?(?:\w+ )?\w+ing\b/g),
+    pastCont:       count(/\b(?:was|were) (?:not )?(?:\w+ )?\w+ing\b/g),
+    presentPerfect: count(new RegExp("\\b(?:have|has|'ve|'s) (?:not |never |already |just )?" + PP + "\\b", 'g')),
+    pastPerfect:    count(new RegExp('\\bhad (?:not |never |already |just )?' + PP + '\\b', 'g')),
+    perfectCont:    count(/\b(?:have|has|had) been \w+ing\b/g),
+    future:         count(/\b(?:will|'ll|shall) \w+|going to \w+/g),
+    modal:          count(/\b(?:can|could|may|might|must|should|would|ought to|have to|has to)\b/g),
+    passive:        count(new RegExp('\\b(?:am|is|are|was|were|be|been|being) ' + PP + '\\b', 'g')),
+    conditional:    count(/\bif\b|\bunless\b|\bwould have\b/g),
+    relativeClause: count(/\b(?:who|whom|whose|which)\b|\bthat (?:is|was|are|were|has|have|had|\w+s|\w+ed)\b/g),
+    comparative:    count(/\b\w+er than\b|\bmore \w+ than\b|\bless \w+ than\b/g),
+    superlative:    count(/\bthe (?:\w+est|most \w+|least \w+)\b/g),
+    gerundInfin:    count(/\b(?:enjoy|like|love|hate|avoid|finish|keep|mind|suggest|consider) \w+ing\b|\b(?:want|need|decide|hope|plan|try|would like) to \w+\b/g),
+    linker:         count(/\b(?:however|therefore|moreover|furthermore|although|though|whereas|besides|in addition|for example|for instance|on the other hand|as a result)\b/g)
+  };
+
+  // Plural nouns: word ends in -s and its lemma differs (avoids "always", "this")
+  let plural = 0;
+  if (cefrReady()) {
+    (raw.toLowerCase().match(/\b[a-z]+s\b/g) || []).forEach(w => {
+      if (/(ss|us|is)$/.test(w)) return;
+      const hit = cefrOf(w);
+      if (hit && hit.lemma !== w && hit.pos === 'noun') plural++;
+    });
+  }
+  const irregPlural = count(/\b(?:children|men|women|feet|teeth|geese|mice|people|lives|knives|wives|leaves|halves)\b/g);
+  f.plural = plural + irregPlural;
+
+  // Irregular verb forms actually produced
+  f.irregularVerb = (raw.toLowerCase().match(/\b[a-z]+\b/g) || [])
+    .filter(w => IRR[w] && !/^(children|men|women|feet|teeth|geese|mice|people|lives|knives|wives|leaves|halves|better|best|worse|worst|more|most)$/.test(w)).length;
+
+  // Past simple: irregular past forms + -ed not already consumed by perfect/passive
+  const edTotal = count(/\b\w+ed\b/g);
+  const edBound = f.presentPerfect + f.pastPerfect + f.passive;
+  f.pastSimple = Math.max(0, edTotal - edBound) + f.irregularVerb;
+
+  // ── SENTENCE TYPES ──
+  const sents = raw.split(/[.!?]+/).map(x => x.trim()).filter(x => x.split(/\s+/).length >= 3);
+  const SUB = /\b(?:because|although|though|since|while|when|whenever|if|unless|after|before|until|whereas|so that|even though|who|which|whose|that)\b/i;
+  const COORD = /\b(?:and|but|or|so|yet|nor)\b/i;
+  let simple = 0, compound = 0, complex = 0;
+  sents.forEach(s => {
+    const hasSub = SUB.test(s), hasCoord = COORD.test(s);
+    if (hasSub) complex++;
+    else if (hasCoord) compound++;
+    else simple++;
+  });
+
+  // Distinct tense types used — a rough proxy for grammatical range
+  const tenseKeys = ['presentCont','pastCont','presentPerfect','pastPerfect','perfectCont','future','pastSimple'];
+  f.tenseVariety = tenseKeys.filter(k => f[k] > 0).length;
+
+  return {
+    features: f,
+    sentences: { total: sents.length, simple, compound, complex },
+    avgLength: sents.length
+      ? Math.round(sents.reduce((a, s) => a + s.split(/\s+/).length, 0) / sents.length)
+      : 0
+  };
+}
+
+// ── COMPACT SUMMARY FOR THE AI PROMPT ───────
+// Reports the B1+ end of the scale, not the A1/A2 end. Every learner produces
+// mostly A-level words, so the A1 share separates nobody; what distinguishes a
+// Band 5 from a Band 7 is whether mid- and high-level words appear at all.
+//
+// The actual B1+ words are listed, not just counted. A count alone asks the
+// grader to take the number on faith; the word list lets it check whether each
+// one was used naturally and in the right context, which is the half of
+// Lexical Resource that no regex can measure.
+function buildEvidenceLine(lex, gram, prosody) {
+  if (!lex || !gram) return '';
+  const g = gram.features, s = gram.sentences;
+
+  // With few content words the percentage is noise: 1 C1 word in 8 reads as
+  // 12.5%. Flag it rather than letting the grader treat it as a real signal.
+  const thin = lex.counted < 15;
+  const midHigh = [...lex.samples.B1, ...lex.samples.B2, ...lex.samples.C1, ...lex.samples.C2];
+
+  const TENSE = [['pastSimple','past'],['presentCont','prCont'],['presentPerfect','prPerf'],
+                 ['pastPerfect','paPerf'],['perfectCont','perfCont'],['future','future']];
+  const tensesUsed = TENSE.filter(([k]) => g[k] > 0).map(([, n]) => n);
+  const structs = [];
+  if (g.relativeClause) structs.push('relative' + g.relativeClause);
+  if (g.conditional)    structs.push('conditional' + g.conditional);
+  if (g.passive)        structs.push('passive' + g.passive);
+  if (g.modal)          structs.push('modal' + g.modal);
+  if (g.comparative || g.superlative) structs.push('compar' + (g.comparative + g.superlative));
+  if (g.linker)         structs.push('linker' + g.linker);
+
+  const cxPct = s.total ? Math.round(s.complex / s.total * 100) : 0;
+
+  return [
+    `LEX ${lex.counted} content words${thin ? ' (TOO FEW — treat the percentages as unreliable)' : ''}`,
+    `  B1+ ${Math.round((lex.pct.B1 + lex.pct.B2 + lex.pct.C1 + lex.pct.C2) * 10) / 10}%  B2+ ${lex.advancedPct}%  (A1/A2 share omitted — not informative)`,
+    `  B1+ words actually used: ${midHigh.length ? midHigh.join(', ') : 'NONE'}`,
+    `GRAM tense variety ${g.tenseVariety}/7 — ${tensesUsed.join(', ') || 'none'}`,
+    `  other structures: ${structs.join(', ') || 'none'}`,
+    `  sentences ${s.total}: ${s.simple} simple / ${s.compound} compound / ${s.complex} complex (${cxPct}% complex)`,
+    prosody ? `DELIVERY ${prosody.wpm} wpm, ${prosody.pauses} pauses over 0.5s (${prosody.longPauses} over 1.5s), longest ${prosody.longestPause}s, ${prosody.silencePct}% silence` : ''
+  ].filter(Boolean).join('\n');
+}
+
+// Compact, storable form of the local analysis — this is what the Google Doc
+// export reads back, so it must survive a round trip through the sheet.
+function buildAnalysisPayload() {
+  try {
+    const a = analyzeLanguage(A.langText || '', A.prosody);
+    if (!a.lex) return null;
+    return {
+      b1plus: Math.round((a.lex.pct.B1 + a.lex.pct.B2 + a.lex.pct.C1 + a.lex.pct.C2) * 10) / 10,
+      b2plus: a.lex.advancedPct,
+      contentWords: a.lex.counted,
+      b1Words: [...a.lex.samples.B1, ...a.lex.samples.B2, ...a.lex.samples.C1, ...a.lex.samples.C2].slice(0, 20),
+      grammar: {
+        tenseVariety: a.gram.features.tenseVariety,
+        sentences: a.gram.sentences.total,
+        complex: a.gram.sentences.complex
+      },
+      prosody: a.prosody || null
+    };
+  } catch (e) { return null; }
+}
+
+function analyzeLanguage(text, prosody) {
+  const lex  = cefrProfile(text);
+  const gram = grammarProfile(text);
+  return { lex, gram, prosody, evidence: buildEvidenceLine(lex, gram, prosody) };
+}
+
+// ── GOOGLE DOC EXPORT ───────────────────────
+async function exportToDoc(sessionId, asTeacher) {
+  const id = sessionId || A.lastSessionId;
+  if (!id) { toast('Nothing to export yet', 'error'); return; }
+  const btns = document.querySelectorAll('.doc-export-btn');
+  btns.forEach(b => { b.disabled = true; b.textContent = '⏳ Building document…'; });
+  try {
+    const res = await gasCall(asTeacher ? 'teacher.exportDoc' : 'speak.exportDoc', { sessionId: id });
+    if (!res.success) { toast(res.error, 'error', 6000); return; }
+    window.open(res.url, '_blank');
+    toast(res.created ? 'Document created' : `Attempt added — ${res.attempts} attempts in this document`, 'success', 5000);
+  } catch (e) {
+    toast('Export failed: ' + e.message, 'error', 6000);
+  } finally {
+    btns.forEach(b => { b.disabled = false; b.textContent = '📄 Export to Google Doc'; });
+  }
+}
+
+// ── RENDER ──────────────────────────────────
+function renderLanguageAnalysis(text, prosody) {
+  const a = analyzeLanguage(text, prosody);
+  if (!a.lex) {
+    return '<div class="card"><div style="font-size:13px;color:var(--g600)">Vocabulary analysis unavailable — <code>cefr-dict.js</code> did not load.</div></div>';
+  }
+  const { lex, gram } = a;
+  const g = gram.features;
+  const b1plus = Math.round((lex.pct.B1 + lex.pct.B2 + lex.pct.C1 + lex.pct.C2) * 10) / 10;
+  const midHigh = [...lex.samples.B1, ...lex.samples.B2, ...lex.samples.C1, ...lex.samples.C2];
+  const thin = lex.counted < 15;
+
+  const bar = CEFR_LEVELS
+    .filter(L => lex.pct[L] > 0)
+    .map(L => `<div title="${L}: ${lex.pct[L]}%" style="width:${lex.pct[L]}%;background:${CEFR_COLORS[L]};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff">${lex.pct[L] >= 8 ? L : ''}</div>`)
+    .join('');
+
+  const legend = CEFR_LEVELS.map(L => `
+    <div style="display:flex;align-items:center;gap:6px;font-size:11px">
+      <span style="width:10px;height:10px;border-radius:3px;background:${CEFR_COLORS[L]};flex-shrink:0"></span>
+      <span style="font-weight:700">${L}</span>
+      <span style="color:var(--g600);font-family:var(--fm)">${lex.pct[L]}%</span>
+      <span style="color:var(--g400)">(${lex.counts[L]})</span>
+    </div>`).join('');
+
+  const GRAM_LABELS = [
+    ['pastSimple','Past simple'], ['presentCont','Present continuous'],
+    ['presentPerfect','Present perfect'], ['pastPerfect','Past perfect'],
+    ['perfectCont','Perfect continuous'], ['future','Future'],
+    ['modal','Modals'], ['passive','Passive'],
+    ['conditional','Conditionals'], ['relativeClause','Relative clauses'],
+    ['comparative','Comparatives'], ['superlative','Superlatives'],
+    ['gerundInfin','Gerund / infinitive'], ['plural','Plural nouns'],
+    ['irregularVerb','Irregular verbs'], ['linker','Linking devices']
+  ];
+  const used   = GRAM_LABELS.filter(([k]) => g[k] > 0);
+  const unused = GRAM_LABELS.filter(([k]) => !g[k]);
+
+  const s = gram.sentences;
+  const sPct = n => s.total ? Math.round(n / s.total * 100) : 0;
+
+  const p = a.prosody;
+  const paceLabel = !p ? '' : p.wpm < 100 ? 'slow' : p.wpm > 170 ? 'fast' : 'natural';
+  const paceColor = !p ? '' : (p.wpm >= 110 && p.wpm <= 160) ? 'var(--green-d)' : 'var(--gold-d)';
+  const deliveryCard = !p ? '' : `
+  <div class="card">
+    <div class="card-title" style="margin-bottom:4px">🎙️ Delivery</div>
+    <div style="font-size:11px;color:var(--g400);margin-bottom:14px">
+      Measured from the audio timings. This is the only real evidence available about how you sounded —
+      the transcript itself cannot show pronunciation, because it spells every word correctly regardless.
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px">
+      <div style="background:var(--g50);border:1px solid var(--g100);border-radius:10px;padding:10px;text-align:center">
+        <div style="font-family:var(--fm);font-size:1.4rem;font-weight:800;color:${paceColor}">${p.wpm}</div>
+        <div style="font-size:10px;color:var(--g600);text-transform:uppercase;letter-spacing:.05em;font-weight:600">Words / min (${paceLabel})</div>
+      </div>
+      <div style="background:var(--g50);border:1px solid var(--g100);border-radius:10px;padding:10px;text-align:center">
+        <div style="font-family:var(--fm);font-size:1.4rem;font-weight:800;color:${p.longPauses > 3 ? 'var(--red-d)' : 'var(--g800)'}">${p.pauses}</div>
+        <div style="font-size:10px;color:var(--g600);text-transform:uppercase;letter-spacing:.05em;font-weight:600">Pauses &gt; 0.5s</div>
+      </div>
+      <div style="background:var(--g50);border:1px solid var(--g100);border-radius:10px;padding:10px;text-align:center">
+        <div style="font-family:var(--fm);font-size:1.4rem;font-weight:800">${p.longestPause}s</div>
+        <div style="font-size:10px;color:var(--g600);text-transform:uppercase;letter-spacing:.05em;font-weight:600">Longest pause</div>
+      </div>
+      <div style="background:var(--g50);border:1px solid var(--g100);border-radius:10px;padding:10px;text-align:center">
+        <div style="font-family:var(--fm);font-size:1.4rem;font-weight:800">${p.silencePct}%</div>
+        <div style="font-size:10px;color:var(--g600);text-transform:uppercase;letter-spacing:.05em;font-weight:600">Silence</div>
+      </div>
+    </div>
+  </div>`;
+
+  return `
+  ${deliveryCard}
+  <div class="card">
+    <div class="card-title" style="margin-bottom:4px">📚 Vocabulary Profile (CEFR)</div>
+    <div style="font-size:11px;color:var(--g400);margin-bottom:14px">
+      ${lex.totalWords} words · ${lex.uniqueWords} unique · ${lex.counted} matched against a ${Object.keys(CEFR_MAP).length}-word CEFR list
+    </div>
+
+    <div style="display:flex;height:26px;border-radius:8px;overflow:hidden;background:var(--g100);margin-bottom:12px">${bar}</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(88px,1fr));gap:8px;margin-bottom:14px">${legend}</div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px">
+      <div style="background:var(--g50);border:1px solid var(--g100);border-radius:10px;padding:10px;text-align:center">
+        <div style="font-family:var(--fm);font-size:1.4rem;font-weight:800;color:${b1plus >= 15 ? 'var(--green-d)' : b1plus >= 8 ? 'var(--gold-d)' : 'var(--g600)'}">${b1plus}%</div>
+        <div style="font-size:10px;color:var(--g600);text-transform:uppercase;letter-spacing:.05em;font-weight:600">B1 and above</div>
+      </div>
+      <div style="background:var(--g50);border:1px solid var(--g100);border-radius:10px;padding:10px;text-align:center">
+        <div style="font-family:var(--fm);font-size:1.4rem;font-weight:800;color:${lex.advancedPct >= 10 ? 'var(--green-d)' : 'var(--g600)'}">${lex.advancedPct}%</div>
+        <div style="font-size:10px;color:var(--g600);text-transform:uppercase;letter-spacing:.05em;font-weight:600">B2 and above</div>
+      </div>
+      <div style="background:var(--g50);border:1px solid var(--g100);border-radius:10px;padding:10px;text-align:center">
+        <div style="font-family:var(--fm);font-size:1.4rem;font-weight:800">${lex.ttr}</div>
+        <div style="font-size:10px;color:var(--g600);text-transform:uppercase;letter-spacing:.05em;font-weight:600">Type–token ratio</div>
+      </div>
+      <div style="background:var(--g50);border:1px solid var(--g100);border-radius:10px;padding:10px;text-align:center">
+        <div style="font-family:var(--fm);font-size:1.4rem;font-weight:800">${gram.avgLength}</div>
+        <div style="font-size:10px;color:var(--g600);text-transform:uppercase;letter-spacing:.05em;font-weight:600">Words / sentence</div>
+      </div>
+    </div>
+
+    <div style="margin-top:14px">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--g400);margin-bottom:5px">B1+ words you used — these are what lift Lexical Resource</div>
+      ${midHigh.length
+        ? `<div style="display:flex;flex-wrap:wrap;gap:4px">${midHigh.map(w => `<span class="badge badge-blue">${w}</span>`).join('')}</div>`
+        : '<div style="font-size:12px;color:var(--g600)">None this time — every content word was A1/A2. Aim for a few precise, topic-specific words next attempt.</div>'}
+    </div>
+    ${thin ? `<div style="margin-top:12px;background:var(--gold-l);border:1px solid #FDE68A;border-radius:8px;padding:9px 12px;font-size:12px;color:var(--gold-d)">
+      Only ${lex.counted} content words — too few for the percentages above to mean much. Speak at greater length for a reliable profile.
+    </div>` : ''}
+    ${lex.offList.length ? `<div style="margin-top:12px">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--g400);margin-bottom:5px">Not on the CEFR list (names, slang, or transcription slips)</div>
+      <div style="display:flex;flex-wrap:wrap;gap:4px">${lex.offList.map(w => `<span class="badge badge-grey">${w}</span>`).join('')}</div>
+    </div>` : ''}
+  </div>
+
+  <div class="card">
+    <div class="card-title" style="margin-bottom:4px">🔤 Grammar Range</div>
+    <div style="font-size:11px;color:var(--g400);margin-bottom:14px">
+      Structures detected in what you actually said. This counts <strong>what you used</strong>, not whether it was correct — accuracy is covered in the AI feedback above.
+    </div>
+
+    <div style="display:flex;gap:8px;margin-bottom:14px;align-items:center;flex-wrap:wrap">
+      <span style="font-size:12px;color:var(--g600)">Tense variety:</span>
+      <div style="display:flex;gap:3px">
+        ${[1,2,3,4,5,6,7].map(i => `<span style="width:22px;height:6px;border-radius:3px;background:${i <= g.tenseVariety ? 'var(--blue)' : 'var(--g200)'}"></span>`).join('')}
+      </div>
+      <span style="font-family:var(--fm);font-weight:700;font-size:13px">${g.tenseVariety}/7</span>
+    </div>
+
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">
+      ${used.map(([k, label]) => `<span class="badge badge-green">${label} <strong style="font-family:var(--fm);margin-left:3px">${g[k]}</strong></span>`).join('') || '<span style="font-size:12px;color:var(--g400)">No structures detected — the answer may be too short.</span>'}
+    </div>
+
+    ${unused.length ? `<div style="margin-bottom:14px">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--g400);margin-bottom:5px">Not used this time — try working one in</div>
+      <div style="display:flex;flex-wrap:wrap;gap:5px">${unused.map(([, label]) => `<span class="badge badge-grey">${label}</span>`).join('')}</div>
+    </div>` : ''}
+
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--g400);margin-bottom:6px">
+      Sentence types (${s.total} sentences) — complex sentences count for more in speaking than in writing
+    </div>
+    <div style="display:flex;height:20px;border-radius:6px;overflow:hidden;background:var(--g100);margin-bottom:8px">
+      ${s.simple ? `<div style="width:${sPct(s.simple)}%;background:var(--g400)"></div>` : ''}
+      ${s.compound ? `<div style="width:${sPct(s.compound)}%;background:var(--blue-m)"></div>` : ''}
+      ${s.complex ? `<div style="width:${sPct(s.complex)}%;background:var(--purple)"></div>` : ''}
+    </div>
+    <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:11px">
+      <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:var(--g400);margin-right:5px"></span>Simple <strong>${s.simple}</strong></span>
+      <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:var(--blue-m);margin-right:5px"></span>Compound <strong>${s.compound}</strong></span>
+      <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:var(--purple);margin-right:5px"></span>Complex <strong>${s.complex}</strong></span>
+    </div>
+  </div>`;
+}
+
+// ════════════════════════════════════════════
 // UTILITIES
 // ════════════════════════════════════════════
+function classNameOf(classId) {
+  if (!classId) return '';
+  const cl = _teacherClasses.find(c => String(c.ClassID) === String(classId));
+  return cl ? (cl.ClassName || cl.ClassID) : classId;
+}
+
 function fmtClassList(raw) {
   const s = String(raw || '').trim();
   if (!s) return '—';
@@ -2670,6 +3221,7 @@ async function renderTeacherProgress(c) {
   ]);
   _progSessions = sessRes.data || [];
   const classes = (clsRes.data || []).filter(cl => cl.Status !== 'Archived');
+  _teacherClasses = classes;
   _progRows = buildProgressRows(_progSessions, _progFilter);
   renderProgressUI(c, classes);
 }
