@@ -1076,6 +1076,8 @@ async function doLogin() {
     if (!res.success) { toast(res.error, 'error'); return; }
     A.user = res.user;
     A.sessionToken = res.sessionToken;
+    A.scoreAdjust = parseFloat(res.scoreAdjust) || 0;
+    localStorage.setItem('speak_adjust', String(A.scoreAdjust));
     localStorage.setItem('speak_session', JSON.stringify({ user: A.user, token: A.sessionToken }));
     loadGate();
     toast('Welcome, ' + A.user.fullName + '!', 'success');
@@ -1934,6 +1936,17 @@ async function renderTeacherSettings(c) {
         <input class="form-input" id="set-folder" value="${s.AudioFolderID||''}" placeholder="1abc...xyz">
         <div class="form-hint">Drive folder to store student audio. Leave empty to use your root Drive.</div>
       </div>
+      <div class="form-group">
+        <label class="form-label">Calibration offset</label>
+        <select class="form-input form-select" id="set-adjust">
+          ${[0,0.5,1,1.5].map(v => `<option value="${v}" ${String(parseFloat(s.ScoreAdjust)||0)===String(v)?'selected':''}>+${v.toFixed(1)}${v===0?'  (raw AI marking)':''}</option>`).join('')}
+        </select>
+        <div class="form-hint">
+          Corrects the AI's tendency to mark below a student's true level. Applied to all four criteria before averaging, and not shown separately to students — it is part of the score, not a bonus on top of it.
+          <br><br>
+          Set it from evidence: have a student whose real band you know practise here, then set the offset to close the gap. Re-check occasionally, since a value derived from one student may not hold at every level.
+        </div>
+      </div>
       <div class="form-group"><label class="form-label">Google Drive Folder ID (for feedback documents)</label>
         <input class="form-input" id="set-docfolder" value="${s.DocsFolderID||''}" placeholder="1abc...xyz">
         <div class="form-hint">Where exported feedback docs are filed. Each student gets one document per topic, shared as view-only by link.</div>
@@ -1952,6 +1965,8 @@ async function saveSettings() {
     if (folder !== undefined) await gasCall('teacher.saveSetting', { key: 'AudioFolderID', value: folder });
     const docFolder = document.getElementById('set-docfolder')?.value.trim();
     if (docFolder !== undefined) await gasCall('teacher.saveSetting', { key: 'DocsFolderID', value: docFolder });
+    const adjust = document.getElementById('set-adjust')?.value;
+    if (adjust !== undefined) await gasCall('teacher.saveSetting', { key: 'ScoreAdjust', value: adjust });
     if (curP && newP) {
       const res = await gasCall('teacher.changePassword', { current: curP, newPassword: newP });
       if (!res.success) { toast(res.error, 'error'); return; }
@@ -2850,16 +2865,22 @@ FEEDBACK TONE
 - Every mistake you name MUST come with a correct, usable example.
 - Write all feedback in English.
 
-Return ONLY valid JSON, no markdown fence:
+Return ONLY valid JSON, no markdown fence.
+
+CRITICAL: "qs" must contain EXACTLY ${n} objects — one per question, in the
+same order as the Q&A below. Grade every single answer, even a short or weak
+one. A response with fewer than ${n} objects is invalid and will be rejected.
+
 {
   "qs": [
-    {
+    {  // object 1 of ${n} — repeat this shape for every question
       "overall": 5.5,
       "fc": 5, "lr": 6, "gr": 5, "p": 5,
       "errors": [{"wrong":"what they said","correct":"the fix","type":"grammar|vocab|collocation","reason":"short why"}],
       "suggestion": "one actionable line, with a usable example",
       "natural": "their best sentence rewritten as a fluent speaker would say it"
     }
+    // ... continue until there are ${n} objects in total
   ],
   "r": {
     "good": ["phrase they used well","another"],
@@ -2912,7 +2933,7 @@ async function finishSession() {
   // Straight to the results screen — analysis visible now, band score fills in.
   renderResults(answered, null, false, attemptNo, null, null, null, null, null, '', shouldGrade);
 
-  let rpt = null, gradeFailed = false, gradeError = '', gradedBy = '';
+  let rpt = null, gradeFailed = false, gradeError = '', gradedBy = '', gradedCount = 0;
 
   try {
     if (shouldGrade) {
@@ -2923,32 +2944,70 @@ async function finishSession() {
       const prompt = buildGradePrompt(qaBlock, answered.length, A.langEvidence, A.mode);
       const sys    = 'IELTS Speaking examiner. Return ONLY valid JSON.';
 
+      const want = answered.length;
       let parsed = null;
-      try {
-        setGradingStatus('Gemini is marking your answers…');
-        parsed   = _parseGradeJSON(await gemFetch(sys, prompt, 1, true));
-        gradedBy = GM;
-      } catch (eGem) {
-        console.warn('Gemini grading failed:', eGem);
-        // Groq bills chat models against a separate quota from Whisper, so
-        // falling back here does not eat into transcription.
-        if (A.groqKey) {
+
+      async function attempt(p) {
+        try {
+          setGradingStatus('Gemini is marking your answers…');
+          const out = _parseGradeJSON(await gemFetch(sys, p, 1, true));
+          gradedBy = GM;
+          return out;
+        } catch (eGem) {
+          console.warn('Gemini grading failed:', eGem);
+          // Groq meters chat models separately from Whisper, so falling back
+          // here does not consume transcription quota.
+          if (!A.groqKey) throw eGem;
           setGradingStatus('Gemini unavailable — trying the backup grader…');
           try {
-            parsed   = _parseGradeJSON(await groqGrade(sys, prompt));
+            const out = _parseGradeJSON(await groqGrade(sys, p));
             gradedBy = GROQ_GRADE_MODEL;
+            return out;
           } catch (eGroq) {
             console.warn('Groq grading failed:', eGroq);
             throw new Error(eGem.message + '  ·  backup: ' + eGroq.message);
           }
-        } else { throw eGem; }
+        }
       }
 
-      if (!parsed?.qs) throw new Error('Grader returned malformed JSON');
+      parsed = await attempt(prompt);
+
+      // Models sometimes return one object because the schema example showed
+      // one. Ask again, naming the shortfall, before accepting a partial mark.
+      if (parsed?.qs && parsed.qs.length < want) {
+        console.warn('Grader returned ' + parsed.qs.length + ' of ' + want + ' — retrying');
+        setGradingStatus(`Only ${parsed.qs.length} of ${want} answers came back — asking again…`);
+        try {
+          const retry = await attempt(prompt +
+            `\n\nYour previous reply contained only ${parsed.qs.length} object(s) in "qs". ` +
+            `That is incomplete. Return all ${want}, one per question, in order.`);
+          if (retry?.qs && retry.qs.length > parsed.qs.length) parsed = retry;
+        } catch (eRetry) { console.warn('Retry failed:', eRetry); }
+      }
+
+      if (!parsed?.qs || !parsed.qs.length) throw new Error('Grader returned malformed JSON');
+      gradedCount = Math.min(parsed.qs.length, want);
+
+      // Teacher-set encouragement offset. Applied to all four criteria, never
+      // to a subset: lifting three of them would leave the fourth looking like
+      // the student's weakness when it is only the one that was not lifted,
+      // which would send them practising the wrong thing.
+      const ADJ = parseFloat(A.scoreAdjust) || 0;
+      const lift = v => {
+        const n = parseFloat(v);
+        if (!n) return v;
+        return Math.min(9, Math.round((n + ADJ) * 2) / 2);
+      };
+
       parsed.qs.forEach((g, i) => {
         if (!answered[i]) return;
-        answered[i].overall = g.overall;
-        answered[i].scores  = { fluency:{ score:g.fc||g.fluency }, lexical:{ score:g.lr||g.lexical }, grammar:{ score:g.gr||g.grammar }, pronunciation:{ score:g.p||g.pronunciation } };
+        answered[i].overall = lift(g.overall);
+        answered[i].scores  = {
+          fluency:      { score: lift(g.fc || g.fluency) },
+          lexical:      { score: lift(g.lr || g.lexical) },
+          grammar:      { score: lift(g.gr || g.grammar) },
+          pronunciation:{ score: lift(g.p  || g.pronunciation) }
+        };
         answered[i].errors  = g.errors || [];
         answered[i].suggestion = g.suggestion || '';
         answered[i].natural = g.natural || '';
@@ -3014,7 +3073,7 @@ async function finishSession() {
   A.retryCount = attemptNo;
 
   if (gradeFailed) toast('Grading failed — the attempt was saved without a score', 'error', 8000);
-  renderResults(answered, rpt, shouldGrade, attemptNo, overall, fc, lr, gr, p, gradeError, false, gradedBy);
+  renderResults(answered, rpt, shouldGrade, attemptNo, overall, fc, lr, gr, p, gradeError, false, gradedBy, gradedCount);
 }
 
 // How many per-question panels have been opened this session.
@@ -3162,7 +3221,7 @@ function buildReport(answered, r, isMilestone, attemptNo) {
 // ════════════════════════════════════════════
 // RESULTS RENDER
 // ════════════════════════════════════════════
-function renderResults(answered, rpt, isMilestone, attemptNo, overall, fc, lr, gr, p, gradeError, gradingPending, gradedBy) {
+function renderResults(answered, rpt, isMilestone, attemptNo, overall, fc, lr, gr, p, gradeError, gradingPending, gradedBy, gradedCount) {
   SS('S-results');
   const main = document.getElementById('results-main');
   const next = nextMilestone(attemptNo);
@@ -3177,6 +3236,11 @@ function renderResults(answered, rpt, isMilestone, attemptNo, overall, fc, lr, g
         </div>
       </div>
       <p style="margin-top:10px;font-size:12px;color:var(--g600)">Your measured profile is below and is already final — the band scores will appear here when marking finishes.</p>
+    </div>` : ''}
+
+    ${isMilestone && gradedCount && gradedCount < answered.length ? `<div class="card" style="background:var(--gold-l);border-color:#FDE68A">
+      <div style="font-weight:700;color:var(--gold-d)">⚠️ Only ${gradedCount} of ${answered.length} answers were marked</div>
+      <p style="margin-top:4px;font-size:12px;color:var(--gold-d)">The grader returned an incomplete response even after being asked again. The band above reflects the ${gradedCount} marked answer(s) only, not the whole session. Practise the topic again for a full mark.</p>
     </div>` : ''}
 
     ${gradedBy && !/^gemini/.test(gradedBy) ? `<div class="card" style="background:var(--gold-l);border-color:#FDE68A">
@@ -3197,6 +3261,9 @@ function renderResults(answered, rpt, isMilestone, attemptNo, overall, fc, lr, g
         <div class="res-label">IELTS Speaking Band Score</div>
         <div class="crit-grid">
           ${[['FC',fc],['LR',lr],['GR',gr],['P',p]].map(([n,v])=>`<div class="crit-box"><div class="crit-score">${v||'—'}</div><div class="crit-name">${n}</div></div>`).join('')}
+        </div>
+        <div style="font-size:10px;color:rgba(255,255,255,.35);margin-top:12px;line-height:1.6">
+          Estimated band, not an official IELTS result. Use it to track your progress over time rather than as a prediction of your test score.
         </div>
       </div>` : `
       <div class="card" style="background:var(--green-l);border-color:var(--green)">
@@ -3705,6 +3772,7 @@ window.addEventListener('load', () => {
   try {
     const saved = JSON.parse(localStorage.getItem('speak_session') || 'null');
     if (saved?.token && saved?.user) { A.user = saved.user; A.sessionToken = saved.token; loadGate(); }
+    A.scoreAdjust = parseFloat(localStorage.getItem('speak_adjust')) || 0;
   } catch(_) {}
   try {
     const tTok = localStorage.getItem('speak_teacher');
