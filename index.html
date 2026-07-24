@@ -2193,6 +2193,10 @@ async function renderMyHistory(c) {
   c.innerHTML = `
     <h2 style="margin-bottom:16px">📋 My History</h2>
     ${groups.length ? groups.map(g => {
+      // getMyHistory hands sessions back newest-first, so sort before treating
+      // the last element as "the latest attempt" — otherwise every export and
+      // every score strip silently refers to the oldest one.
+      g.sessions.sort((a, b) => String(a.StartTime || '').localeCompare(String(b.StartTime || '')));
       const milestones = g.sessions.filter(s => String(s.IsMilestone) === 'true' && s.Overall);
       return `
         <div class="card">
@@ -2591,7 +2595,10 @@ async function transcribeGroq(blob, mime) {
   fd.append('response_format', 'verbose_json');
   fd.append('temperature', '0');
   fd.append('timestamp_granularities[]', 'word');
-  fd.append('prompt', 'Transcribe exactly what is spoken. Do not add, predict, or correct any words.');
+  // Whisper is trained on well-formed text and will quietly repair learner
+  // errors unless told not to. It cannot be stopped entirely, which is why
+  // detected errors are treated as evidence but clean output is not.
+  fd.append('prompt', 'Verbatim transcription of a language learner. Transcribe exactly what is spoken, including grammatical errors, missing plural -s, and unconjugated verbs. Do not add, predict, correct, or tidy any words.');
   const r = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
     method: 'POST',
     headers: { 'Authorization': 'Bearer ' + A.groqKey },
@@ -2615,24 +2622,62 @@ async function transcribeGroq(blob, mime) {
 // out of it — Whisper spells words correctly no matter how they were said.
 function prosodyFrom(words, duration) {
   if (!words || words.length < 5) return null;
+
   const gaps = [];
   for (let i = 1; i < words.length; i++) {
     const g = (words[i].start || 0) - (words[i - 1].end || 0);
     if (g > 0.01) gaps.push(g);
   }
   const span = duration || ((words[words.length - 1].end || 0) - (words[0].start || 0));
-  const pauses = gaps.filter(g => g >= 0.5);
-  const longPauses = gaps.filter(g => g >= 1.5);
+
+  // Whisper writes clean sentences whatever it hears, so hesitation is
+  // invisible in the text. It is not invisible in the timings — and it lives
+  // mostly in gaps too short to have been counted before.
+  const micro = gaps.filter(g => g >= 0.25 && g < 0.5);
+  const mid   = gaps.filter(g => g >= 0.5  && g < 1.5);
+  const long  = gaps.filter(g => g >= 1.5);
   const silence = gaps.reduce((a, g) => a + g, 0);
+
+  // Mean length of run: how many words are spoken between one hesitation and
+  // the next. This is the standard fluency measure in L2 research and it
+  // separates halting speech from fluent speech far better than raw speed,
+  // which a nervous fast talker can fake.
+  let runs = [], run = 1;
+  for (let i = 1; i < words.length; i++) {
+    const g = (words[i].start || 0) - (words[i - 1].end || 0);
+    if (g >= 0.3) { runs.push(run); run = 1; } else run++;
+  }
+  runs.push(run);
+  const mlr = runs.length ? Math.round(words.length / runs.length * 10) / 10 : words.length;
+
+  // Speed while actually speaking, with the pauses taken out.
+  const phonation = Math.max(0.1, span - silence);
+
   return {
     words: words.length,
     seconds: Math.round(span * 10) / 10,
     wpm: span > 0 ? Math.round(words.length / span * 60) : 0,
-    pauses: pauses.length,
-    longPauses: longPauses.length,
+    articulationWpm: Math.round(words.length / phonation * 60),
+    pauses: mid.length + long.length,
+    microPauses: micro.length,
+    longPauses: long.length,
     longestPause: gaps.length ? Math.round(Math.max(...gaps) * 10) / 10 : 0,
-    silencePct: span > 0 ? Math.round(silence / span * 100) : 0
+    silencePct: span > 0 ? Math.round(silence / span * 100) : 0,
+    mlr: mlr,
+    runs: runs.length
   };
+}
+
+// Whisper strips most disfluency, but immediate repetitions sometimes survive
+// ("I I think", "the the"). When they do, they are real.
+function repeatedWords(text) {
+  const w = String(text || '').toLowerCase().match(/\b[a-z']+\b/g) || [];
+  const hits = [];
+  for (let i = 1; i < w.length; i++) {
+    // "he had had", "that that" and "very very" are legitimate repetitions.
+    if (w[i] === w[i - 1] && !/^(that|had|very|no)$/.test(w[i])) hits.push(w[i]);
+  }
+  return hits;
 }
 
 // ── NAVIGATION ────────────────────────────
@@ -2804,6 +2849,18 @@ How to read them:
   English carry more weight than in writing and should be rewarded.
 - If content words are flagged TOO FEW, ignore the percentages entirely and
   judge from the answers.
+- ACCURACY lists errors found in the transcript itself. The transcriber was
+  told to write exactly what was said, so an error listed here was almost
+  certainly spoken. The reverse does not hold: transcription still tidies some
+  speech, so an empty list is not proof of accuracy. Treat listed errors as
+  confirmed and weigh them in Grammatical Range and Accuracy.
+
+CEILINGS (these are applied to your scores afterwards regardless, so mark
+consistently with them):
+- Basic agreement or plural errors in 50% or more of sentences -> GR cannot
+  exceed 6.
+- Silence over 50% of the recording -> P cannot exceed 6.
+- Fewer than 4.5 words between hesitations -> FC cannot exceed 6.
 === END MEASUREMENTS ===
 ` : '';
 
@@ -2825,10 +2882,16 @@ FLUENCY & COHERENCE
   hard, and tell them to expand using What / When / Why / Where / Who / How.
 - Rambling, repeating the same idea without progressing -> lower FC and tell
   them to stay focused.
-- The DELIVERY line above is your evidence for delivery. Around 120-150 wpm is
-  natural; markedly slower or faster, frequent pauses over 1.5s, or a high
-  silence share all indicate hesitation. Do not invent delivery problems that
-  the numbers do not show.
+- The DELIVERY line is your only evidence about delivery. The transcript will
+  NOT show hesitation, stumbling or repetition: the transcriber writes fluent
+  sentences whatever it hears. Never conclude from clean text that the speaker
+  was fluent.
+- Read it as: around 120-150 wpm overall is natural. "Words between
+  hesitations" is the strongest single signal — 8 or more is fluent, 5 to 7 is
+  uneven, below 5 is halting no matter how tidy the transcript looks. Many
+  micro-pauses with a high articulation rate means someone starting and
+  stopping, not someone speaking slowly. Do not invent delivery problems the
+  numbers do not show, and do not overlook ones they do.
 
 LEXICAL RESOURCE
 - Unnatural phrasing or word-for-word translation from the first language ->
@@ -2836,6 +2899,23 @@ LEXICAL RESOURCE
 - Reliance on basic overused vocabulary ("I like", "I don't like", "happy",
   "beautiful") -> suggest topic-specific Band 6.5+ alternatives.
 - A solid B1+ share made of words used correctly -> credit it in LR.
+- COLLOCATION is the clearest divider between Band 6 and Band 7+. Judge whether
+  words sit together as a fluent speaker would put them. Flag combinations that
+  are grammatical but not idiomatic ("stock sharing" for "share trading",
+  "do a mistake" for "make a mistake", "heavy traffic" correct but "strong
+  traffic" not) and give the natural pairing. Credit precise collocation where
+  it appears.
+- PHRASAL VERBS: note which were used and whether the particle and register fit
+  ("bring up an idea" fine; "bring up the economy" wrong). Their absence is not
+  an error, but confident, correct use is Band 7 evidence.
+- IDIOMS and fixed expressions: reward natural, well-placed use. Penalise
+  idioms that are misquoted, forced, or used in the wrong register — an idiom
+  dropped in to sound advanced reads worse than plain accurate English, and
+  IELTS descriptors treat inappropriate idiomatic use as a weakness, not a
+  neutral choice.
+- Repeating the examiner's own words instead of paraphrasing is a lexical
+  weakness. If the answer leans on the question's wording, say so and offer the
+  paraphrase they could have used.
 
 GRAMMATICAL RANGE & ACCURACY
 - Fails to mix simple, compound and complex sentences, or shows little clause
@@ -2884,6 +2964,12 @@ one. A response with fewer than ${n} objects is invalid and will be rejected.
   ],
   "r": {
     "good": ["phrase they used well","another"],
+    "collocations": {
+      "strong": ["precise pairings they got right"],
+      "off":    [{"said":"what they produced","better":"the natural pairing"}]
+    },
+    "phrasalVerbs": ["phrasal verbs they used, marked (ok) or (wrong: ...)"],
+    "idioms":       ["idioms or fixed expressions used, marked (natural) or (forced/misquoted)"],
     "weak": "the single biggest weakness",
     "up": "Band 8 rewrite of their strongest answer",
     "adv": "one short paragraph of advice, encouraging if the band is 5.5 or below",
@@ -2918,14 +3004,23 @@ async function finishSession() {
   // student can start reading real feedback immediately instead of staring at
   // a spinner while the AI works. Padding the wait with a fake delay would
   // only add time; showing what is already computed removes it.
-  answered.forEach(r => { r._m = localMetrics(r.studentAnswer); });
+  answered.forEach(r => {
+    r._m    = localMetrics(r.studentAnswer);
+    r._echo = questionEcho(r.question, r.studentAnswer);
+  });
   A.langText = answered.map(r => r.studentAnswer).join(' ');
   const allWords = answered.reduce((a, r) => a.concat(r._words || []), []);
   const allDur   = answered.reduce((a, r) => a + (r._dur || 0), 0);
   A.prosody = prosodyFrom(allWords, allDur);
   try {
-    A.langEvidence = analyzeLanguage(A.langText, A.prosody).evidence;
-  } catch (e) { A.langEvidence = ''; console.warn('Language analysis failed:', e); }
+    const la = analyzeLanguage(A.langText, A.prosody);
+    A.langEvidence = la.evidence;
+    A.langCaps     = la.caps || {};
+    A.langAcc      = la.acc  || null;
+  } catch (e) {
+    A.langEvidence = ''; A.langCaps = {}; A.langAcc = null;
+    console.warn('Language analysis failed:', e);
+  }
 
   const attemptNo = A.retryCount + 1;
   let shouldGrade = isMilestone(attemptNo) || A.pendingMilestone;
@@ -2999,15 +3094,40 @@ async function finishSession() {
         return Math.min(9, Math.round((n + ADJ) * 2) / 2);
       };
 
+      // Ceilings are applied after the offset, or the offset would lift a
+      // score straight back through them. Telling the model about them is not
+      // enough — a stated limit is advice, an applied one is a limit.
+      const CAPS = A.langCaps || {};
+      const capped = (v, key) => {
+        const n = parseFloat(v);
+        if (!n || !CAPS[key]) return v;
+        return Math.min(n, CAPS[key].max);
+      };
+      // Echoing is a property of one answer, so it caps that answer's lexis
+      // rather than the whole session.
+      const capEcho = (v, r) => {
+        const n = parseFloat(v);
+        if (!n || !r._echo) return v;
+        const bad = r._echo.count >= QUESTION_ECHO_LIMIT || r._echo.copied;
+        return bad ? Math.min(n, CAP_BAND) : v;
+      };
+
       parsed.qs.forEach((g, i) => {
         if (!answered[i]) return;
-        answered[i].overall = lift(g.overall);
-        answered[i].scores  = {
-          fluency:      { score: lift(g.fc || g.fluency) },
-          lexical:      { score: lift(g.lr || g.lexical) },
-          grammar:      { score: lift(g.gr || g.grammar) },
-          pronunciation:{ score: lift(g.p  || g.pronunciation) }
+        const sc = {
+          fluency:      { score: capped(lift(g.fc || g.fluency), 'fc') },
+          lexical:      { score: capEcho(lift(g.lr || g.lexical), answered[i]) },
+          grammar:      { score: capped(lift(g.gr || g.grammar), 'gr') },
+          pronunciation:{ score: capped(lift(g.p  || g.pronunciation), 'p') }
         };
+        answered[i].scores = sc;
+        // Rebuild the per-question band from the capped criteria rather than
+        // trusting the model's own figure, which was set before capping.
+        const vals = ['fluency','lexical','grammar','pronunciation']
+          .map(k => parseFloat(sc[k].score)).filter(v => v > 0);
+        answered[i].overall = vals.length
+          ? Math.round(vals.reduce((a, v) => a + v, 0) / vals.length * 2) / 2
+          : lift(g.overall);
         answered[i].errors  = g.errors || [];
         answered[i].suggestion = g.suggestion || '';
         answered[i].natural = g.natural || '';
@@ -3211,6 +3331,12 @@ function buildReport(answered, r, isMilestone, attemptNo) {
   lines.push('### 📝 IELTS SPEAKING RESULT');
   if (r) {
     if (r.good?.length) lines.push('- **Good phrases:** ' + r.good.join(' · '));
+    if (r.collocations?.strong?.length)
+      lines.push('- **Collocations you got right:** ' + r.collocations.strong.join(' · '));
+    if (r.collocations?.off?.length)
+      lines.push('- **Word pairings to fix:** ' + r.collocations.off.map(x => x.said + ' -> ' + x.better).join(' · '));
+    if (r.phrasalVerbs?.length) lines.push('- **Phrasal verbs:** ' + r.phrasalVerbs.join(' · '));
+    if (r.idioms?.length)       lines.push('- **Idioms:** ' + r.idioms.join(' · '));
     if (r.weak)         lines.push('- **Area to improve:** ' + r.weak);
     if (r.up)           { lines.push(''); lines.push('### 🚀 UPGRADED VERSION (Band 8+)'); lines.push(r.up); }
     if (r.adv)          { lines.push(''); lines.push('### 💡 ADVICE'); lines.push(r.adv); }
@@ -3236,6 +3362,22 @@ function renderResults(answered, rpt, isMilestone, attemptNo, overall, fc, lr, g
         </div>
       </div>
       <p style="margin-top:10px;font-size:12px;color:var(--g600)">Your measured profile is below and is already final — the band scores will appear here when marking finishes.</p>
+    </div>` : ''}
+
+    ${isMilestone && A.langCaps && Object.keys(A.langCaps).length ? `<div class="card" style="background:var(--red-l);border-color:var(--red)">
+      <div style="font-weight:700;color:var(--red-d)">📏 A ceiling was applied to this attempt</div>
+      <ul style="margin:6px 0 0 18px;font-size:13px;color:var(--red-d);line-height:1.8">
+        ${A.langCaps.fc ? `<li><strong>Fluency capped at ${A.langCaps.fc.max}</strong> — ${A.langCaps.fc.why}.</li>` : ''}
+        ${A.langCaps.gr ? `<li><strong>Grammar capped at ${A.langCaps.gr.max}</strong> — ${A.langCaps.gr.why}.</li>` : ''}
+        ${A.langCaps.p ? `<li><strong>Pronunciation capped at ${A.langCaps.p.max}</strong> — ${A.langCaps.p.why}.</li>` : ''}
+        ${(answered || []).filter(r => r._echo && (r._echo.count >= QUESTION_ECHO_LIMIT || r._echo.copied)).map((r, i) =>
+          `<li><strong>Lexis capped at ${CAP_BAND}</strong> on one answer — ${r._echo.copied
+            ? 'you repeated the question wording "' + r._echo.copied + '" instead of paraphrasing'
+            : 'you used "' + r._echo.worst + '" ' + r._echo.count + ' times rather than varying it'}.</li>`).join('')}
+      </ul>
+      ${A.langAcc && A.langAcc.findings.length ? `<div style="margin-top:8px;font-size:12px;color:var(--red-d)">
+        Found: ${A.langAcc.findings.slice(0,5).map(f => `<span style="font-family:var(--fm)">${f.snippet.trim()} → ${f.fix}</span>`).join(' · ')}
+      </div>` : ''}
     </div>` : ''}
 
     ${isMilestone && gradedCount && gradedCount < answered.length ? `<div class="card" style="background:var(--gold-l);border-color:#FDE68A">
@@ -3311,6 +3453,29 @@ function renderResults(answered, rpt, isMilestone, attemptNo, overall, fc, lr, g
         <div class="card-title" style="margin-bottom:12px">📊 Detailed Analysis</div>
         ${rpt.adv ? `<div class="rpt-box" style="margin-bottom:12px">${rpt.adv.replace(/\n/g,'<br>')}</div>` : ''}
         ${rpt.good?.length ? `<div style="margin-bottom:10px"><strong>Good phrases:</strong> ${rpt.good.join(' · ')}</div>` : ''}
+
+        ${rpt.collocations?.strong?.length ? `<div style="margin-bottom:8px">
+          <div class="qs-lbl">Collocations you got right</div>
+          <div style="display:flex;flex-wrap:wrap;gap:4px">${rpt.collocations.strong.map(x => `<span class="badge badge-green">${x}</span>`).join('')}</div>
+        </div>` : ''}
+
+        ${rpt.collocations?.off?.length ? `<div style="margin-bottom:8px">
+          <div class="qs-lbl">Word pairings to fix</div>
+          ${rpt.collocations.off.map(x => `<div style="font-size:13px;margin-bottom:3px">
+            <s style="color:var(--red)">${x.said}</s> → <strong style="color:var(--green-d)">${x.better}</strong>
+          </div>`).join('')}
+        </div>` : ''}
+
+        ${rpt.phrasalVerbs?.length ? `<div style="margin-bottom:8px">
+          <div class="qs-lbl">Phrasal verbs</div>
+          <div style="display:flex;flex-wrap:wrap;gap:4px">${rpt.phrasalVerbs.map(x => `<span class="badge ${/wrong/i.test(x) ? 'badge-red' : 'badge-blue'}">${x}</span>`).join('')}</div>
+        </div>` : ''}
+
+        ${rpt.idioms?.length ? `<div style="margin-bottom:8px">
+          <div class="qs-lbl">Idioms &amp; fixed expressions</div>
+          <div style="display:flex;flex-wrap:wrap;gap:4px">${rpt.idioms.map(x => `<span class="badge ${/forced|misquot|wrong/i.test(x) ? 'badge-gold' : 'badge-green'}">${x}</span>`).join('')}</div>
+        </div>` : ''}
+
         ${rpt.weak ? `<div style="font-size:13px;color:var(--g600)"><strong>Weakest area:</strong> ${rpt.weak}</div>` : ''}
       </div>` : ''}
 
@@ -3485,6 +3650,143 @@ function grammarProfile(text) {
   };
 }
 
+// ── QUESTION ECHO ───────────────────────────
+// Leaning on the examiner's own wording instead of paraphrasing is a Lexical
+// Resource weakness: it shows the candidate had no other way to say it.
+// Function words are ignored — every answer reuses "the" and "you".
+// Set to 3 from evidence, not preference. At 2 this fired on answers that were
+// plainly strong — "I am a student ... pride in being a student there", which
+// also produced incredibly, competitive, admission, pride. Naming the topic
+// twice across a long answer is normal English, not parroting. At 3 it catches
+// what it is meant to: "I like books. I like books very much. I like books."
+// Lower it to 2 here if you want the stricter reading.
+const QUESTION_ECHO_LIMIT = 3;
+
+function questionEcho(question, answer) {
+  if (!cefrReady()) return { worst: null, count: 0, copied: '' };
+  const CONTENT = { noun:1, verb:1, adj:1, adv:1 };
+  const qWords = String(question || '').toLowerCase().match(/\b[a-z][a-z']*\b/g) || [];
+  const aWords = String(answer   || '').toLowerCase().match(/\b[a-z][a-z']*\b/g) || [];
+  if (!qWords.length || !aWords.length) return { worst: null, count: 0, copied: '' };
+
+  const lemma = w => { const h = cefrOf(w); return h ? h.lemma : w; };
+  const qLemmas = {};
+  qWords.forEach(w => { const h = cefrOf(w); if (h && CONTENT[h.pos]) qLemmas[h.lemma] = w; });
+
+  const tally = {};
+  aWords.forEach(w => { const l = lemma(w); if (qLemmas[l]) tally[l] = (tally[l] || 0) + 1; });
+
+  let worst = null, count = 0;
+  Object.keys(tally).forEach(l => { if (tally[l] > count) { count = tally[l]; worst = l; } });
+
+  // A copied run of words is parroting outright, whatever the counts say.
+  let copied = '';
+  for (let n = Math.min(6, qWords.length); n >= 4; n--) {
+    for (let i = 0; i + n <= qWords.length; i++) {
+      const span = qWords.slice(i, i + n).join(' ');
+      if ((' ' + aWords.join(' ') + ' ').indexOf(' ' + span + ' ') >= 0) { copied = span; break; }
+    }
+    if (copied) break;
+  }
+  return { worst, count, copied };
+}
+
+// ── ACCURACY SCAN ───────────────────────────
+// Deliberately conservative: each pattern is one a learner produces and a
+// fluent speaker does not, checked against the CEFR list so only real verbs
+// and nouns are flagged. Precision matters more than recall here, because a
+// false positive caps a band that the student earned.
+function grammarErrorScan(text) {
+  const findings = [];
+  if (!cefrReady()) return { findings, sentences: 0, sentencesWithError: 0, rate: 0 };
+
+  const AUX = /^(is|are|was|were|am|be|been|being|has|have|had|do|does|did|can|could|will|would|shall|should|may|might|must|need|dare|let|not|never|also|only|just|really|always|often|usually|sometimes|still|already|too|very)$/;
+  // Already plural, or never pluralised — flagging these produces nonsense
+  // like "many peoples" and would cap a band the student did not lose.
+  const IRREG_PL = /^(people|children|men|women|feet|teeth|geese|mice|sheep|fish|deer|police|staff|youth|series|species)$/;
+  const UNCOUNT  = /^(information|advice|furniture|luggage|equipment|homework|research|knowledge|money|water|music|news|traffic|weather|work|progress|evidence|feedback|software|hardware|content|damage|luck|fun|help)$/;
+
+  // Third-person -s is not a plain suffix: go -> goes, study -> studies.
+  const thirdPerson = v =>
+    /(o|s|x|z|ch|sh)$/.test(v) ? v + 'es'
+    : /[^aeiou]y$/.test(v)     ? v.slice(0, -1) + 'ies'
+    : v + 's';
+  const pluralise = n =>
+    /(s|x|z|ch|sh)$/.test(n)   ? n + 'es'
+    : /[^aeiou]y$/.test(n)     ? n.slice(0, -1) + 'ies'
+    : n + 's';
+  const isVerb = w => { const h = cefrOf(w); return h && (h.pos === 'verb' || (h.allPos || []).indexOf('verb') >= 0); };
+  const isNoun = w => { const h = cefrOf(w); return h && (h.pos === 'noun' || (h.allPos || []).indexOf('noun') >= 0); };
+  const lemmaOf = w => { const h = cefrOf(w); return h ? h.lemma : w; };
+
+  const sents = String(text || '').split(/[.!?]+/).map(x => x.trim()).filter(x => x.split(/\s+/).length >= 3);
+  let sentencesWithError = 0;
+
+  sents.forEach(sent => {
+    const low = ' ' + sent.toLowerCase().replace(/[^a-z' ]/g, ' ').replace(/\s+/g, ' ') + ' ';
+    let hit = false;
+
+    // he / she / it + bare verb  ("he go", "she like")
+    let m, re1 = /\b(he|she|it)\s+([a-z']+)\b/g;
+    while ((m = re1.exec(low))) {
+      const v = m[2];
+      if (AUX.test(v) || /s$/.test(v) || /^(to|a|an|the|his|her|its|and|but|or|that|which|who)$/.test(v)) continue;
+      if (isVerb(v) && lemmaOf(v) === v) {
+        findings.push({ type: 'subject-verb agreement', snippet: m[0], fix: m[1] + ' ' + thirdPerson(v) });
+        hit = true;
+      }
+    }
+
+    // number / quantifier + singular noun  ("three book", "many student")
+    let re2 = /\b(two|three|four|five|six|seven|eight|nine|ten|many|several|few|both|lots of|a lot of)\s+([a-z']+)\b/g;
+    while ((m = re2.exec(low))) {
+      const n = m[2];
+      if (/s$/.test(n) || AUX.test(n) || IRREG_PL.test(n) || UNCOUNT.test(n)) continue;
+      if (isNoun(n) && lemmaOf(n) === n) {
+        findings.push({ type: 'plural form', snippet: m[0], fix: m[1] + ' ' + pluralise(n) });
+        hit = true;
+      }
+    }
+
+    // a / an + plural noun  ("a books")
+    let re3 = /\b(a|an)\s+([a-z']+s)\b/g;
+    while ((m = re3.exec(low))) {
+      const n = m[2];
+      if (AUX.test(n) || /(ss|us|is)$/.test(n) || UNCOUNT.test(n)) continue;
+      const lem = lemmaOf(n);
+      if (isNoun(n) && lem !== n) {
+        findings.push({ type: 'article with plural', snippet: m[0], fix: m[1] + ' ' + lem });
+        hit = true;
+      }
+    }
+
+    if (hit) sentencesWithError++;
+  });
+
+  return {
+    findings: findings.slice(0, 12),
+    sentences: sents.length,
+    sentencesWithError,
+    rate: sents.length ? Math.round(sentencesWithError / sents.length * 100) : 0
+  };
+}
+
+// Ceilings from measurement rather than judgement. Only ever lower a band,
+// and only on evidence strong enough to stand on its own.
+const CAP_BAND = 6;
+function bandCaps(acc, prosody) {
+  const caps = {};
+  if (acc && acc.sentences >= 3 && acc.rate >= 50)
+    caps.gr = { max: CAP_BAND, why: `basic errors in ${acc.rate}% of sentences` };
+  if (prosody && prosody.silencePct >= 50)
+    caps.p  = { max: CAP_BAND, why: `${prosody.silencePct}% of the recording was silence` };
+  // Fluent speakers run 8-12 words between hesitations; halting speech breaks
+  // every 3-5. The transcript cannot show this, the timings can.
+  if (prosody && prosody.words >= 25 && prosody.mlr < 4.5)
+    caps.fc = { max: CAP_BAND, why: `speech broke off every ${prosody.mlr} words on average` };
+  return caps;
+}
+
 // ── COMPACT SUMMARY FOR THE AI PROMPT ───────
 // Reports the B1+ end of the scale, not the A1/A2 end. Every learner produces
 // mostly A-level words, so the A1 share separates nobody; what distinguishes a
@@ -3494,7 +3796,7 @@ function grammarProfile(text) {
 // grader to take the number on faith; the word list lets it check whether each
 // one was used naturally and in the right context, which is the half of
 // Lexical Resource that no regex can measure.
-function buildEvidenceLine(lex, gram, prosody) {
+function buildEvidenceLine(lex, gram, prosody, acc, reps) {
   if (!lex || !gram) return '';
   const g = gram.features, s = gram.sentences;
 
@@ -3523,7 +3825,17 @@ function buildEvidenceLine(lex, gram, prosody) {
     `GRAM tense variety ${g.tenseVariety}/7 — ${tensesUsed.join(', ') || 'none'}`,
     `  other structures: ${structs.join(', ') || 'none'}`,
     `  sentences ${s.total}: ${s.simple} simple / ${s.compound} compound / ${s.complex} complex (${cxPct}% complex)`,
-    prosody ? `DELIVERY ${prosody.wpm} wpm, ${prosody.pauses} pauses over 0.5s (${prosody.longPauses} over 1.5s), longest ${prosody.longestPause}s, ${prosody.silencePct}% silence` : ''
+    prosody ? `DELIVERY ${prosody.wpm} wpm overall, ${prosody.articulationWpm} wpm while actually speaking, `
+            + `${prosody.mlr} words between hesitations, ${prosody.microPauses} micro-pauses (0.25-0.5s), `
+            + `${prosody.pauses} pauses over 0.5s (${prosody.longPauses} over 1.5s), `
+            + `longest ${prosody.longestPause}s, ${prosody.silencePct}% silence` : '',
+    acc && acc.findings.length
+      ? `ACCURACY basic errors in ${acc.sentencesWithError}/${acc.sentences} sentences (${acc.rate}%): `
+        + acc.findings.map(f => `"${f.snippet.trim()}" -> "${f.fix}"`).join('; ')
+      : (acc && acc.sentences ? 'ACCURACY no basic agreement or plural errors found in the transcript' : ''),
+    reps && reps.length
+      ? `REPETITION the transcriber kept ${reps.length} immediate repetition(s) (${reps.slice(0, 6).join(', ')}) — it normally removes these, so the stumbling was pronounced`
+      : ''
   ].filter(Boolean).join('\n');
 }
 
@@ -3551,7 +3863,10 @@ function buildAnalysisPayload() {
 function analyzeLanguage(text, prosody) {
   const lex  = cefrProfile(text);
   const gram = grammarProfile(text);
-  return { lex, gram, prosody, evidence: buildEvidenceLine(lex, gram, prosody) };
+  const acc  = grammarErrorScan(text);
+  const reps = repeatedWords(text);
+  return { lex, gram, acc, reps, prosody, caps: bandCaps(acc, prosody),
+           evidence: buildEvidenceLine(lex, gram, prosody, acc, reps) };
 }
 
 // ── GOOGLE DOC EXPORT ───────────────────────
@@ -3564,9 +3879,10 @@ async function exportToDoc(sessionId, asTeacher) {
     const res = await gasCall(asTeacher ? 'teacher.exportDoc' : 'speak.exportDoc', { sessionId: id });
     if (!res.success) { toast(res.error, 'error', 6000); return; }
     window.open(res.url, '_blank');
-    toast(res.alreadyPresent ? 'This attempt is already in the document — opening it'
-        : res.created         ? 'Document created'
-        : `Attempt added — ${res.attempts} attempts in this document`, 'success', 5000);
+    toast(res.alreadyPresent ? `Document already up to date — ${res.attempts} attempt(s)`
+        : res.rebuilt         ? `Document rebuilt — all ${res.attempts} graded attempts, in order`
+        : res.created         ? `Document created — ${res.attempts} graded attempt(s)`
+        : `${res.added} attempt(s) added — ${res.attempts} in this document`, 'success', 5000);
   } catch (e) {
     toast('Export failed: ' + e.message, 'error', 6000);
   } finally {
@@ -3618,31 +3934,30 @@ function renderLanguageAnalysis(text, prosody) {
   const p = a.prosody;
   const paceLabel = !p ? '' : p.wpm < 100 ? 'slow' : p.wpm > 170 ? 'fast' : 'natural';
   const paceColor = !p ? '' : (p.wpm >= 110 && p.wpm <= 160) ? 'var(--green-d)' : 'var(--gold-d)';
+  const mlrLabel  = !p ? '' : p.mlr >= 8 ? 'fluent' : p.mlr >= 5 ? 'uneven' : 'halting';
+  const mlrColor  = !p ? '' : p.mlr >= 8 ? 'var(--green-d)' : p.mlr >= 5 ? 'var(--gold-d)' : 'var(--red-d)';
+  const stat = (val, label, color) => `
+      <div style="background:var(--g50);border:1px solid var(--g100);border-radius:10px;padding:10px;text-align:center">
+        <div style="font-family:var(--fm);font-size:1.4rem;font-weight:800;${color ? 'color:' + color : ''}">${val}</div>
+        <div style="font-size:10px;color:var(--g600);text-transform:uppercase;letter-spacing:.05em;font-weight:600">${label}</div>
+      </div>`;
   const deliveryCard = !p ? '' : `
   <div class="card">
     <div class="card-title" style="margin-bottom:4px">🎙️ Delivery</div>
     <div style="font-size:11px;color:var(--g400);margin-bottom:14px">
-      Measured from the audio timings. This is the only real evidence available about how you sounded —
-      the transcript itself cannot show pronunciation, because it spells every word correctly regardless.
+      Measured from the audio timings. The transcript cannot show hesitation — it writes tidy sentences however you actually sounded — so these numbers are the only real record of your delivery.
     </div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px">
-      <div style="background:var(--g50);border:1px solid var(--g100);border-radius:10px;padding:10px;text-align:center">
-        <div style="font-family:var(--fm);font-size:1.4rem;font-weight:800;color:${paceColor}">${p.wpm}</div>
-        <div style="font-size:10px;color:var(--g600);text-transform:uppercase;letter-spacing:.05em;font-weight:600">Words / min (${paceLabel})</div>
-      </div>
-      <div style="background:var(--g50);border:1px solid var(--g100);border-radius:10px;padding:10px;text-align:center">
-        <div style="font-family:var(--fm);font-size:1.4rem;font-weight:800;color:${p.longPauses > 3 ? 'var(--red-d)' : 'var(--g800)'}">${p.pauses}</div>
-        <div style="font-size:10px;color:var(--g600);text-transform:uppercase;letter-spacing:.05em;font-weight:600">Pauses &gt; 0.5s</div>
-      </div>
-      <div style="background:var(--g50);border:1px solid var(--g100);border-radius:10px;padding:10px;text-align:center">
-        <div style="font-family:var(--fm);font-size:1.4rem;font-weight:800">${p.longestPause}s</div>
-        <div style="font-size:10px;color:var(--g600);text-transform:uppercase;letter-spacing:.05em;font-weight:600">Longest pause</div>
-      </div>
-      <div style="background:var(--g50);border:1px solid var(--g100);border-radius:10px;padding:10px;text-align:center">
-        <div style="font-family:var(--fm);font-size:1.4rem;font-weight:800">${p.silencePct}%</div>
-        <div style="font-size:10px;color:var(--g600);text-transform:uppercase;letter-spacing:.05em;font-weight:600">Silence</div>
-      </div>
+      ${stat(p.mlr, 'Words between hesitations (' + mlrLabel + ')', mlrColor)}
+      ${stat(p.wpm, 'Words / min (' + paceLabel + ')', paceColor)}
+      ${stat(p.articulationWpm, 'Words / min while speaking', '')}
+      ${stat(p.microPauses, 'Micro-pauses 0.25-0.5s', p.microPauses > p.words / 6 ? 'var(--gold-d)' : '')}
+      ${stat(p.pauses, 'Pauses over 0.5s', p.longPauses > 3 ? 'var(--red-d)' : '')}
+      ${stat(p.silencePct + '%', 'Silence', p.silencePct >= 50 ? 'var(--red-d)' : '')}
     </div>
+    ${p.mlr < 5 ? `<div style="margin-top:12px;background:var(--gold-l);border:1px solid #FDE68A;border-radius:8px;padding:9px 12px;font-size:12px;color:var(--gold-d)">
+      Your speech broke off roughly every ${p.mlr} words. Aim to keep going for a whole clause before pausing — pause at the end of an idea, not in the middle of one.
+    </div>` : ''}
   </div>`;
 
   return `
