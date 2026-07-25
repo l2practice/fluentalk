@@ -535,6 +535,7 @@ textarea.form-input{resize:vertical;min-height:72px;line-height:1.6}
       <div class="sidenav-item active" onclick="teacherTab('overview')"><span class="sidenav-icon">📊</span> Class Overview</div>
       <div class="sidenav-item" onclick="teacherTab('classroom')"><span class="sidenav-icon">🏫</span> Classroom</div>
       <div class="sidenav-item" onclick="teacherTab('homework')"><span class="sidenav-icon">📚</span> Homework Book</div>
+      <div class="sidenav-item" onclick="teacherTab('library')"><span class="sidenav-icon">📖</span> Question Library</div>
       <div class="sidenav-item" onclick="teacherTab('progress')"><span class="sidenav-icon">📈</span> Study Progress</div>
       <div class="sidenav-section">Archive</div>
       <div class="sidenav-item" onclick="teacherTab('studentArchive')"><span class="sidenav-icon">🗄️</span> Student Archive</div>
@@ -771,6 +772,8 @@ textarea.form-input{resize:vertical;min-height:72px;line-height:1.6}
         <label class="form-label" style="margin-top:4px">Questions *</label>
         <div id="asn-q-list"></div>
         <button class="btn btn-outline btn-sm" style="margin-top:6px" onclick="asnAddQ()">+ Add Question</button>
+        <label style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:13px;cursor:pointer">
+          <input type="checkbox" id="asn-save-lib"> Also save these questions to the Library as a topic</label>
       </div>
     </div>
     <div class="modal-footer">
@@ -796,27 +799,142 @@ textarea.form-input{resize:vertical;min-height:72px;line-height:1.6}
 
 <!-- Activate Student Modal -->
 <div class="modal-overlay" id="activate-modal">
-  <div class="modal" style="max-width:440px">
+  <div class="modal" style="max-width:480px">
     <div class="modal-header">
-      <span class="modal-title" id="act-title">Activate Student</span>
+      <span class="modal-title" id="act-title">Edit Student</span>
       <button class="btn btn-ghost btn-sm" onclick="closeModal('activate-modal')">✕</button>
     </div>
     <div class="modal-body">
-      <div class="form-group">
-        <label class="form-label">Status</label>
-        <select class="form-input form-select" id="act-status">
-          <option value="Active">Active</option>
-          <option value="Archived">Archived (blocked from signing in)</option>
-        </select>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group">
+          <label class="form-label">Student ID</label>
+          <input class="form-input" id="act-id">
+          <div class="form-hint">Their login ID — changing it keeps all their history.</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Status</label>
+          <select class="form-input form-select" id="act-status">
+            <option value="Active">Active</option>
+            <option value="Archived">Archived (blocked from signing in)</option>
+          </select>
+        </div>
       </div>
       <div class="form-group">
-        <label class="form-label">Assign to Class</label>
+        <label class="form-label">Full Name</label>
+        <input class="form-input" id="act-name">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input class="form-input" id="act-email" type="email">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group">
+          <label class="form-label">Date of Birth</label>
+          <input class="form-input" id="act-dob" type="date">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Phone</label>
+          <input class="form-input" id="act-phone">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Class</label>
         <select class="form-input form-select" id="act-class"></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Reset password <span style="font-weight:400;color:var(--g400)">(optional)</span></label>
+        <input class="form-input" id="act-pass" placeholder="Leave blank to keep current password">
       </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal('activate-modal')">Cancel</button>
-      <button class="btn btn-green" onclick="doActivate()">Save</button>
+      <button class="btn btn-green" onclick="doActivate()">Save changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- Launch a topic to classes -->
+<div class="modal-overlay" id="launch-modal" style="overflow-y:auto">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-header">
+      <span class="modal-title">🚀 Launch: <span id="launch-title"></span></span>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('launch-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Assignment title (as students see it)</label>
+        <input class="form-input" id="launch-asn-title">
+      </div>
+      <div class="form-group">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <label class="form-label" style="margin:0">Questions to include</label>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-ghost btn-sm" onclick="launchToggleAllQ(true)">All</button>
+            <button class="btn btn-ghost btn-sm" onclick="launchToggleAllQ(false)">None</button>
+          </div>
+        </div>
+        <div id="launch-questions" style="border:1.5px solid var(--g200);border-radius:var(--r);padding:4px 12px;max-height:230px;overflow-y:auto;background:#fff;margin-top:6px"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Assign to class(es)</label>
+        <div id="launch-classes" style="border:1.5px solid var(--g200);border-radius:var(--r);padding:8px 12px;max-height:150px;overflow-y:auto;background:#fff"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Deadline <span style="font-weight:400;color:var(--g400)">(optional)</span></label>
+        <input class="form-input" id="launch-deadline" type="date">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('launch-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="doLaunch()">🚀 Launch to Homework Book</button>
+    </div>
+  </div>
+</div>
+
+<!-- Library topic editor -->
+<div class="modal-overlay" id="lib-edit-modal">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-header">
+      <span class="modal-title" id="lib-edit-title-h">New topic</span>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('lib-edit-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="lib-edit-part">
+      <div class="form-group"><label class="form-label">Topic title *</label><input class="form-input" id="lib-edit-title" placeholder="e.g. Hometown"></div>
+      <div class="form-group">
+        <label class="form-label" id="lib-edit-qs-label">Questions *</label>
+        <textarea class="form-input" id="lib-edit-qs" rows="8" placeholder="One question per line"></textarea>
+        <div class="form-hint" id="lib-edit-qs-hint">One question per line.</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('lib-edit-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveLibraryEditor()">Save topic</button>
+    </div>
+  </div>
+</div>
+
+<!-- Re-launch Assignment -->
+<div class="modal-overlay" id="relaunch-modal">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-header">
+      <span class="modal-title">🚀 Re-launch assignment</span>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('relaunch-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--g600);margin-bottom:14px">
+        Re-issue <strong id="relaunch-title"></strong> to another class as a fresh assignment. The archived original is kept as a record.
+      </p>
+      <label class="form-label">Assign to</label>
+      <div id="relaunch-classes" style="border:1.5px solid var(--g200);border-radius:var(--r);padding:10px 12px;max-height:170px;overflow-y:auto;background:#fff;margin-bottom:14px"></div>
+      <div class="form-group">
+        <label class="form-label">New deadline <span style="font-weight:400;color:var(--g400)">(optional)</span></label>
+        <input class="form-input" id="relaunch-deadline" type="date">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('relaunch-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="doRelaunch()">Re-launch</button>
     </div>
   </div>
 </div>
@@ -1165,7 +1283,7 @@ let _sortCol = '', _sortDir = 1;
 
 async function teacherTab(tab) {
   document.querySelectorAll('.sidenav-item').forEach((el,i) => {
-    const tabs = ['overview','classroom','homework','progress','studentArchive','classArchive','settings'];
+    const tabs = ['overview','classroom','homework','library','progress','studentArchive','classArchive','settings'];
     el.classList.toggle('active', tabs[i] === tab);
   });
   const c = document.getElementById('teacher-content');
@@ -1174,6 +1292,7 @@ async function teacherTab(tab) {
     if (tab === 'overview')  await renderTeacherOverview(c);
     if (tab === 'classroom') await renderTeacherClassroom(c);
     if (tab === 'homework')  await renderTeacherHomework(c);
+    if (tab === 'library')   await renderLibrary(c);
     if (tab === 'progress')  await renderTeacherProgress(c);
     if (tab === 'studentArchive') await renderStudentArchive(c);
     if (tab === 'classArchive')   await renderClassArchive(c);
@@ -1286,16 +1405,18 @@ function renderClassroomUI(c) {
           <th>Student ID</th><th>Full Name</th><th>Class</th><th>Email</th><th>Status</th><th></th>
         </tr></thead>
         <tbody>
-          ${students.length ? students.map(s => `
+          ${students.length ? students.map((s,si) => `
             <tr>
               <td style="font-family:var(--fm)">${s.StudentID}</td>
               <td style="font-weight:600">${s.FullName}</td>
               <td>${s.ClassID ? `<div style="font-weight:600">${classNameOf(s.ClassID)}</div><div style="font-size:10px;color:var(--g400);font-family:var(--fm)">${s.ClassID}</div>` : '—'}</td>
               <td style="font-size:12px">${s.Email}</td>
               <td><span class="badge ${s.Status==='Active'?'badge-green':s.Status==='Pending'?'badge-gold':'badge-grey'}">${s.Status}</span></td>
-              <td style="display:flex;gap:6px">
-                <button class="btn btn-outline btn-sm" onclick="showActivate('${s.StudentID}','${s.FullName}','${s.ClassID||''}')">Edit</button>
-                ${s.Status !== 'Archived' ? `<button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="archiveStudent('${s.StudentID}')">Archive</button>` : ''}
+              <td style="white-space:nowrap;text-align:right">
+                <div style="display:inline-flex;gap:6px">
+                  <button class="btn btn-outline btn-sm" onclick="editStudent(${si})">Edit</button>
+                  ${s.Status !== 'Archived' ? `<button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="archiveStudent('${s.StudentID}')">Archive</button>` : ''}
+                </div>
               </td>
             </tr>`).join('') : '<tr><td colspan="6" class="empty">No students found</td></tr>'}
         </tbody>
@@ -1318,23 +1439,47 @@ function openAddStudent() {
   openModal('add-student-modal');
 }
 
-function showActivate(studentId, fullName, classId) {
-  document.getElementById('act-title').textContent = 'Edit: ' + fullName;
-  document.getElementById('act-status').value = 'Active';
-  document.getElementById('act-class').innerHTML = classOptions(classId, true);
-  document.getElementById('activate-modal')._studentId = studentId;
+function editStudent(idx) {
+  const s = _teacherStudents[idx];
+  if (!s) return;
+  document.getElementById('act-title').textContent = 'Edit: ' + s.FullName;
+  document.getElementById('act-id').value     = s.StudentID || '';
+  document.getElementById('act-name').value   = s.FullName || '';
+  document.getElementById('act-email').value  = s.Email || '';
+  document.getElementById('act-dob').value    = s.DOB || '';
+  document.getElementById('act-phone').value  = s.Phone || '';
+  document.getElementById('act-pass').value   = '';
+  document.getElementById('act-status').value = s.Status === 'Archived' ? 'Archived' : 'Active';
+  document.getElementById('act-class').innerHTML = classOptions(s.ClassID, true);
+  const modal = document.getElementById('activate-modal');
+  modal._studentId = s.StudentID;   // original id, so the backend can locate the row
   openModal('activate-modal');
+}
+
+// retained so any older call site still resolves
+function showActivate(studentId) {
+  const idx = _teacherStudents.findIndex(s => String(s.StudentID) === String(studentId));
+  if (idx >= 0) editStudent(idx);
 }
 
 async function doActivate() {
   const modal = document.getElementById('activate-modal');
-  const studentId = modal._studentId;
-  const status  = document.getElementById('act-status').value;
-  const classId = document.getElementById('act-class').value.trim().toUpperCase();
+  const payload = {
+    studentId:    modal._studentId,
+    newStudentId: document.getElementById('act-id').value.trim(),
+    fullName:     document.getElementById('act-name').value.trim(),
+    email:        document.getElementById('act-email').value.trim(),
+    dob:          document.getElementById('act-dob').value,
+    phone:        document.getElementById('act-phone').value.trim(),
+    status:       document.getElementById('act-status').value,
+    classId:      document.getElementById('act-class').value.trim().toUpperCase(),
+    newPassword:  document.getElementById('act-pass').value
+  };
+  if (!payload.newStudentId || !payload.fullName) { toast('Student ID and name cannot be empty', 'error'); return; }
   try {
-    const res = await gasCall('teacher.activateUser', { studentId, status, classId });
+    const res = await gasCall('teacher.updateStudent', payload);
     if (!res.success) { toast(res.error, 'error'); return; }
-    toast('Updated successfully!', 'success');
+    toast('Student updated', 'success');
     closeModal('activate-modal');
     teacherTab('classroom');
   } catch(e) { toast(e.message, 'error'); }
@@ -1421,26 +1566,28 @@ async function doAddStudent() {
 
 // ── HOMEWORK ────────────────────────────────
 let _asnQCount = 4;
+let _asnFromLibrary = '';
 function asnPartChange() {
   const part = document.getElementById('asn-part').value;
   _asnQCount = part === 'part2' ? 1 : 4;
   renderAsnQuestions();
 }
 
-function renderAsnQuestions() {
+function renderAsnQuestions(fill) {
   const part = document.getElementById('asn-part')?.value || 'part1';
-  const n    = part === 'part2' ? 1 : 4;
+  const base = part === 'part2' ? 1 : 4;
+  const n    = fill && fill.length ? Math.max(base, fill.length) : base;
+  _asnQCount = n;
   const list = document.getElementById('asn-q-list');
   if (!list) return;
   list.innerHTML = Array.from({length: n}, (_, i) => `
     <div style="margin-bottom:10px">
       <label class="form-label" style="margin-bottom:4px">Question ${i+1}${i<(part==='part2'?0:3)?'':' (optional)'}</label>
-      <textarea class="form-input" id="asn-q-${i}" rows="2" placeholder="Enter question ${i+1}…"></textarea>
+      <textarea class="form-input" id="asn-q-${i}" rows="2" placeholder="Enter question ${i+1}…">${fill && fill[i] ? String(fill[i]).replace(/</g,'&lt;') : ''}</textarea>
     </div>`).join('');
   const wrap = document.getElementById('asn-questions-wrap');
-  const addBtn = wrap.querySelector('button');
-  if (part === 'part2') { addBtn.style.display = 'none'; }
-  else { addBtn.style.display = ''; }
+  const addBtn = wrap.querySelector('button[onclick="asnAddQ()"]');
+  if (addBtn) addBtn.style.display = part === 'part2' ? 'none' : '';
 }
 
 function asnAddQ() {
@@ -1453,6 +1600,157 @@ function asnAddQ() {
   list.appendChild(div);
 }
 
+let _hwView = 'Active';
+let _library = [];
+let _libPart = 'part1';
+
+async function renderLibrary(c) {
+  const res = await gasCall('teacher.getLibrary', {});
+  _library = res.data || [];
+  const items = _library.filter(x => (x.Part || 'part1') === _libPart);
+  const partLabel = { part1: 'Part 1 — Introduction', part2: 'Part 2 — Long Turn (cue card)', part3: 'Part 3 — Discussion' };
+  const count = p => _library.filter(x => (x.Part || 'part1') === p).length;
+
+  c.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:10px">
+      <h2 style="font-size:1.3rem">📖 Question Library</h2>
+      <button class="btn btn-primary btn-sm" onclick="openLibraryEditor()">+ New ${partLabel[_libPart].split(' — ')[0]} topic</button>
+    </div>
+    <p style="font-size:13px;color:var(--g600);margin-bottom:16px">
+      Topics are grouped by IELTS part. Open a part, add your questions, then launch a topic to a class to set homework.
+    </p>
+    <div class="auth-tabs" style="max-width:420px;margin-bottom:18px">
+      <div class="auth-tab ${_libPart==='part1'?'active':''}" onclick="_libPart='part1';teacherTab('library')">Part 1 <span style="opacity:.6">(${count('part1')})</span></div>
+      <div class="auth-tab ${_libPart==='part2'?'active':''}" onclick="_libPart='part2';teacherTab('library')">Part 2 <span style="opacity:.6">(${count('part2')})</span></div>
+      <div class="auth-tab ${_libPart==='part3'?'active':''}" onclick="_libPart='part3';teacherTab('library')">Part 3 <span style="opacity:.6">(${count('part3')})</span></div>
+    </div>
+    ${items.length ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px">
+      ${items.map(item => {
+        let qs = []; try { qs = JSON.parse(item.Questions || '[]'); } catch(e) {}
+        return `<div class="card" style="margin:0">
+          <div style="font-weight:700;font-size:1rem">${item.Title}</div>
+          <div style="margin-top:3px">
+            <span style="font-size:11px;color:var(--g400)">${qs.length} ${_libPart==='part2'?'cue card'+(qs.length===1?'':'s'):'question'+(qs.length===1?'':'s')} · launched ${item.UsedCount||0}×</span>
+          </div>
+          <ol style="margin:10px 0 0 18px;padding:0;font-size:12px;color:var(--g600);line-height:1.7">
+            ${qs.slice(0,4).map(q => `<li>${String(q).replace(/</g,'&lt;')}</li>`).join('')}
+            ${qs.length>4?`<li style="list-style:none;color:var(--g400)">+${qs.length-4} more…</li>`:''}
+          </ol>
+          <div style="display:flex;gap:6px;margin-top:14px">
+            <button class="btn btn-primary btn-sm" onclick="openLaunch('${item.LibID}')">🚀 Launch to class</button>
+            <button class="btn btn-outline btn-sm" onclick="openLibraryEditor('${item.LibID}')">Edit</button>
+            <button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="deleteLibraryItem('${item.LibID}','${(item.Title||'').replace(/'/g,'&#39;')}')">Delete</button>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>` : `<div class="empty">No ${partLabel[_libPart].split(' — ')[0]} topics yet. Create one to get started.</div>`}`;
+}
+
+// ── LAUNCH A TOPIC ──────────────────────────
+let _launchLibId = '';
+function openLaunch(libId) {
+  const item = _library.find(x => String(x.LibID) === String(libId));
+  if (!item) return;
+  if (!_teacherClasses.length) {
+    gasCall('teacher.getClasses').then(r => {
+      _teacherClasses = (r.data || []).filter(c => c.Status !== 'Archived');
+      openLaunch(libId);
+    });
+    return;
+  }
+  _launchLibId = libId;
+  let qs = []; try { qs = JSON.parse(item.Questions || '[]'); } catch(e) {}
+
+  document.getElementById('launch-title').textContent = item.Title;
+  document.getElementById('launch-asn-title').value = item.Title;
+  document.getElementById('launch-deadline').value = '';
+
+  // Questions: all ticked by default, teacher unticks what to leave out.
+  document.getElementById('launch-questions').innerHTML = qs.map((q, i) => `
+    <label style="display:flex;gap:8px;padding:6px 0;cursor:pointer;font-size:13px;border-bottom:1px solid var(--g100)">
+      <input type="checkbox" class="launch-q" value="${i}" checked style="margin-top:3px">
+      <span>${String(q).replace(/</g,'&lt;')}</span>
+    </label>`).join('');
+  document.getElementById('launch-questions')._qs = qs;
+
+  document.getElementById('launch-classes').innerHTML = _teacherClasses.map(cl => `
+    <label style="display:flex;align-items:center;gap:8px;padding:5px 0;cursor:pointer;font-size:13px">
+      <input type="checkbox" class="launch-cls" value="${cl.ClassID}">
+      ${cl.ClassName || cl.ClassID} <span style="font-family:var(--fm);color:var(--g400);font-size:11px">${cl.ClassID}</span>
+    </label>`).join('');
+  openModal('launch-modal');
+}
+
+function launchToggleAllQ(on) {
+  document.querySelectorAll('.launch-q').forEach(cb => cb.checked = on);
+}
+
+async function doLaunch() {
+  const wrap = document.getElementById('launch-questions');
+  const allQs = wrap._qs || [];
+  const questions = Array.from(document.querySelectorAll('.launch-q:checked')).map(cb => allQs[parseInt(cb.value)]).filter(Boolean);
+  const classes  = Array.from(document.querySelectorAll('.launch-cls:checked')).map(cb => cb.value);
+  const title    = document.getElementById('launch-asn-title').value.trim();
+  const deadline = document.getElementById('launch-deadline').value;
+  if (!questions.length) { toast('Select at least one question', 'error'); return; }
+  if (!classes.length)   { toast('Select at least one class', 'error'); return; }
+  try {
+    const res = await gasCall('teacher.launchFromLibrary', { libId: _launchLibId, questions, classes, title, deadline });
+    if (!res.success) { toast(res.error, 'error'); return; }
+    toast('Launched to ' + classes.length + ' class(es) — now in the Homework Book', 'success', 5000);
+    closeModal('launch-modal');
+    teacherTab('library');
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// Standalone editor for a library topic.
+function openLibraryEditor(libId) {
+  const item = libId ? _library.find(x => String(x.LibID) === String(libId)) : null;
+  let qs = []; if (item) { try { qs = JSON.parse(item.Questions || '[]'); } catch(e) {} }
+  const part = item ? (item.Part || 'part1') : _libPart;
+  document.getElementById('lib-edit-modal')._libId = libId || '';
+  document.getElementById('lib-edit-title-h').textContent =
+    (item ? 'Edit ' : 'New ') + ({ part1: 'Part 1', part2: 'Part 2', part3: 'Part 3' }[part]) + ' topic';
+  document.getElementById('lib-edit-title').value = item ? item.Title : '';
+  document.getElementById('lib-edit-part').value = part;
+  const isP2 = part === 'part2';
+  document.getElementById('lib-edit-qs').value = qs.join('\n');
+  document.getElementById('lib-edit-qs').placeholder = isP2
+    ? 'One cue card per line, e.g. Describe a place you like to visit. You should say: where it is, how often you go, what you do there, and why you like it.'
+    : 'One question per line';
+  document.getElementById('lib-edit-qs-label').textContent = isP2 ? 'Cue cards *' : 'Questions *';
+  document.getElementById('lib-edit-qs-hint').textContent = isP2
+    ? 'One cue card per line. Include the prompts ("You should say…") in the same line.'
+    : 'One question per line.';
+  openModal('lib-edit-modal');
+}
+
+async function saveLibraryEditor() {
+  const title = document.getElementById('lib-edit-title').value.trim();
+  const part  = document.getElementById('lib-edit-part').value;
+  const questions = document.getElementById('lib-edit-qs').value.split('\n').map(x => x.trim()).filter(Boolean);
+  if (!title) { toast('Enter a title', 'error'); return; }
+  if (!questions.length) { toast('Enter at least one question', 'error'); return; }
+  try {
+    const res = await gasCall('teacher.saveToLibrary', { title, part, questions });
+    if (!res.success) { toast(res.error, 'error'); return; }
+    toast(res.updated ? 'Topic updated' : 'Topic created', 'success');
+    closeModal('lib-edit-modal');
+    _libPart = part;
+    teacherTab('library');
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function deleteLibraryItem(libId, title) {
+  if (!confirm('Delete the topic "' + title + '"?\n\nAssignments already launched from it are not affected.')) return;
+  try {
+    const res = await gasCall('teacher.deleteLibraryItem', { libId });
+    if (!res.success) { toast(res.error, 'error'); return; }
+    toast('Deleted', 'success');
+    teacherTab('library');
+  } catch(e) { toast(e.message, 'error'); }
+}
+
 async function renderTeacherHomework(c) {
   const [asnRes, clsRes] = await Promise.all([
     gasCall('teacher.getAssignments', {}),
@@ -1460,34 +1758,92 @@ async function renderTeacherHomework(c) {
   ]);
   _teacherAssignments = asnRes.data || [];
   _teacherClasses = (clsRes.data || []).filter(c => c.Status !== 'Archived');
+  const list = _teacherAssignments.filter(a => (a.Status || 'Active') === _hwView);
   c.innerHTML = `
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px">
       <h2 style="font-size:1.3rem">📚 Homework Book</h2>
       <button class="btn btn-primary btn-sm" onclick="openCreateAsn()">+ Create Assignment</button>
     </div>
+    <div class="auth-tabs" style="max-width:320px;margin-bottom:16px">
+      <div class="auth-tab ${_hwView==='Active'?'active':''}" onclick="_hwView='Active';teacherTab('homework')">Active</div>
+      <div class="auth-tab ${_hwView==='Archived'?'active':''}" onclick="_hwView='Archived';teacherTab('homework')">Archived</div>
+    </div>
     <div class="tbl-wrap">
       <table class="tbl">
-        <thead><tr><th>Title</th><th>Part</th><th>Classes</th><th>Deadline</th><th>Status</th><th></th></tr></thead>
+        <thead><tr><th>Title</th><th>Part</th><th>Classes</th><th>Deadline</th><th style="text-align:right"></th></tr></thead>
         <tbody>
-          ${_teacherAssignments.length ? _teacherAssignments.map(a => `
+          ${list.length ? list.map(a => `
             <tr>
               <td style="font-weight:600">${a.Title||'—'}</td>
               <td><span class="badge badge-blue">${a.Part||'—'}</span></td>
               <td style="font-size:12px">${fmtClassList(a.AssignedClasses)}</td>
-              <td style="font-size:12px">${a.Deadline ? new Date(a.Deadline).toLocaleDateString('vi-VN') : '—'}</td>
-              <td><span class="badge ${a.Status==='Active'?'badge-green':'badge-grey'}">${a.Status||'—'}</span></td>
-              <td>
-                <button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="deleteAsn('${a.AssignID}','${(a.Title||'').replace(/'/g,'`')}')">Delete</button>
+              <td style="font-size:12px;white-space:nowrap">${a.Deadline ? fmtDT(a.Deadline).split(' ')[0] : '—'}</td>
+              <td style="white-space:nowrap;text-align:right">
+                <div style="display:inline-flex;gap:6px">
+                  ${_hwView==='Active'
+                    ? `<button class="btn btn-outline btn-sm" onclick="archiveAsn('${a.AssignID}','${(a.Title||'').replace(/'/g,'&#39;')}')">Archive</button>`
+                    : `<button class="btn btn-outline btn-sm" style="color:var(--blue)" onclick="openRelaunch('${a.AssignID}','${(a.Title||'').replace(/'/g,'&#39;')}')">Re-launch</button>
+                       <button class="btn btn-ghost btn-sm" style="color:var(--green-d)" onclick="unarchiveAsn('${a.AssignID}')">Restore</button>`}
+                  <button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="deleteAsn('${a.AssignID}','${(a.Title||'').replace(/'/g,'&#39;')}')">Delete</button>
+                </div>
               </td>
-            </tr>`).join('') : '<tr><td colspan="6" class="empty">No assignments yet</td></tr>'}
+            </tr>`).join('') : `<tr><td colspan="5" class="empty">No ${_hwView.toLowerCase()} assignments</td></tr>`}
         </tbody>
       </table>
     </div>`;
 }
 
+async function archiveAsn(assignId, title) {
+  if (!confirm('Archive "' + title + '"?\n\nStudents will no longer see it. You can re-launch it to another class later.')) return;
+  try {
+    const res = await gasCall('teacher.setAssignmentStatus', { assignId, status: 'Archived' });
+    if (!res.success) { toast(res.error, 'error'); return; }
+    toast('Assignment archived', 'success');
+    teacherTab('homework');
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function unarchiveAsn(assignId) {
+  try {
+    const res = await gasCall('teacher.setAssignmentStatus', { assignId, status: 'Active' });
+    if (!res.success) { toast(res.error, 'error'); return; }
+    toast('Assignment restored', 'success');
+    teacherTab('homework');
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+function openRelaunch(assignId, title) {
+  if (!_teacherClasses.length) { toast('Create a class first', 'error'); return; }
+  document.getElementById('relaunch-title').textContent = title;
+  document.getElementById('relaunch-modal')._assignId = assignId;
+  document.getElementById('relaunch-deadline').value = '';
+  document.getElementById('relaunch-classes').innerHTML = _teacherClasses.map(cl => `
+    <label style="display:flex;align-items:center;gap:8px;padding:5px 0;cursor:pointer;font-size:13px">
+      <input type="checkbox" class="relaunch-cls" value="${cl.ClassID}">
+      ${cl.ClassName || cl.ClassID} <span style="font-family:var(--fm);color:var(--g400);font-size:11px">${cl.ClassID}</span>
+    </label>`).join('');
+  openModal('relaunch-modal');
+}
+
+async function doRelaunch() {
+  const modal = document.getElementById('relaunch-modal');
+  const classes = Array.from(document.querySelectorAll('.relaunch-cls:checked')).map(cb => cb.value);
+  if (!classes.length) { toast('Select at least one class', 'error'); return; }
+  const deadline = document.getElementById('relaunch-deadline').value;
+  try {
+    const res = await gasCall('teacher.relaunchAssignment', { assignId: modal._assignId, classes, deadline });
+    if (!res.success) { toast(res.error, 'error'); return; }
+    toast('Assignment re-launched to ' + classes.length + ' class(es)', 'success');
+    closeModal('relaunch-modal');
+    _hwView = 'Active';
+    teacherTab('homework');
+  } catch(e) { toast(e.message, 'error'); }
+}
+
 function openCreateAsn() {
   if (!_teacherClasses.length) { toast('Create a class first', 'error'); return; }
   _asnQCount = 4;
+  _asnFromLibrary = '';
   const list = document.getElementById('asn-class-list');
   list.innerHTML = `
     <label style="display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer;font-size:13px;font-weight:600;border-bottom:1px solid var(--g100);margin-bottom:4px">
@@ -1525,7 +1881,8 @@ async function doCreateAssignment() {
   if (part === 'part2' && questions.length < 1) { toast('At least 1 question required for Part 2', 'error'); return; }
   try {
     const assignedClasses = allChecked ? ['ALL'] : picked;
-    const res = await gasCall('teacher.createAssignment', { title, part, questions, deadline, assignedClasses });
+    const saveToLibrary = document.getElementById('asn-save-lib')?.checked || false;
+    const res = await gasCall('teacher.createAssignment', { title, part, questions, deadline, assignedClasses, fromLibrary: _asnFromLibrary, saveToLibrary });
     if (!res.success) { toast(res.error, 'error'); return; }
     toast('Assignment created successfully!', 'success');
     closeModal('create-asn-modal');
