@@ -899,13 +899,9 @@ textarea.form-input{resize:vertical;min-height:72px;line-height:1.6}
       <button class="btn btn-ghost btn-sm" onclick="closeModal('lib-edit-modal')">✕</button>
     </div>
     <div class="modal-body">
-      <input type="hidden" id="lib-edit-part">
       <div class="form-group"><label class="form-label">Topic title *</label><input class="form-input" id="lib-edit-title" placeholder="e.g. Hometown"></div>
-      <div class="form-group">
-        <label class="form-label" id="lib-edit-qs-label">Questions *</label>
-        <textarea class="form-input" id="lib-edit-qs" rows="8" placeholder="One question per line"></textarea>
-        <div class="form-hint" id="lib-edit-qs-hint">One question per line.</div>
-      </div>
+      <div id="lib-edit-qs-wrap"></div>
+      <button class="btn btn-outline btn-sm" onclick="libEditAddQ()">+ Add question</button>
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal('lib-edit-modal')">Cancel</button>
@@ -1633,7 +1629,7 @@ async function renderLibrary(c) {
             <span style="font-size:11px;color:var(--g400)">${qs.length} ${_libPart==='part2'?'cue card'+(qs.length===1?'':'s'):'question'+(qs.length===1?'':'s')} · launched ${item.UsedCount||0}×</span>
           </div>
           <ol style="margin:10px 0 0 18px;padding:0;font-size:12px;color:var(--g600);line-height:1.7">
-            ${qs.slice(0,4).map(q => `<li>${String(q).replace(/</g,'&lt;')}</li>`).join('')}
+            ${qs.slice(0,4).map(q => { const t = typeof q === 'string' ? q : (q.question||''); const kw = (typeof q === 'object' && q.keywords||[]).length; return `<li>${String(t).replace(/</g,'&lt;')}${kw?` <span style="color:var(--g400)">(${kw} kw)</span>`:''}</li>`; }).join('')}
             ${qs.length>4?`<li style="list-style:none;color:var(--g400)">+${qs.length-4} more…</li>`:''}
           </ol>
           <div style="display:flex;gap:6px;margin-top:14px">
@@ -1666,11 +1662,16 @@ function openLaunch(libId) {
   document.getElementById('launch-deadline').value = '';
 
   // Questions: all ticked by default, teacher unticks what to leave out.
-  document.getElementById('launch-questions').innerHTML = qs.map((q, i) => `
-    <label style="display:flex;gap:8px;padding:6px 0;cursor:pointer;font-size:13px;border-bottom:1px solid var(--g100)">
+  document.getElementById('launch-questions').innerHTML = qs.map((q, i) => {
+    const t  = typeof q === 'string' ? q : (q.question||'');
+    const kw = (typeof q === 'object' && q.keywords) ? q.keywords : [];
+    return `<label style="display:flex;gap:8px;padding:8px 0;cursor:pointer;font-size:13px;border-bottom:1px solid var(--g100)">
       <input type="checkbox" class="launch-q" value="${i}" checked style="margin-top:3px">
-      <span>${String(q).replace(/</g,'&lt;')}</span>
-    </label>`).join('');
+      <span>${String(t).replace(/</g,'&lt;')}
+        ${kw.length?`<div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:4px">${kw.map(k=>`<span class="badge badge-blue" style="font-size:10px">${String(k).replace(/</g,'&lt;')}</span>`).join('')}</div>`:''}
+      </span>
+    </label>`;
+  }).join('');
   document.getElementById('launch-questions')._qs = qs;
 
   document.getElementById('launch-classes').innerHTML = _teacherClasses.map(cl => `
@@ -1704,33 +1705,98 @@ async function doLaunch() {
 }
 
 // Standalone editor for a library topic.
+// Each question is an object { question, keywords[] }. Older library rows
+// stored plain strings, so normalise on the way in.
+function normalizeQ(raw) {
+  if (typeof raw === 'string') return { question: raw, keywords: [] };
+  return { question: raw.question || '', keywords: Array.isArray(raw.keywords) ? raw.keywords : [] };
+}
+
+let _libEditQs = [];   // working copy while the editor is open
+
 function openLibraryEditor(libId) {
   const item = libId ? _library.find(x => String(x.LibID) === String(libId)) : null;
   let qs = []; if (item) { try { qs = JSON.parse(item.Questions || '[]'); } catch(e) {} }
   const part = item ? (item.Part || 'part1') : _libPart;
-  document.getElementById('lib-edit-modal')._libId = libId || '';
+
+  _libEditQs = qs.length ? qs.map(normalizeQ) : [{ question: '', keywords: [] }];
+
+  const modal = document.getElementById('lib-edit-modal');
+  modal._libId = libId || '';
+  modal._part  = part;
   document.getElementById('lib-edit-title-h').textContent =
-    (item ? 'Edit ' : 'New ') + ({ part1: 'Part 1', part2: 'Part 2', part3: 'Part 3' }[part]) + ' topic';
+    (item ? 'Edit ' : 'New ') + ({ part1:'Part 1', part2:'Part 2', part3:'Part 3' }[part]) + ' topic';
   document.getElementById('lib-edit-title').value = item ? item.Title : '';
-  document.getElementById('lib-edit-part').value = part;
-  const isP2 = part === 'part2';
-  document.getElementById('lib-edit-qs').value = qs.join('\n');
-  document.getElementById('lib-edit-qs').placeholder = isP2
-    ? 'One cue card per line, e.g. Describe a place you like to visit. You should say: where it is, how often you go, what you do there, and why you like it.'
-    : 'One question per line';
-  document.getElementById('lib-edit-qs-label').textContent = isP2 ? 'Cue cards *' : 'Questions *';
-  document.getElementById('lib-edit-qs-hint').textContent = isP2
-    ? 'One cue card per line. Include the prompts ("You should say…") in the same line.'
-    : 'One question per line.';
+  renderLibEditQs();
   openModal('lib-edit-modal');
 }
 
+function renderLibEditQs() {
+  const part = document.getElementById('lib-edit-modal')._part;
+  const isP2 = part === 'part2';
+  const noun = isP2 ? 'Cue card' : 'Question';
+  const wrap = document.getElementById('lib-edit-qs-wrap');
+  wrap.innerHTML = _libEditQs.map((q, i) => `
+    <div class="card" style="margin:0 0 12px;padding:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <span style="font-weight:700;font-size:13px">${noun} ${i+1}</span>
+        ${_libEditQs.length > 1 ? `<button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="libEditRemoveQ(${i})">Remove</button>` : ''}
+      </div>
+      <textarea class="form-input" rows="${isP2?3:2}" placeholder="${isP2?'Describe… You should say:':'Enter the question'}"
+        oninput="_libEditQs[${i}].question=this.value">${String(q.question||'').replace(/</g,'&lt;')}</textarea>
+      <div style="margin-top:8px">
+        <label class="form-label" style="font-size:11px">Keywords students will see <span style="font-weight:400;color:var(--g400)">— type one and press Enter</span></label>
+        <div id="kwbox-${i}" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;border:1.5px solid var(--g200);border-radius:var(--r);padding:8px;background:#fff;min-height:42px">
+          ${q.keywords.map((k, ki) => libKwChip(i, ki, k)).join('')}
+          <input class="lib-kw-input" data-qi="${i}" placeholder="${q.keywords.length?'':'add a keyword…'}"
+            style="border:none;outline:none;flex:1;min-width:90px;font-size:13px;padding:2px"
+            onkeydown="libKwKey(event, ${i})">
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+function libKwChip(qi, ki, text) {
+  return `<span class="badge badge-blue" style="display:inline-flex;align-items:center;gap:5px">
+    ${String(text).replace(/</g,'&lt;')}
+    <span onclick="libEditRemoveKw(${qi},${ki})" style="cursor:pointer;font-weight:700;opacity:.6">✕</span>
+  </span>`;
+}
+
+function libKwKey(e, qi) {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    const v = e.target.value.trim();
+    if (!v) return;
+    if (!_libEditQs[qi].keywords.includes(v)) _libEditQs[qi].keywords.push(v);
+    e.target.value = '';
+    renderLibEditQs();
+    // keep focus in the same box for rapid entry
+    setTimeout(() => { const inp = document.querySelector('.lib-kw-input[data-qi="'+qi+'"]'); if (inp) inp.focus(); }, 0);
+  } else if (e.key === 'Backspace' && !e.target.value && _libEditQs[qi].keywords.length) {
+    _libEditQs[qi].keywords.pop();
+    renderLibEditQs();
+    setTimeout(() => { const inp = document.querySelector('.lib-kw-input[data-qi="'+qi+'"]'); if (inp) inp.focus(); }, 0);
+  }
+}
+
+function libEditRemoveKw(qi, ki) { _libEditQs[qi].keywords.splice(ki, 1); renderLibEditQs(); }
+function libEditRemoveQ(i)       { _libEditQs.splice(i, 1); renderLibEditQs(); }
+function libEditAddQ() {
+  _libEditQs.push({ question: '', keywords: [] });
+  renderLibEditQs();
+  setTimeout(() => { const boxes = document.querySelectorAll('#lib-edit-qs-wrap textarea'); const last = boxes[boxes.length-1]; if (last) last.focus(); }, 0);
+}
+
 async function saveLibraryEditor() {
+  const modal = document.getElementById('lib-edit-modal');
+  const part  = modal._part;
   const title = document.getElementById('lib-edit-title').value.trim();
-  const part  = document.getElementById('lib-edit-part').value;
-  const questions = document.getElementById('lib-edit-qs').value.split('\n').map(x => x.trim()).filter(Boolean);
+  const questions = _libEditQs
+    .map(q => ({ question: (q.question||'').trim(), keywords: q.keywords || [] }))
+    .filter(q => q.question);
   if (!title) { toast('Enter a title', 'error'); return; }
-  if (!questions.length) { toast('Enter at least one question', 'error'); return; }
+  if (!questions.length) { toast('Add at least one question', 'error'); return; }
   try {
     const res = await gasCall('teacher.saveToLibrary', { title, part, questions });
     if (!res.success) { toast(res.error, 'error'); return; }
@@ -2600,6 +2666,9 @@ function buildSetup(type, hwData) {
   if (isHW && hwData) {
     try { questions = JSON.parse(hwData.Questions || '[]'); } catch(e) {}
   }
+  // Questions may be plain strings (older data) or { question, keywords }.
+  const qText = i => { const q = questions[i]; return q == null ? '' : (typeof q === 'string' ? q : (q.question || '')); };
+  const qKw   = i => { const q = questions[i]; return (q && typeof q === 'object' && Array.isArray(q.keywords)) ? q.keywords : []; };
 
   let hwTopic = hwData?.Title || A.topic || '';
   let topicSel = '';
@@ -2620,20 +2689,26 @@ function buildSetup(type, hwData) {
     ? `<div class="card">
         <div class="form-group">
           <label class="form-label" style="color:var(--red)">CUES / TOPIC</label>
-          <textarea class="form-input" id="qt-0" rows="3" placeholder="VD: Describe a person who has greatly influenced you.">${questions[0]||''}</textarea>
+          <textarea class="form-input" id="qt-0" rows="3" placeholder="VD: Describe a person who has greatly influenced you.">${qText(0)}</textarea>
         </div>
-        <div class="form-group">
+        ${qKw(0).length ? `<div class="form-group">
+          <label class="form-label">💡 KEY WORDS FROM YOUR TEACHER</label>
+          <div style="display:flex;flex-wrap:wrap;gap:6px">${qKw(0).map(k=>`<span class="badge badge-blue">${String(k).replace(/</g,'&lt;')}</span>`).join('')}</div>
+          <input type="hidden" id="kw-inp-0" value="${qKw(0).join(',')}">
+        </div>` : `<div class="form-group">
           <label class="form-label">💡 KEY WORDS <small style="font-weight:400;color:var(--g400)">(words you want to use)</small></label>
           <input class="form-input" id="kw-inp-0" placeholder="Keywords, comma-separated">
-        </div>
+        </div>`}
       </div>`
     : Array.from({length: isHW ? questions.length || 4 : 4}, (_, i) => `
         <div class="card">
           <div class="qlbl" style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--red);margin-bottom:7px">QUESTION ${i+1}${i < 3 && !isHW ? ' *' : ''}</div>
-          <textarea class="form-input" id="qt-${i}" rows="2" placeholder="Enter question…">${questions[i]||''}</textarea>
+          <textarea class="form-input" id="qt-${i}" rows="2" placeholder="Enter question…">${qText(i)}</textarea>
           <div style="margin-top:8px">
             <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--gold);margin-bottom:5px">💡 KEY WORDS</div>
-            <input class="form-input" id="kw-inp-${i}" style="border-color:#FCD34D" placeholder="Keywords, comma-separated">
+            ${qKw(i).length ? `<div style="display:flex;flex-wrap:wrap;gap:6px">${qKw(i).map(k=>`<span class="badge badge-blue">${String(k).replace(/</g,'&lt;')}</span>`).join('')}</div>
+            <input type="hidden" id="kw-inp-${i}" value="${qKw(i).join(',')}">`
+            : `<input class="form-input" id="kw-inp-${i}" style="border-color:#FCD34D" placeholder="Keywords, comma-separated">`}
           </div>
         </div>`).join('');
 
