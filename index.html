@@ -637,6 +637,7 @@ textarea.form-input{resize:vertical;min-height:72px;line-height:1.6}
         <button class="btn btn-outline btn-sm" onclick="retryRec()">🔄 Re-record</button>
       </div>
     </div>
+    <div id="short-answer-warn" style="display:none;background:var(--red-l);border:1px solid var(--red);color:var(--red-d);border-radius:var(--r);padding:10px 14px;font-size:13px;font-weight:600;margin-bottom:12px"></div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-bottom:14px">
       <button class="btn btn-outline btn-sm" id="prev-btn" onclick="prevQ()" disabled>◀ Prev</button>
       <button class="btn btn-outline" id="next-btn" onclick="nextQ()">Next →</button>
@@ -2821,6 +2822,8 @@ function loadQ(idx) {
   const lblMap = { part1: 'IELTS PART 1', part2: 'IELTS PART 2 — LONG TURN', part3: 'IELTS PART 3', free: 'QUESTION', homework: 'QUESTION' };
   document.getElementById('q-lbl').textContent = (lblMap[A.mode] || 'QUESTION') + ' — Q' + (idx + 1);
   updProg();
+  const warn = document.getElementById('short-answer-warn');
+  if (warn) warn.style.display = 'none';
   A.talking = false; A.curAnswer = '';
   resetTalkUI();
   document.getElementById('next-btn').textContent = (idx >= A.qs.length - 1) ? 'Finish ✓' : 'Next →';
@@ -3004,6 +3007,8 @@ async function stopCaptureAndTranscribe() {
     const txt = tr.text;
     A.curAnswer = (A.curAnswer + ' ' + txt).trim();
     document.getElementById('ptt-interim').textContent = A.curAnswer;
+    const warn = document.getElementById('short-answer-warn');
+    if (warn && warn.style.display === 'block' && wordCount(A.curAnswer) >= MIN_ANSWER_WORDS) warn.style.display = 'none';
     return true;
   } catch(e) { toast('Transcription error: ' + e.message, 'error', 6000); return false; }
 }
@@ -3115,11 +3120,32 @@ function repeatedWords(text) {
 }
 
 // ── NAVIGATION ────────────────────────────
+const MIN_ANSWER_WORDS = 10;
+
+function wordCount(text) {
+  return (String(text || '').trim().match(/\b[\w']+\b/g) || []).length;
+}
+
 async function nextQ() {
   if (A.talking) await stopTalk();
+  const ans = (A.curAnswer || '').trim();
+
+  // A two-or-three-word answer cannot be graded and is the obvious way to game
+  // the milestone counter. Require a real attempt before moving on.
+  const wc = wordCount(ans);
+  if (wc < MIN_ANSWER_WORDS) {
+    const gapEl = document.getElementById('short-answer-warn');
+    if (gapEl) {
+      gapEl.style.display = 'block';
+      gapEl.innerHTML = `⚠️ Your answer is too short (${wc} word${wc===1?'':'s'}). Please give a fuller answer of at least ${MIN_ANSWER_WORDS} words before moving on.`;
+    } else {
+      toast(`Your answer is too short (${wc} words) — please answer more fully before continuing.`, 'error', 5000);
+    }
+    return;   // stay on this question; the recording and transcript are kept
+  }
+
   clearInterval(A.qcdTm);
   const idx = A.idx;
-  const ans = (A.curAnswer || '').trim();
   A.recs[idx].studentAnswer = ans;
   A.recs[idx].question      = A.qs[idx].question;
   A.recs[idx].keywords      = A.qs[idx].keywords || [];
@@ -3332,7 +3358,11 @@ LEXICAL RESOURCE
   lower LR and give the natural English equivalent.
 - Reliance on basic overused vocabulary ("I like", "I don't like", "happy",
   "beautiful") -> suggest topic-specific Band 6.5+ alternatives.
-- A solid B1+ share made of words used correctly -> credit it in LR.
+- A solid B1+ share made of words used correctly -> credit it in LR. Use the
+  measured VOCAB line: a B1+ share below ~25% points to Band 5-6 range on
+  Lexical Resource; 25-40% supports Band 6-7; above 40% used accurately
+  supports Band 7+. These are guides, not a formula — a high share of misused
+  advanced words is not Band 7.
 - COLLOCATION is the clearest divider between Band 6 and Band 7+. Judge whether
   words sit together as a fluent speaker would put them. Flag combinations that
   are grammatical but not idiomatic ("stock sharing" for "share trading",
@@ -3352,6 +3382,12 @@ LEXICAL RESOURCE
   paraphrase they could have used.
 
 GRAMMATICAL RANGE & ACCURACY
+- Use the measured GRAMMAR line, which counts simple / compound / complex
+  sentences. Complex sentences are the main marker of grammatical range in
+  speaking. As a guide: under ~20% complex points to Band 5-6; 20-40% supports
+  Band 6-7; above 40%, used accurately, supports Band 7+. A candidate speaking
+  almost entirely in simple sentences cannot score above 6 on range however
+  few errors they make.
 - Fails to mix simple, compound and complex sentences, or shows little clause
   variety -> lower GR and name specific ways to combine sentences.
 - Basic errors, especially verb tense or core sentence structure -> lower
@@ -3385,11 +3421,14 @@ CRITICAL: "qs" must contain EXACTLY ${n} objects — one per question, in the
 same order as the Q&A below. Grade every single answer, even a short or weak
 one. A response with fewer than ${n} objects is invalid and will be rejected.
 
+SCORING FORMAT: fc, lr, gr and p must each be a WHOLE number from 1 to 9 (no
+half bands on the four criteria). Only "overall" may use a .5.
+
 {
   "qs": [
     {  // object 1 of ${n} — repeat this shape for every question
       "overall": 5.5,
-      "fc": 5, "lr": 6, "gr": 5, "p": 5,
+      "fc": 5, "lr": 6, "gr": 5, "p": 5,   // each a whole number 1-9
       "errors": [{"wrong":"what they said","correct":"the fix","type":"grammar|vocab|collocation","reason":"short why"}],
       "suggestion": "one actionable line, with a usable example",
       "natural": "their best sentence rewritten as a fluent speaker would say it"
@@ -3522,10 +3561,13 @@ async function finishSession() {
       // the student's weakness when it is only the one that was not lifted,
       // which would send them practising the wrong thing.
       const ADJ = parseFloat(A.scoreAdjust) || 0;
+      // IELTS reports each of the four criteria as a whole band; only the
+      // overall speaking score falls on a half. So every criterion is rounded
+      // to an integer, and the overall is the .5-rounded mean of those four.
       const lift = v => {
         const n = parseFloat(v);
         if (!n) return v;
-        return Math.min(9, Math.round((n + ADJ) * 2) / 2);
+        return Math.max(1, Math.min(9, Math.round(n + ADJ)));
       };
 
       // Ceilings are applied after the offset, or the offset would lift a
@@ -3555,13 +3597,13 @@ async function finishSession() {
           pronunciation:{ score: capped(lift(g.p  || g.pronunciation), 'p') }
         };
         answered[i].scores = sc;
-        // Rebuild the per-question band from the capped criteria rather than
-        // trusting the model's own figure, which was set before capping.
+        // Overall is the .5-rounded mean of the four whole-band criteria, the
+        // way IELTS derives the reported speaking band.
         const vals = ['fluency','lexical','grammar','pronunciation']
           .map(k => parseFloat(sc[k].score)).filter(v => v > 0);
         answered[i].overall = vals.length
           ? Math.round(vals.reduce((a, v) => a + v, 0) / vals.length * 2) / 2
-          : lift(g.overall);
+          : Math.round((parseFloat(g.overall) || 0) * 2) / 2;
         answered[i].errors  = g.errors || [];
         answered[i].suggestion = g.suggestion || '';
         answered[i].natural = g.natural || '';
@@ -3700,12 +3742,14 @@ function setGradingStatus(txt) {
 }
 
 function avg(answered, field) {
+  // Criterion scores are whole bands, so the session criterion average is too.
   const vals = answered.map(r => parseFloat(r.scores?.[field]?.score) || 0).filter(v => v > 0);
   if (!vals.length) return '';
   const a = vals.reduce((s, v) => s + v, 0) / vals.length;
-  return Math.round(a * 2) / 2;
+  return Math.round(a);
 }
 function calcOverall(answered) {
+  // Overall speaking band is reported on half-bands.
   const vals = answered.map(r => parseFloat(r.overall) || 0).filter(v => v > 0);
   if (!vals.length) return '';
   const a = vals.reduce((s, v) => s + v, 0) / vals.length;
