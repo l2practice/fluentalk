@@ -1068,36 +1068,26 @@ function loadGate() {
   try {
     const g = JSON.parse(localStorage.getItem(gateKey()) || '{}');
     A.cooldownUntil = g.cooldownUntil || 0;
-    A.ackRequired   = !!g.ackRequired;
-    A.ackTopic      = g.ackTopic || '';
-  } catch (_) { A.cooldownUntil = 0; A.ackRequired = false; }
+    // A cooldown can never exceed COOLDOWN_SECONDS; a stored value further in
+    // the future is stale state from the old acknowledgement gate — discard it
+    // so nobody stays locked out.
+    if (A.cooldownUntil > Date.now() + COOLDOWN_SECONDS * 1000) A.cooldownUntil = 0;
+  } catch (_) { A.cooldownUntil = 0; }
 }
 
 function saveGate() {
   try {
-    localStorage.setItem(gateKey(), JSON.stringify({
-      cooldownUntil: A.cooldownUntil || 0,
-      ackRequired:   !!A.ackRequired,
-      ackTopic:      A.ackTopic || ''
-    }));
+    localStorage.setItem(gateKey(), JSON.stringify({ cooldownUntil: A.cooldownUntil || 0 }));
   } catch (_) {}
 }
 
 function startCooldown() {
   A.cooldownUntil = Date.now() + COOLDOWN_SECONDS * 1000;
-  A.ackRequired = false;
-  saveGate();
-}
-
-function requireAcknowledgement(topic) {
-  A.ackRequired = true;
-  A.ackTopic = topic || '';
-  A.cooldownUntil = 0;
   saveGate();
 }
 
 function clearGate() {
-  A.cooldownUntil = 0; A.ackRequired = false; A.ackTopic = ''; saveGate();
+  A.cooldownUntil = 0; saveGate();
 }
 
 function cooldownLeft() {
@@ -1107,11 +1097,9 @@ function cooldownLeft() {
 // Every route into a new session goes through here, otherwise the gate is
 // theatre — a student could simply reopen the topic from My History.
 function practiceGate() {
-  if (A.ackRequired)
-    return { ok: false, reason: 'Open your feedback and confirm you have read it before the next attempt.' };
   const left = cooldownLeft();
   if (left > 0)
-    return { ok: false, reason: `Take a moment to think about the feedback — you can practise again in ${left}s.` };
+    return { ok: false, reason: `Take a moment to look over your feedback — you can practise again in ${left}s.` };
   return { ok: true };
 }
 
@@ -2458,31 +2446,39 @@ async function renderStudentOverview(c) {
 async function renderPeerComparison(c) {
   const res = await gasCall('student.getPeerComparison');
   if (!res.success) { c.innerHTML = '<div class="empty">' + res.error + '</div>'; return; }
-  const peers = res.data;
-  const myId  = A.user?.studentId;
+  const topics = res.data || [];
   const clsName = res.className || A.user?.className || A.user?.classId || 'My Class';
+
+  const bandColor = b => b >= 6.5 ? 'var(--green-d)' : b >= 5.5 ? 'var(--gold-d)' : 'var(--red-d)';
+
   c.innerHTML = `
     <h2 style="margin-bottom:4px">👥 Peer Comparison</h2>
     <div style="font-size:13px;color:var(--g600);margin-bottom:16px">${clsName}${A.user?.classId ? ` <span style="font-family:var(--fm);font-size:11px;color:var(--g400)">· ${A.user.classId}</span>` : ''}</div>
-    <div class="card">
-      <p style="font-size:13px;color:var(--g600);margin-bottom:16px">This leaderboard shows how many times each classmate has practiced. Keep it up! 💪</p>
-      ${peers.map((p, i) => {
-        const isMe = String(p.studentId) === String(myId);
-        return `<div class="peer-row ${isMe ? 'peer-me' : ''}">
-          <div class="peer-rank ${i===0?'top1':i===1?'top2':i===2?'top3':''}">${i+1}</div>
-          <div>
-            <div class="peer-name">${p.name || p.studentId} ${isMe ? '<span class="badge badge-blue" style="margin-left:4px">You</span>' : ''}</div>
-            <div class="peer-last">${p.lastPractice ? 'Last: ' + fmtDT(p.lastPractice) : 'Not yet'}</div>
+    <p style="font-size:13px;color:var(--g600);margin-bottom:16px">How much your class has practised each topic. 💪</p>
+    ${topics.length ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px">
+      ${topics.map(t => `
+        <div class="card" style="margin:0">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
+            <div style="font-weight:700;font-size:1rem;line-height:1.3">${t.topic}</div>
+            <span class="badge badge-blue" style="flex-shrink:0">${t.part||'part1'}</span>
           </div>
-          <div class="peer-count">${p.count}  sessions</div>
-          <div>
-            <div style="width:${Math.min(p.count/10*100,100)}px;max-width:100px;height:6px;background:var(--g200);border-radius:3px;overflow:hidden">
-              <div style="height:100%;width:${Math.min(p.count/10*100,100)}%;background:${isMe?'var(--blue)':'var(--g400)'};border-radius:3px"></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px">
+            <div style="background:var(--g50);border:1px solid var(--g100);border-radius:10px;padding:10px;text-align:center">
+              <div style="font-family:var(--fm);font-size:1.5rem;font-weight:800">${t.peerCount}</div>
+              <div style="font-size:10px;color:var(--g600);text-transform:uppercase;letter-spacing:.05em;font-weight:600">classmate${t.peerCount===1?'':'s'}</div>
+            </div>
+            <div style="background:var(--g50);border:1px solid var(--g100);border-radius:10px;padding:10px;text-align:center">
+              <div style="font-family:var(--fm);font-size:1.5rem;font-weight:800">${t.totalAttempts}</div>
+              <div style="font-size:10px;color:var(--g600);text-transform:uppercase;letter-spacing:.05em;font-weight:600">total tries</div>
             </div>
           </div>
-        </div>`;
-      }).join('') || '<div class="empty">No data yet</div>'}
-    </div>`;
+          <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--g100);display:flex;align-items:center;justify-content:space-between">
+            <div style="font-size:12px;color:var(--g600)">You: <strong style="color:var(--ink)">${t.myAttempts}</strong> ${t.myAttempts===1?'try':'tries'}</div>
+            ${t.myBest !== null ? `<div style="font-size:12px;color:var(--g600)">Best: <strong style="color:${bandColor(t.myBest)}">${t.myBest}</strong></div>` : '<span class="badge badge-grey">Not tried</span>'}
+          </div>
+          ${t.lastPractice ? `<div style="font-size:10px;color:var(--g400);margin-top:8px">Class last practised ${fmtDT(t.lastPractice)}</div>` : ''}
+        </div>`).join('')}
+    </div>` : '<div class="empty">No practice in your class yet — be the first!</div>'}`;
 }
 
 let _studentHW = [];
@@ -2527,12 +2523,9 @@ function renderPracticeHome(c) {
   const gate = practiceGate();
   c.innerHTML = `
     <h2 style="margin-bottom:16px">🎤 Practice</h2>
-    ${!gate.ok ? `<div class="card" style="border-color:${A.ackRequired ? 'var(--blue)' : 'var(--gold)'};background:${A.ackRequired ? 'var(--blue-l)' : 'var(--gold-l)'}">
-      <div style="font-weight:700;color:${A.ackRequired ? 'var(--blue-d)' : 'var(--gold-d)'}">
-        ${A.ackRequired ? '📖 Feedback waiting to be read' : '⏳ Short pause between attempts'}
-      </div>
+    ${!gate.ok ? `<div class="card" style="border-color:var(--gold);background:var(--gold-l)">
+      <div style="font-weight:700;color:var(--gold-d)">⏳ Short pause between attempts</div>
       <p style="margin-top:5px;font-size:13px;color:var(--g700)" id="gate-msg">${gate.reason}</p>
-      ${A.ackRequired ? `<button class="btn btn-primary btn-sm" style="margin-top:10px" onclick="SS('S-student');studentTab('history')">Go to my feedback</button>` : ''}
     </div>` : ''}
     <div class="key-wrap">
       <div style="font-weight:700;margin-bottom:10px">🔑 Gemini API Key <small style="font-weight:400;color:var(--g600)">(for grading)</small></div>
@@ -3629,56 +3622,15 @@ async function finishSession() {
 }
 
 // How many per-question panels have been opened this session.
-let _openedFeedback = new Set();
-function markFeedbackOpened(hdr) {
-  const body = hdr.nextElementSibling;
-  if (body && body.classList.contains('open')) {
-    _openedFeedback.add(hdr.querySelector('.qa-n')?.textContent || String(_openedFeedback.size));
-    updateAckButton();
-  }
-}
-
-function updateAckButton() {
-  const btn  = document.getElementById('ack-btn');
-  const note = document.getElementById('ack-progress');
-  if (!btn) return;
-  const need = parseInt(btn.dataset.need || '0');
-  const seen = _openedFeedback.size;
-  const done = seen >= need;
-  btn.disabled = !done;
-  if (note) note.textContent = done
-    ? 'All feedback opened.'
-    : `Opened ${seen} of ${need} — open each question to see what to fix.`;
-}
-
 function renderNextStep(answered, isMilestone, attemptNo) {
   const zone = document.getElementById('next-step-zone');
   if (!zone) return;
 
-  if (isMilestone) {
-    // A graded attempt is the one moment there is something substantial to act
-    // on. Reading it is the point of the milestone, so the next attempt waits.
-    _openedFeedback = new Set();
-    requireAcknowledgement(A.topic);
-    const need = answered.length;
-    zone.innerHTML = `
-      <div class="card" style="border-color:var(--blue);background:var(--blue-l)">
-        <div style="font-weight:700;color:var(--blue-d);font-size:1rem">📖 Read your feedback before attempt ${attemptNo + 1}</div>
-        <p style="margin-top:6px;font-size:13px;color:var(--g700);line-height:1.7">
-          Practising again without taking the corrections in just repeats the same answer.
-          Open each question above, look at what was marked, then confirm below.
-        </p>
-        <div id="ack-progress" style="font-size:12px;color:var(--blue-d);font-weight:600;margin:10px 0">Opened 0 of ${need} — open each question to see what to fix.</div>
-        <button class="btn btn-primary" id="ack-btn" data-need="${need}" disabled onclick="acknowledgeFeedback()">
-          ✅ I have read the feedback — start attempt ${attemptNo + 1}
-        </button>
-      </div>`;
-    updateAckButton();
-    return;
-  }
-
-  // Ungraded attempt: a short pause, filled with a concrete target rather than
-  // an empty timer.
+  // Every attempt now uses the same 20-second cooldown. The earlier version
+  // made a graded attempt wait until every feedback panel had been opened, but
+  // when the opened-panel count did not line up with the answer count the
+  // confirm button never enabled and the student was stuck. A timer cannot
+  // dead-end: it always counts down to zero.
   startCooldown();
   const a = analyzeLanguage(A.langText || '', A.prosody);
   const targets = [];
@@ -3700,9 +3652,14 @@ function renderNextStep(answered, isMilestone, attemptNo) {
   if (a.prosody && a.prosody.longPauses > 2)
     targets.push(`${a.prosody.longPauses} pauses over 1.5s. Keep going with a filler rather than stopping.`);
 
+  // On a graded attempt, nudge them to read the feedback — but do not force it.
+  const heading = isMilestone
+    ? `📖 Your feedback is above — take a look before attempt ${attemptNo + 1}`
+    : `🎯 Before attempt ${attemptNo + 1}`;
+
   zone.innerHTML = `
     <div class="card" style="border-color:var(--gold);background:var(--gold-l)">
-      <div style="font-weight:700;color:var(--gold-d);font-size:1rem">🎯 Before attempt ${attemptNo + 1}</div>
+      <div style="font-weight:700;color:var(--gold-d);font-size:1rem">${heading}</div>
       <ul style="margin:8px 0 0 18px;font-size:13px;color:var(--g700);line-height:1.8">
         ${targets.map(t => `<li>${t}</li>`).join('') || '<li>Say a little more, and give a reason for each answer.</li>'}
       </ul>
@@ -3726,12 +3683,6 @@ function tickCooldown() {
     btn.disabled = false;
     btn.textContent = '🔄 Practice again';
   }
-}
-
-function acknowledgeFeedback() {
-  clearGate();
-  toast('Feedback acknowledged — good luck with the next attempt', 'success');
-  retryFromHistory(A.topic, A.assignId || '', A.mode);
 }
 
 function setGradingStatus(txt) {
@@ -3847,7 +3798,7 @@ function renderResults(answered, rpt, isMilestone, attemptNo, overall, fc, lr, g
 
     ${isMilestone ? answered.map((r, i) => `
       <div class="qacc">
-        <div class="qacc-hdr" onclick="this.nextElementSibling.classList.toggle('open');markFeedbackOpened(this)">
+        <div class="qacc-hdr" onclick="this.nextElementSibling.classList.toggle('open')">
           <div class="qa-n">${i+1}</div>
           <div class="qa-q">${r.question}</div>
           <div class="qa-band">${r.overall || '—'}</div>
