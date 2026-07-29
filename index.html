@@ -2472,7 +2472,16 @@ async function renderPeerComparison(c) {
               <div style="font-size:10px;color:var(--g600);text-transform:uppercase;letter-spacing:.05em;font-weight:600">total tries</div>
             </div>
           </div>
-          <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--g100);display:flex;align-items:center;justify-content:space-between">
+          <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--g100)">
+            <div style="font-size:10px;color:var(--g400);text-transform:uppercase;letter-spacing:.05em;font-weight:600;margin-bottom:6px">Who practised</div>
+            <div style="display:flex;flex-direction:column;gap:4px;max-height:180px;overflow-y:auto">
+              ${(t.members||[]).map(m => `<div style="display:flex;align-items:center;justify-content:space-between;font-size:13px;${m.isMe?'font-weight:700':''}">
+                <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${m.name}${m.isMe?' <span class="badge badge-blue" style="font-size:9px">You</span>':''}</span>
+                <span style="color:var(--g600);flex-shrink:0;margin-left:8px">${m.count}×</span>
+              </div>`).join('')}
+            </div>
+          </div>
+          <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--g100);display:flex;align-items:center;justify-content:space-between">
             <div style="font-size:12px;color:var(--g600)">You: <strong style="color:var(--ink)">${t.myAttempts}</strong> ${t.myAttempts===1?'try':'tries'}</div>
             ${t.myBest !== null ? `<div style="font-size:12px;color:var(--g600)">Best: <strong style="color:${bandColor(t.myBest)}">${t.myBest}</strong></div>` : '<span class="badge badge-grey">Not tried</span>'}
           </div>
