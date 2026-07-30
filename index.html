@@ -2060,7 +2060,7 @@ function renderProgressRows(rows) {
       </td>
       <td>${scoreStr}${backupGraded ? ' <span class="badge badge-gold" title="At least one attempt was marked by the backup model, so its band may not be directly comparable">backup</span>' : ''}</td>
       <td style="text-align:center">
-        ${hasUngraded ? '<span title="Milestone attempts without a score" style="cursor:help">⚠️</span>' : ''}
+        ${hasUngraded ? '<span title="A milestone attempt (3/5/8/10…) failed to grade, so no band was saved for it. The system automatically re-grades at the next attempt, which is why the graded attempts may not fall exactly on 3/5/8/10." style="cursor:help">⚠️</span>' : ''}
       </td>
       <td style="text-align:right;white-space:nowrap">
         <button class="btn btn-outline btn-sm" style="color:var(--red);font-weight:700" onclick="showProgressDetail(${sessionKey})">Detail</button>
@@ -2451,18 +2451,25 @@ async function renderPeerComparison(c) {
   const clsName = res.className || A.user?.className || A.user?.classId || 'My Class';
 
   const bandColor = b => b >= 6.5 ? 'var(--green-d)' : b >= 5.5 ? 'var(--gold-d)' : 'var(--red-d)';
+  const deadlineStr = d => {
+    if (!d) return '';
+    const dt = new Date(d); if (isNaN(dt)) return '';
+    const overdue = dt < new Date();
+    return `<span style="font-size:11px;font-weight:600;color:${overdue?'var(--red-d)':'var(--gold-d)'};background:${overdue?'var(--red-l)':'var(--gold-l)'};border-radius:6px;padding:2px 8px;white-space:nowrap">${overdue?'⏰ Due ':'📅 Due '}${fmtDT(d).split(' ')[0]}</span>`;
+  };
 
   c.innerHTML = `
     <h2 style="margin-bottom:4px">👥 Peer Comparison</h2>
     <div style="font-size:13px;color:var(--g600);margin-bottom:16px">${clsName}${A.user?.classId ? ` <span style="font-family:var(--fm);font-size:11px;color:var(--g400)">· ${A.user.classId}</span>` : ''}</div>
     <p style="font-size:13px;color:var(--g600);margin-bottom:16px">How much your class has practised each topic. 💪</p>
-    ${topics.length ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px">
+    ${topics.length ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px">
       ${topics.map(t => `
         <div class="card" style="margin:0">
           <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
-            <div style="font-weight:700;font-size:1rem;line-height:1.3">${t.topic}</div>
+            <div style="font-weight:700;font-size:1.05rem;line-height:1.3">${t.topic}</div>
             <span class="badge badge-blue" style="flex-shrink:0">${t.part||'part1'}</span>
           </div>
+          ${t.deadline ? `<div style="margin-top:6px">${deadlineStr(t.deadline)}</div>` : ''}
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px">
             <div style="background:var(--g50);border:1px solid var(--g100);border-radius:10px;padding:10px;text-align:center">
               <div style="font-family:var(--fm);font-size:1.5rem;font-weight:800">${t.peerCount}</div>
@@ -2473,16 +2480,18 @@ async function renderPeerComparison(c) {
               <div style="font-size:10px;color:var(--g600);text-transform:uppercase;letter-spacing:.05em;font-weight:600">total tries</div>
             </div>
           </div>
-          <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--g100)">
-            <div style="font-size:10px;color:var(--g400);text-transform:uppercase;letter-spacing:.05em;font-weight:600;margin-bottom:6px">Who practised</div>
-            <div style="display:flex;flex-direction:column;gap:4px;max-height:180px;overflow-y:auto">
-              ${(t.members||[]).map(m => `<div style="display:flex;align-items:center;justify-content:space-between;font-size:13px;${m.isMe?'font-weight:700':''}">
-                <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${m.name}${m.isMe?' <span class="badge badge-blue" style="font-size:9px">You</span>':''}</span>
-                <span style="color:var(--g600);flex-shrink:0;margin-left:8px">${m.count}×</span>
+          <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--g100)">
+            <div style="font-size:10px;color:var(--g400);text-transform:uppercase;letter-spacing:.05em;font-weight:600;margin-bottom:8px">Who practised</div>
+            <div style="display:flex;flex-direction:column;gap:2px;max-height:240px;overflow-y:auto">
+              ${(t.members||[]).map((m, i) => `<div style="display:flex;align-items:center;gap:8px;font-size:13px;padding:5px 6px;border-radius:8px;${m.isMe?'background:var(--blue-l);font-weight:700':''}">
+                <span style="font-family:var(--fm);font-size:11px;color:var(--g400);width:20px;flex-shrink:0;text-align:right">${i+1}.</span>
+                <span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${m.name}${m.isMe?' <span class="badge badge-blue" style="font-size:9px">You</span>':''}</span>
+                <span style="color:var(--g500);font-size:11px;flex-shrink:0">${m.last?fmtDT(m.last):'—'}</span>
+                <span style="color:var(--ink);font-weight:700;flex-shrink:0;min-width:28px;text-align:right">${m.count}×</span>
               </div>`).join('')}
             </div>
           </div>
-          <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--g100);display:flex;align-items:center;justify-content:space-between">
+          <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--g100);display:flex;align-items:center;justify-content:space-between">
             <div style="font-size:12px;color:var(--g600)">You: <strong style="color:var(--ink)">${t.myAttempts}</strong> ${t.myAttempts===1?'try':'tries'}</div>
             ${t.myBest !== null ? `<div style="font-size:12px;color:var(--g600)">Best: <strong style="color:${bandColor(t.myBest)}">${t.myBest}</strong></div>` : '<span class="badge badge-grey">Not tried</span>'}
           </div>
@@ -3237,10 +3246,15 @@ async function gemFetch(sys, usr, attempt, jsonMode, noThinkCfg) {
 
   if (!text) {
     const why = cand?.finishReason || 'unknown';
-    // Nothing is capping the output any more, so hitting the ceiling means the
-    // request itself is too large — raising a limit would not help.
-    if (why === 'MAX_TOKENS')
-      throw new Error('The reply exceeded the model output limit. Try grading fewer questions in one session.');
+    // MAX_TOKENS with an empty body means reasoning consumed the whole budget
+    // before any answer was written. 'low' thinking is not 'off' — it still
+    // spends tokens. Retry once with thinking disabled so the model spends its
+    // budget on the reply instead. Only give up if that also comes back empty.
+    if (why === 'MAX_TOKENS') {
+      if (!noThinkCfg) return gemFetch(sys, usr, attempt, jsonMode, true);
+      if (attempt === 1) return gemFetch(sys, usr, 2, jsonMode, true);
+      throw new Error('The reply exceeded the model output limit even without reasoning. Try grading fewer questions in one session.');
+    }
     if (why === 'SAFETY' || why === 'PROHIBITED_CONTENT')
       throw new Error('Gemini blocked this response (' + why + '). Try rephrasing the questions.');
     if (attempt === 1) return gemFetch(sys, usr, 2, jsonMode, noThinkCfg);
