@@ -1604,11 +1604,23 @@ function asnAddQ() {
 let _hwView = 'Active';
 let _library = [];
 let _libPart = 'part1';
+let _libSort = 'newest';
 
 async function renderLibrary(c) {
   const res = await gasCall('teacher.getLibrary', {});
   _library = res.data || [];
-  const items = _library.filter(x => (x.Part || 'part1') === _libPart);
+  let items = _library.filter(x => (x.Part || 'part1') === _libPart);
+  // Sort the visible topics by the teacher's chosen order.
+  items = items.slice().sort((a, b) => {
+    switch (_libSort) {
+      case 'az':      return String(a.Title).localeCompare(String(b.Title), undefined, { sensitivity: 'base' });
+      case 'za':      return String(b.Title).localeCompare(String(a.Title), undefined, { sensitivity: 'base' });
+      case 'newest':  return String(b.CreatedAt || '').localeCompare(String(a.CreatedAt || ''));
+      case 'oldest':  return String(a.CreatedAt || '').localeCompare(String(b.CreatedAt || ''));
+      case 'used':    return (parseInt(b.UsedCount) || 0) - (parseInt(a.UsedCount) || 0);
+      default:        return 0;
+    }
+  });
   const partLabel = { part1: 'Part 1 — Introduction', part2: 'Part 2 — Long Turn (cue card)', part3: 'Part 3 — Discussion' };
   const count = p => _library.filter(x => (x.Part || 'part1') === p).length;
 
@@ -1624,6 +1636,15 @@ async function renderLibrary(c) {
       <div class="auth-tab ${_libPart==='part1'?'active':''}" onclick="_libPart='part1';teacherTab('library')">Part 1 <span style="opacity:.6">(${count('part1')})</span></div>
       <div class="auth-tab ${_libPart==='part2'?'active':''}" onclick="_libPart='part2';teacherTab('library')">Part 2 <span style="opacity:.6">(${count('part2')})</span></div>
       <div class="auth-tab ${_libPart==='part3'?'active':''}" onclick="_libPart='part3';teacherTab('library')">Part 3 <span style="opacity:.6">(${count('part3')})</span></div>
+    </div>
+    <div style="display:flex;justify-content:flex-end;margin-bottom:14px">
+      <select class="form-input form-select" style="width:auto;font-size:13px;padding:6px 10px" onchange="_libSort=this.value;teacherTab('library')">
+        <option value="newest" ${_libSort==='newest'?'selected':''}>Newest first</option>
+        <option value="oldest" ${_libSort==='oldest'?'selected':''}>Oldest first</option>
+        <option value="az" ${_libSort==='az'?'selected':''}>Title A → Z</option>
+        <option value="za" ${_libSort==='za'?'selected':''}>Title Z → A</option>
+        <option value="used" ${_libSort==='used'?'selected':''}>Most launched</option>
+      </select>
     </div>
     ${items.length ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px">
       ${items.map(item => {
@@ -3856,11 +3877,13 @@ function renderResults(answered, rpt, isMilestone, attemptNo, overall, fc, lr, g
       <p style="margin-top:4px;font-size:12px;color:var(--gold-d)">Gemini was unavailable, so a different model marked this attempt. Its band scores may not line up exactly with your other attempts — compare with care.</p>
     </div>` : ''}
 
-    ${gradeError ? `<div class="card" style="background:var(--red-l);border-color:var(--red)">
-      <div style="font-weight:700;color:var(--red-d)">⚠️ AI grading did not run for this attempt</div>
-      <p style="margin-top:6px;font-size:13px;color:var(--red-d)">Your answers and the measurements below were saved, but no band score was given — showing an invented number would be worse than showing none.</p>
-      <div style="margin-top:8px;font-family:var(--fm);font-size:11px;background:#fff;border-radius:6px;padding:8px 10px;color:var(--g700);word-break:break-word">${gradeError}</div>
-      <p style="margin-top:8px;font-size:12px;color:var(--red-d)">Check your Gemini API key in Practice, then try this attempt again — it will not count as a wasted milestone.</p>
+    ${gradeError ? `<div class="card" style="background:var(--gold-l);border-color:var(--gold)">
+      <div style="font-weight:700;color:var(--gold-d)">⏳ The AI grader was busy — this attempt wasn't scored</div>
+      <p style="margin-top:6px;font-size:13px;color:var(--gold-d);line-height:1.7">Your answers and the measurements below were saved. The AI is temporarily overloaded, so no band was given this time. <strong>Practise once more and your next attempt will be graded</strong> — you won't lose this milestone.</p>
+      <p style="margin-top:8px;font-size:13px;color:var(--gold-d);line-height:1.7;font-style:italic">Lượt luyện tập đã được ghi nhận nhưng chưa thể chấm điểm vì phản hồi từ AI đang bị nghẽn. Hãy luyện tập thêm 1 lần nữa để AI chấm.</p>
+      <details style="margin-top:8px"><summary style="font-size:11px;color:var(--g500);cursor:pointer">Technical detail</summary>
+        <div style="margin-top:6px;font-family:var(--fm);font-size:11px;background:#fff;border-radius:6px;padding:8px 10px;color:var(--g700);word-break:break-word">${gradeError}</div>
+      </details>
     </div>` : ''}
     ${isMilestone ? `
       <div class="res-hero">
