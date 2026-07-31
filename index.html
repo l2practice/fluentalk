@@ -3014,23 +3014,35 @@ async function startAudioCapture() {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     const mime   = pickMime();
-    A.mr = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
-    A.chunks = [];
-    A.mr.ondataavailable = e => { if (e.data.size > 0) A.chunks.push(e.data); };
-    A.mr.stream = stream;
-    A.mr.start(100);
+    const mr = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+    // Chunks belong to THIS recorder instance, not a shared A.chunks array.
+    // The shared array was the real bug: pressing stop then record again
+    // quickly reset it while the previous onstop was still reading it, so the
+    // blob came out empty or truncated — on every browser, not just Safari.
+    mr._chunks = [];
+    mr.ondataavailable = e => { if (e.data && e.data.size > 0) mr._chunks.push(e.data); };
+    mr.stream = stream;
+    A.mr = mr;
+    const ua = navigator.userAgent;
+    const isSafari = /^((?!chrome|android).)*safari/i.test(ua) || (/iP(hone|ad)/.test(ua) && !/CriOS|FxiOS/.test(ua));
+    if (isSafari) mr.start(); else mr.start(100);
   } catch(e) { toast('Could not access microphone: ' + e.message, 'error'); }
 }
 function stopMediaRecorder() {
   return new Promise(resolve => {
-    if (!A.mr || A.mr.state === 'inactive') { resolve(null); return; }
-    A.mr.onstop = () => {
-      const mime = A.mr.mimeType || 'audio/webm';
-      const blob = new Blob(A.chunks, { type: mime });
-      A.mr.stream.getTracks().forEach(t => t.stop());
+    const mr = A.mr;
+    if (!mr || mr.state === 'inactive') { resolve(null); return; }
+    mr.onstop = () => {
+      const mime = mr.mimeType || 'audio/webm';
+      const blob = new Blob(mr._chunks, { type: mime });
+      try { mr.stream.getTracks().forEach(t => t.stop()); } catch(_) {}
       resolve({ blob, mime });
     };
-    A.mr.stop();
+    // Ask for any buffered audio to be delivered as a final dataavailable
+    // event before stop() fires onstop, so the tail of the recording is not
+    // lost. requestData throws if already inactive, hence the guard.
+    try { if (mr.state === 'recording') mr.requestData(); } catch(_) {}
+    mr.stop();
   });
 }
 async function stopCaptureAndTranscribe() {
@@ -3038,7 +3050,7 @@ async function stopCaptureAndTranscribe() {
   if (!rec) { toast('Could not record audio', 'error'); return false; }
   const durMs = Date.now() - (A.recStartTs || Date.now());
   if (rec.blob.size < 1500 || durMs < 400) {
-    toast('Recording too short — hold SPACE longer and try again', 'error', 4000);
+    toast('Recording too short — nói ngay sau khi nhấn và giữ ít nhất 2 giây rồi thử lại.', 'error', 4500);
     return false;
   }
   A.lastBlob = rec.blob; A.lastMime = rec.mime;
@@ -3069,13 +3081,13 @@ function mimeToExt(mime) {
   if (m.includes('wav')) return 'wav';
   return 'webm';
 }
-async function transcribeGroq(blob, mime) {
+async function transcribeGroq(blob, mime, model) {
   if (!A.groqKey) throw new Error('Not set Groq key');
   if (!blob || blob.size < 1200) throw new Error('Recording too short');
   const ext = mimeToExt(mime);
   const fd  = new FormData();
   fd.append('file', blob, 'answer.' + ext);
-  fd.append('model', 'whisper-large-v3-turbo');
+  fd.append('model', model || 'whisper-large-v3-turbo');
   fd.append('language', 'en');
   fd.append('response_format', 'verbose_json');
   fd.append('temperature', '0');
@@ -3092,8 +3104,15 @@ async function transcribeGroq(blob, mime) {
   if (!r.ok) {
     const e = await r.json().catch(() => ({}));
     const msg = e.error?.message || 'Groq error ' + r.status;
-    if (/could not process file|valid media file/i.test(msg))
-      throw new Error('Could not read audio file. Please try again or use Chrome.');
+    if (/could not process file|valid media file|failed to decode|invalid/i.test(msg)) {
+      // turbo can be stricter about container quirks than the full model, so
+      // retry once on whisper-large-v3 before surfacing a read error.
+      if ((model || 'whisper-large-v3-turbo') !== 'whisper-large-v3')
+        return transcribeGroq(blob, mime, 'whisper-large-v3');
+      const err = new Error('Could not read the recording. Xin hãy thu âm lại — nói ngay sau khi nhấn, và giữ ít nhất 2 giây.');
+      err.audioRead = true;
+      throw err;
+    }
     if (r.status === 429) throw new Error('Groq rate limit — please wait a moment and try again');
     if (r.status === 401) throw new Error('Invalid Groq API key');
     throw new Error(msg);
