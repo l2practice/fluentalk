@@ -536,6 +536,7 @@ textarea.form-input{resize:vertical;min-height:72px;line-height:1.6}
       <div class="sidenav-item" onclick="teacherTab('classroom')"><span class="sidenav-icon">🏫</span> Classroom</div>
       <div class="sidenav-item" onclick="teacherTab('homework')"><span class="sidenav-icon">📚</span> Homework Book</div>
       <div class="sidenav-item" onclick="teacherTab('library')"><span class="sidenav-icon">📖</span> Question Library</div>
+      <div class="sidenav-item" onclick="teacherTab('jam')"><span class="sidenav-icon">⏱️</span> JAM Practice</div>
       <div class="sidenav-item" onclick="teacherTab('progress')"><span class="sidenav-icon">📈</span> Study Progress</div>
       <div class="sidenav-section">Archive</div>
       <div class="sidenav-item" onclick="teacherTab('studentArchive')"><span class="sidenav-icon">🗄️</span> Student Archive</div>
@@ -985,7 +986,7 @@ const A = {
   mode: '', qs: [], recs: [], idx: 0,
   retryCount: 0, topic: '', assignId: '',
   t0: null, gkey: '', groqKey: '',
-  talking: false, talkBusy: false,
+  talking: false, talkBusy: false, freePart: 'part1',
   recStartTs: 0, curAnswer: '',
   mr: null, chunks: [], lastBlob: null, lastMime: null,
   prepLeft: 0, prepTm: null, recTm: null,
@@ -1272,7 +1273,7 @@ let _sortCol = '', _sortDir = 1;
 
 async function teacherTab(tab) {
   document.querySelectorAll('.sidenav-item').forEach((el,i) => {
-    const tabs = ['overview','classroom','homework','library','progress','studentArchive','classArchive','settings'];
+    const tabs = ['overview','classroom','homework','library','jam','progress','studentArchive','classArchive','settings'];
     el.classList.toggle('active', tabs[i] === tab);
   });
   const c = document.getElementById('teacher-content');
@@ -1282,6 +1283,7 @@ async function teacherTab(tab) {
     if (tab === 'classroom') await renderTeacherClassroom(c);
     if (tab === 'homework')  await renderTeacherHomework(c);
     if (tab === 'library')   await renderLibrary(c);
+    if (tab === 'jam')       await renderJamStats(c);
     if (tab === 'progress')  await renderTeacherProgress(c);
     if (tab === 'studentArchive') await renderStudentArchive(c);
     if (tab === 'classArchive')   await renderClassArchive(c);
@@ -1847,6 +1849,27 @@ async function deleteLibraryItem(libId, title) {
   } catch(e) { toast(e.message, 'error'); }
 }
 
+async function renderJamStats(c) {
+  const res = await gasCall('teacher.getJamStats', {});
+  const stats = res.data || [];
+  c.innerHTML = `
+    <h2 style="margin-bottom:6px">⏱️ JAM Practice</h2>
+    <p style="font-size:13px;color:var(--g600);margin-bottom:18px">Just-A-Minute fluency drills your students ran on their own. No band score — this tracks how much they practised speaking non-stop.</p>
+    ${stats.length ? `<div class="tbl-wrap"><table class="tbl">
+      <thead><tr><th>Student</th><th>Class</th><th>Topics practised</th><th style="text-align:center">Runs</th><th style="text-align:center">Minutes</th><th>Last</th></tr></thead>
+      <tbody>
+        ${stats.map(st => `<tr>
+          <td style="font-weight:600">${st.name || st.studentId}<div style="font-size:10px;color:var(--g400);font-family:var(--fm)">${st.studentId}</div></td>
+          <td style="font-size:12px">${classNameOf(st.classId) || st.classId || '—'}</td>
+          <td style="font-size:12px">${(st.topicList||[]).map(t => `<span class="badge badge-blue" style="margin:2px">${t.topic} ×${t.runs}</span>`).join(' ')}</td>
+          <td style="text-align:center;font-weight:700">${st.totalRuns}</td>
+          <td style="text-align:center">${st.totalMinutes}m</td>
+          <td style="font-size:11px;color:var(--g500)">${st.last ? fmtDT(st.last) : '—'}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table></div>` : '<div class="empty">No JAM practice yet. Students can start it from their Practice screen.</div>'}`;
+}
+
 async function renderTeacherHomework(c) {
   const [asnRes, clsRes] = await Promise.all([
     gasCall('teacher.getAssignments', {}),
@@ -2047,8 +2070,11 @@ function buildProgressRows(sessions, classFilter) {
   const map = {};
   sessions.forEach(s => {
     const key = s.StudentID + '|' + (s.Topic||'');
-    if (!map[key]) map[key] = { StudentID:s.StudentID, StudentName:s.StudentName, ClassID:s.ClassID, ClassName:s.ClassName, Part:s.Part, Topic:s.Topic, sessions:[] };
+    if (!map[key]) map[key] = { StudentID:s.StudentID, StudentName:s.StudentName, ClassID:s.ClassID, ClassName:s.ClassName, Part:s.Part, Topic:s.Topic, Type:s.Type, sessions:[] };
     map[key].sessions.push(s);
+    // A topic counts as free practice only if every attempt in it was free —
+    // if the student ever did it as homework, treat the group as homework.
+    if (s.Type && s.Type !== 'free') map[key].Type = s.Type;
   });
   let rows = Object.values(map);
   if (classFilter) rows = rows.filter(r => String(r.ClassID||'').toUpperCase() === classFilter.toUpperCase());
@@ -2090,7 +2116,7 @@ function renderProgressRows(rows) {
       <td style="font-family:var(--fm);font-size:12px">${r.StudentID}</td>
       <td style="font-weight:600">${r.StudentName||'—'}</td>
       <td>${r.ClassID ? `<div style="font-weight:600;font-size:12px">${r.ClassName || classNameOf(r.ClassID)}</div><div style="font-size:10px;color:var(--g400);font-family:var(--fm)">${r.ClassID}</div>` : '—'}</td>
-      <td><span class="badge badge-blue">${r.Part||'—'}</span></td>
+      <td><span class="badge badge-blue">${r.Part||'—'}</span>${(r.Type==='free') ? ' <span class="badge badge-grey" title="Student practised this on their own, not assigned homework" style="background:#EDE9FE;color:#6D28D9">Free</span>' : ''}</td>
       <td style="font-weight:600;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.Topic||''}">${r.Topic||'—'}</td>
       <td style="font-size:12px">${start}</td>
       <td style="font-size:12px">${end}</td>
@@ -2606,15 +2632,46 @@ function renderPracticeHome(c) {
       <div style="font-size:11px;color:var(--g600);margin-top:6px">Free at <a href="https://console.groq.com/keys" target="_blank">console.groq.com/keys</a></div>
     </div>
     <div class="mode-grid" style="margin-bottom:14px">
-      <div class="mode-tile" onclick="openFreeSetup()">
+      <div class="mode-tile" onclick="openFreeChoice()">
         <div class="mode-icon">✏️</div>
         <div class="mode-title">Free Practice</div>
-        <div class="mode-sub">Enter your own questions to practice</div>
+        <div class="mode-sub">Choose a part and enter your own questions</div>
       </div>
       <div class="mode-tile" onclick="studentTab('homework')">
         <div class="mode-icon">📚</div>
         <div class="mode-title">Homework</div>
         <div class="mode-sub">Practice your teacher's assignments</div>
+      </div>
+    </div>
+    <div class="mode-grid">
+      <div class="mode-tile" onclick="openJAM()" style="border-color:var(--gold);background:var(--gold-l)">
+        <div class="mode-icon">⏱️</div>
+        <div class="mode-title">JAM — Just A Minute</div>
+        <div class="mode-sub">Speak for 60 seconds without stopping</div>
+      </div>
+    </div>`;
+}
+
+// Free Practice: choose which IELTS part before entering questions.
+function openFreeChoice() {
+  if (gateBlocked()) return;
+  const c = document.getElementById('student-content');
+  c.innerHTML = `
+    <button class="btn btn-outline btn-sm" onclick="studentTab('practice')" style="margin-bottom:16px">← Back</button>
+    <h2 style="margin-bottom:6px">✏️ Free Practice</h2>
+    <p style="font-size:13px;color:var(--g600);margin-bottom:20px">Which part do you want to practise? You'll enter your own questions on the next screen.</p>
+    <div class="mode-grid">
+      <div class="mode-tile" onclick="openFreeSetup('part1')">
+        <div class="mode-icon">1️⃣</div><div class="mode-title">Part 1</div>
+        <div class="mode-sub">Short Q&A on familiar topics</div>
+      </div>
+      <div class="mode-tile" onclick="openFreeSetup('part2')">
+        <div class="mode-icon">2️⃣</div><div class="mode-title">Part 2</div>
+        <div class="mode-sub">Long turn from a cue card</div>
+      </div>
+      <div class="mode-tile" onclick="openFreeSetup('part3')">
+        <div class="mode-icon">3️⃣</div><div class="mode-title">Part 3</div>
+        <div class="mode-sub">Discussion on abstract ideas</div>
       </div>
     </div>`;
 }
@@ -2638,9 +2695,10 @@ function saveKey(type) {
   renderPracticeHome(document.getElementById('student-content'));
 }
 
-function openFreeSetup() {
+function openFreeSetup(part) {
   if (gateBlocked()) return;
   A.assignId = '';
+  A.freePart = part || 'part1';
   buildSetup('free', null);
 }
 
@@ -2652,6 +2710,175 @@ function startHWPractice(assignId, title, part) {
   try { questions = JSON.parse(hw.Questions || '[]'); } catch(e) {}
   A.assignId = assignId;
   buildSetup('homework', hw);
+}
+
+// ══════════════════════════════════════════
+// JAM — JUST A MINUTE
+// Pick a Part 1 topic, speak for 60 seconds without stopping, then see the
+// vocabulary you reached for. No band score — this drills fluency, not accuracy.
+// ══════════════════════════════════════════
+let _jam = { topic: '', libId: '', blob: null, mime: '', audioUrl: '', runs: 0, seconds: 0, timer: null, startTs: 0 };
+
+async function openJAM() {
+  if (gateBlocked()) return;
+  if (!A.gkey || !A.groqKey) { toast('Please set both API keys in Practice first', 'error'); return; }
+  const c = document.getElementById('student-content');
+  c.innerHTML = `<button class="btn btn-outline btn-sm" onclick="studentTab('practice')" style="margin-bottom:16px">← Back</button>
+    <h2 style="margin-bottom:6px">⏱️ JAM — Just A Minute</h2>
+    <p style="font-size:13px;color:var(--g600);margin-bottom:8px">Speak for a full minute without stopping. No hesitating over 3 seconds, no repeating yourself, no drifting off topic.</p>
+    <div id="jam-topics"><div class="empty">Loading topics…</div></div>`;
+  try {
+    const res = await gasCall('student.getJamTopics', { part: 'part1' });
+    const topics = res.data || [];
+    document.getElementById('jam-topics').innerHTML = topics.length
+      ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-top:16px">
+          ${topics.map(t => `<div class="mode-tile" onclick="startJAM('${t.libId}','${String(t.title).replace(/'/g,'&#39;')}')">
+            <div class="mode-icon">💬</div>
+            <div class="mode-title">${t.title}</div>
+            <div class="mode-sub">${t.questionCount} question${t.questionCount===1?'':'s'} to spark ideas</div>
+          </div>`).join('')}
+        </div>`
+      : '<div class="empty">Your teacher has not added any Part 1 topics yet.</div>';
+  } catch(e) { document.getElementById('jam-topics').innerHTML = '<div class="empty">' + e.message + '</div>'; }
+}
+
+async function startJAM(libId, title) {
+  _jam.topic = title; _jam.libId = libId; _jam.blob = null; _jam.seconds = 0;
+  const c = document.getElementById('student-content');
+  c.innerHTML = `
+    <div style="text-align:center;max-width:420px;margin:0 auto">
+      <div style="font-size:12px;color:var(--g500);text-transform:uppercase;letter-spacing:.1em;font-weight:700">JAM · ${title}</div>
+      <div id="jam-ring" style="margin:24px auto;width:220px;height:220px;border-radius:50%;border:10px solid var(--g200);display:flex;align-items:center;justify-content:center;position:relative;transition:border-color .3s">
+        <div id="jam-clock" style="font-family:var(--fm);font-size:3.2rem;font-weight:800;color:var(--ink)">0:60</div>
+      </div>
+      <div id="jam-status" style="font-size:15px;font-weight:600;color:var(--gold-d);min-height:24px">Get ready…</div>
+      <div style="font-size:12px;color:var(--g500);margin-top:14px;line-height:1.7">Keep talking for the whole minute. Don't stop, don't repeat, stay on topic.<br><span style="font-style:italic">Nói liên tục cả phút. Đừng dừng, đừng lặp lại, bám sát chủ đề.</span></div>
+      <button class="btn btn-outline btn-sm" style="margin-top:20px" onclick="cancelJAM()">Cancel</button>
+    </div>`;
+  // brief countdown so they can gather themselves
+  let pre = 3;
+  const preTick = setInterval(() => {
+    document.getElementById('jam-status').textContent = 'Starting in ' + pre + '…';
+    if (--pre < 0) { clearInterval(preTick); jamGo(); }
+  }, 700);
+}
+
+async function jamGo() {
+  await startAudioCapture();
+  _jam.startTs = Date.now();
+  _jam.seconds = 60;
+  const status = document.getElementById('jam-status');
+  const clock  = document.getElementById('jam-clock');
+  const ring   = document.getElementById('jam-ring');
+  if (status) status.textContent = '🎙️ Speak!';
+  if (ring) ring.style.borderColor = 'var(--red)';
+  _jam.timer = setInterval(() => {
+    _jam.seconds--;
+    if (clock) clock.textContent = '0:' + String(_jam.seconds).padStart(2, '0');
+    if (ring) {
+      const frac = _jam.seconds / 60;
+      ring.style.borderColor = frac > 0.5 ? 'var(--green-d)' : frac > 0.2 ? 'var(--gold)' : 'var(--red)';
+    }
+    if (_jam.seconds <= 0) { clearInterval(_jam.timer); finishJAM(); }
+  }, 1000);
+}
+
+function cancelJAM() {
+  if (_jam.timer) clearInterval(_jam.timer);
+  try { if (A.mr && A.mr.state !== 'inactive') A.mr.stop(); } catch(_) {}
+  studentTab('practice');
+}
+
+async function finishJAM() {
+  const c = document.getElementById('student-content');
+  const status = document.getElementById('jam-status');
+  if (status) status.textContent = '⏳ Transcribing what you said…';
+  const rec = await stopMediaRecorder();
+  if (!rec || rec.blob.size < 1500) {
+    c.innerHTML = `<div class="empty">The recording was too short to analyse. <button class="btn btn-primary btn-sm" onclick="startJAM('${_jam.libId}','${String(_jam.topic).replace(/'/g,'&#39;')}')">Try again</button></div>`;
+    return;
+  }
+  _jam.blob = rec.blob; _jam.mime = rec.mime;
+  if (_jam.audioUrl) URL.revokeObjectURL(_jam.audioUrl);
+  _jam.audioUrl = URL.createObjectURL(rec.blob);
+
+  let text = '';
+  try {
+    const tr = await transcribeGroq(rec.blob, rec.mime);
+    text = tr.text || '';
+  } catch(e) {
+    c.innerHTML = `<div class="empty">Could not transcribe: ${e.message}<br><button class="btn btn-primary btn-sm" style="margin-top:10px" onclick="startJAM('${_jam.libId}','${String(_jam.topic).replace(/'/g,'&#39;')}')">Try again</button></div>`;
+    return;
+  }
+  _jam.runs++;
+  const lex = cefrProfile(text);
+  renderJAMResult(text, lex);
+
+  // Save the run so the teacher sees the practice happened. No band — JAM is
+  // fluency drill, graded by the student's own eyes on the vocabulary.
+  const durMin = Math.max(1, Math.round((Date.now() - _jam.startTs) / 60000 * 10) / 10);
+  gasCall('speak.saveResult', {
+    topic: _jam.topic, part: 'jam', mode: 'jam', type: 'jam',
+    attemptNo: _jam.runs, durationMin: durMin,
+    startTime: new Date(_jam.startTs).toISOString(), endTime: new Date().toISOString(),
+    resultsJSON: [{ text }], analysis: lex ? { cefr: lex.pct } : null
+  }).catch(() => {});
+}
+
+function renderJAMResult(text, lex) {
+  const c = document.getElementById('student-content');
+  const LV = [['B1','var(--blue)'],['B2','#8B5CF6'],['C1','var(--gold-d)'],['C2','#E8284A']];
+  const bar = lex ? LV.map(([L]) => lex.pct[L] || 0) : [0,0,0,0];
+  const maxPct = Math.max(1, ...bar);
+  c.innerHTML = `
+    <button class="btn btn-outline btn-sm" onclick="studentTab('practice')" style="margin-bottom:16px">← Back to practice</button>
+    <h2 style="margin-bottom:4px">⏱️ ${_jam.topic}</h2>
+    <div style="font-size:13px;color:var(--g600);margin-bottom:18px">Run ${_jam.runs} · one minute · fluency drill</div>
+
+    <div class="card">
+      <div class="card-title">🎧 Listen back &amp; try again</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+        <audio id="jam-audio" src="${_jam.audioUrl}" controls style="flex:1;min-width:200px;height:40px"></audio>
+        <button class="btn btn-primary" onclick="startJAM('${_jam.libId}','${String(_jam.topic).replace(/'/g,'&#39;')}')">🔄 Re-try</button>
+        <button class="btn btn-green" onclick="jamDone()">✓ Done</button>
+      </div>
+    </div>
+
+    ${lex ? `<div class="card">
+      <div class="card-title">📊 Vocabulary you reached for</div>
+      <div style="display:flex;gap:10px;align-items:flex-end;height:120px;margin:16px 0 8px;padding:0 6px">
+        ${LV.map(([L,col]) => {
+          const p = lex.pct[L] || 0;
+          return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%">
+            <div style="font-size:12px;font-weight:700;color:${col};margin-bottom:4px">${p}%</div>
+            <div style="width:100%;background:${col};border-radius:6px 6px 0 0;height:${Math.max(3, p/maxPct*90)}%;transition:height .4s"></div>
+            <div style="font-size:12px;font-weight:700;color:var(--g600);margin-top:6px">${L}</div>
+          </div>`;
+        }).join('')}
+      </div>
+      <div style="font-size:11px;color:var(--g500);text-align:center">Share of your distinct content words at each CEFR level. Aim to grow the B2–C1 bars over successive runs.</div>
+    </div>
+
+    ${LV.map(([L,col]) => {
+      const words = lex.samples[L] || [];
+      if (!words.length) return '';
+      return `<div class="card" style="padding:14px">
+        <div style="font-size:12px;font-weight:700;color:${col};text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">${L} words you used</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px">${words.map(w => `<span class="badge" style="background:${col}22;color:${col}">${w}</span>`).join('')}</div>
+      </div>`;
+    }).join('')}` : '<div class="card"><div class="empty">Vocabulary analysis needs the CEFR dictionary, which did not load.</div></div>'}
+
+    <div class="card" style="background:var(--g50)">
+      <div class="card-title">📝 What you said</div>
+      <p style="font-size:13px;color:var(--g700);line-height:1.7;margin-top:8px;font-style:italic">${text.replace(/</g,'&lt;') || '(nothing transcribed)'}</p>
+    </div>`;
+}
+
+function jamDone() {
+  if (_jam.audioUrl) { URL.revokeObjectURL(_jam.audioUrl); _jam.audioUrl = ''; }
+  toast(`Nice work — ${_jam.runs} run${_jam.runs===1?'':'s'} on "${_jam.topic}" saved`, 'success');
+  _jam.runs = 0;
+  studentTab('practice');
 }
 
 async function renderMyHistory(c) {
@@ -2711,7 +2938,7 @@ function retryFromHistory(topic, assignId, part) {
 // PRACTICE SETUP
 // ════════════════════════════════════════════
 function buildSetup(type, hwData) {
-  A.mode = hwData?.Part || 'part1';
+  A.mode = hwData?.Part || (type === 'free' ? (A.freePart || 'part1') : 'part1');
   const part  = A.mode;
   const isP2  = part === 'part2';
   const isHW  = type === 'homework';
@@ -2766,13 +2993,14 @@ function buildSetup(type, hwData) {
         </div>`).join('');
 
   const nQ = isP2 ? 1 : (isHW ? questions.length || 4 : 4);
-  document.getElementById('setup-tb').textContent = '/ ' + (isP2 ? 'Part 2 Setup' : isHW ? 'Homework Setup' : 'Free Practice Setup');
+  const partLabel = { part1:'Part 1', part2:'Part 2', part3:'Part 3' }[part] || 'Part 1';
+  document.getElementById('setup-tb').textContent = '/ ' + (isHW ? 'Homework Setup' : 'Free ' + partLabel + ' Setup');
   const main = document.getElementById('setup-main');
   main.innerHTML = `
     <div style="background:linear-gradient(135deg,var(--blue),var(--navy));border-radius:var(--rl);padding:18px;margin-bottom:20px;color:#fff;display:flex;align-items:center;gap:12px">
       <div style="width:46px;height:46px;background:rgba(255,255,255,.15);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.6rem;flex-shrink:0">${isP2?'🗣️':isHW?'📚':'✏️'}</div>
       <div>
-        <div style="font-size:1rem;font-weight:700">${isP2?'Part 2 — Long Turn':isHW?'Homework Practice':'Free Practice'}</div>
+        <div style="font-size:1rem;font-weight:700">${isHW?'Homework Practice':'Free Practice — ' + partLabel}</div>
         <div style="font-size:12px;opacity:.72;margin-top:1px">Add your questions and key words</div>
       </div>
     </div>
