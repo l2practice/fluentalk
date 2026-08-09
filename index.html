@@ -2571,7 +2571,9 @@ let _studentHW = [];
 async function renderStudentHomework(c) {
   const res = await gasCall('student.getHomework');
   if (!res.success) { c.innerHTML = '<div class="empty">' + res.error + '</div>'; return; }
-  _studentHW = res.data || [];
+  // Only overwrite the cache with a real result. A transient empty response
+  // must not wipe a list the student is mid-way through, which forced sign-outs.
+  if (Array.isArray(res.data)) _studentHW = res.data;
   const now  = new Date();
   c.innerHTML = `
     <h2 style="margin-bottom:16px">📚 Homework</h2>
@@ -2702,12 +2704,21 @@ function openFreeSetup(part) {
   buildSetup('free', null);
 }
 
-function startHWPractice(assignId, title, part) {
+async function startHWPractice(assignId, title, part) {
   if (gateBlocked()) return;
-  const hw = _studentHW.find(h => h.AssignID === assignId);
-  if (!hw) return;
-  let questions = [];
-  try { questions = JSON.parse(hw.Questions || '[]'); } catch(e) {}
+  let hw = _studentHW.find(h => h.AssignID === assignId);
+  // The in-memory list can be empty if the student reached here without opening
+  // the Homework tab this session (e.g. via a retry), or if a previous fetch
+  // failed. Re-fetch once before giving up, so we never dead-end on a valid
+  // assignment — that was the bug behind "I had to sign out to see the topic".
+  if (!hw) {
+    try {
+      const res = await gasCall('student.getHomework');
+      if (res.success && Array.isArray(res.data) && res.data.length) _studentHW = res.data;
+      hw = _studentHW.find(h => h.AssignID === assignId);
+    } catch(e) {}
+  }
+  if (!hw) { toast('This homework is no longer available. Pull to refresh or open Homework again.', 'error'); return; }
   A.assignId = assignId;
   buildSetup('homework', hw);
 }
@@ -2912,7 +2923,7 @@ async function renderMyHistory(c) {
             </div>
             <div style="display:flex;gap:6px">
               ${milestones.length ? `<button class="btn btn-outline btn-sm doc-export-btn" style="color:var(--green-d)" onclick="exportToDoc('${milestones[milestones.length-1].SessionID}')">📄 Google Doc</button>` : ''}
-              <button class="btn btn-primary btn-sm" onclick="retryFromHistory('${g.topic}','${g.assignId||''}','${g.part||'part1'}')">Re-try</button>
+              <button class="btn btn-primary btn-sm" onclick='retryFromHistory(${JSON.stringify(g.topic||"")}, ${JSON.stringify(g.assignId||"")}, ${JSON.stringify(g.part||"part1")}, ${JSON.stringify(g.sessions[g.sessions.length-1]?.QuestionsJSON || "[]")})'>Re-try</button>
             </div>
           </div>
           ${milestones.length ? `
@@ -2923,16 +2934,29 @@ async function renderMyHistory(c) {
     }).join('') : '<div class="empty">No practice history yet</div>'}`;
 }
 
-function retryFromHistory(topic, assignId, part) {
+function retryFromHistory(topic, assignId, part, questionsJSON) {
   if (gateBlocked()) return;
+  // First choice: the live homework assignment, so attempt counting and the
+  // teacher's latest keywords stay correct.
   if (assignId) {
     const hw = _studentHW.find(h => h.AssignID === assignId);
     if (hw) { startHWPractice(assignId, hw.Title, part); return; }
   }
-  // Free practice retry
-  A.assignId = '';
+  // The assignment might be archived or missing from the cached list. Rather
+  // than dumping the student into an empty free-practice form, rebuild from the
+  // questions saved on their own last session — the questions and the teacher's
+  // keywords were stored with it.
+  let savedQs = [];
+  if (questionsJSON) { try { savedQs = JSON.parse(questionsJSON); } catch(e) {} }
+
+  A.assignId = assignId || '';   // keep the id so the retry still counts toward the assignment
   A.topic    = topic;
-  buildSetup('free', null);
+  A.freePart = part || 'part1';
+  if (savedQs.length) {
+    buildSetup('homework', { Title: topic, Part: part || 'part1', Questions: JSON.stringify(savedQs) });
+  } else {
+    buildSetup('free', null);
+  }
 }
 
 // ════════════════════════════════════════════
@@ -4006,7 +4030,7 @@ function renderNextStep(answered, isMilestone, attemptNo) {
         ${targets.map(t => `<li>${t}</li>`).join('') || '<li>Say a little more, and give a reason for each answer.</li>'}
       </ul>
       <button class="btn btn-primary" id="cooldown-btn" disabled style="margin-top:12px"
-              onclick="retryFromHistory('${A.topic}','${A.assignId||''}','${A.mode}')">
+              onclick='retryFromHistory(${JSON.stringify(A.topic||"")}, ${JSON.stringify(A.assignId||"")}, ${JSON.stringify(A.mode||"part1")}, ${JSON.stringify(JSON.stringify((A.qs||[]).map(q => ({question:q.question, keywords:q.keywords||[]}))))})'>
         🔄 Practice again
       </button>
     </div>`;
