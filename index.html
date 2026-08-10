@@ -569,7 +569,6 @@ textarea.form-input{resize:vertical;min-height:72px;line-height:1.6}
       <div class="sidenav-section">Dashboard</div>
       <div class="sidenav-item active" onclick="studentTab('overview')"><span class="sidenav-icon">📊</span> Overview</div>
       <div class="sidenav-item" onclick="studentTab('peer')"><span class="sidenav-icon">👥</span> Peer Comparison</div>
-      <div class="sidenav-item" onclick="studentTab('homework')"><span class="sidenav-icon">📚</span> Homework</div>
       <div class="sidenav-item" onclick="studentTab('practice')"><span class="sidenav-icon">🎤</span> Practice</div>
       <div class="sidenav-item" onclick="studentTab('history')"><span class="sidenav-icon">📋</span> My History</div>
       <div class="sidenav-section">Account</div>
@@ -2459,7 +2458,7 @@ async function saveSettings() {
 // ════════════════════════════════════════════
 async function studentTab(tab) {
   document.querySelectorAll('#S-student .sidenav-item').forEach((el, i) => {
-    const tabs = ['overview','peer','homework','practice','history'];
+    const tabs = ['overview','peer','practice','history'];
     el.classList.toggle('active', tabs[i] === tab);
   });
   const c = document.getElementById('student-content');
@@ -2467,7 +2466,6 @@ async function studentTab(tab) {
   try {
     if (tab === 'overview')  await renderStudentOverview(c);
     if (tab === 'peer')      await renderPeerComparison(c);
-    if (tab === 'homework')  await renderStudentHomework(c);
     if (tab === 'practice')  { renderPracticeHome(c); tickGateMsg(); }
     if (tab === 'history')   await renderMyHistory(c);
   } catch(e) { c.innerHTML = '<div class="empty">Error: ' + e.message + '</div>'; }
@@ -2568,6 +2566,13 @@ async function renderPeerComparison(c) {
 }
 
 let _studentHW = [];
+async function openHomeworkChoice() {
+  if (gateBlocked()) return;
+  const c = document.getElementById('student-content');
+  c.innerHTML = '<div class="empty">Loading your homework…</div>';
+  await renderStudentHomework(c);
+}
+
 async function renderStudentHomework(c) {
   const res = await gasCall('student.getHomework');
   if (!res.success) { c.innerHTML = '<div class="empty">' + res.error + '</div>'; return; }
@@ -2576,6 +2581,7 @@ async function renderStudentHomework(c) {
   if (Array.isArray(res.data)) _studentHW = res.data;
   const now  = new Date();
   c.innerHTML = `
+    <button class="btn btn-outline btn-sm" onclick="studentTab('practice')" style="margin-bottom:16px">← Back to practice</button>
     <h2 style="margin-bottom:16px">📚 Homework</h2>
     ${_studentHW.length ? _studentHW.map(hw => {
       const deadline = hw.Deadline ? new Date(hw.Deadline) : null;
@@ -2639,7 +2645,7 @@ function renderPracticeHome(c) {
         <div class="mode-title">Free Practice</div>
         <div class="mode-sub">Choose a part and enter your own questions</div>
       </div>
-      <div class="mode-tile" onclick="studentTab('homework')">
+      <div class="mode-tile" onclick="openHomeworkChoice()">
         <div class="mode-icon">📚</div>
         <div class="mode-title">Homework</div>
         <div class="mode-sub">Practice your teacher's assignments</div>
