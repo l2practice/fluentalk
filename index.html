@@ -2936,24 +2936,30 @@ async function renderMyHistory(c) {
 
 function retryFromHistory(topic, assignId, part, questionsJSON) {
   if (gateBlocked()) return;
-  // First choice: the live homework assignment, so attempt counting and the
-  // teacher's latest keywords stay correct.
-  if (assignId) {
-    const hw = _studentHW.find(h => h.AssignID === assignId);
-    if (hw) { startHWPractice(assignId, hw.Title, part); return; }
-  }
-  // The assignment might be archived or missing from the cached list. Rather
-  // than dumping the student into an empty free-practice form, rebuild from the
-  // questions saved on their own last session — the questions and the teacher's
-  // keywords were stored with it.
   let savedQs = [];
   if (questionsJSON) { try { savedQs = JSON.parse(questionsJSON); } catch(e) {} }
 
-  A.assignId = assignId || '';   // keep the id so the retry still counts toward the assignment
+  // First choice: the live homework assignment, so attempt counting and the
+  // teacher's latest keywords stay correct. Only take this path if the cached
+  // assignment actually has questions — otherwise fall through to the saved
+  // ones so the student never lands on an empty form.
+  if (assignId) {
+    const hw = _studentHW.find(h => h.AssignID === assignId);
+    let hwQs = [];
+    if (hw) { try { hwQs = JSON.parse(hw.Questions || '[]'); } catch(e) {} }
+    if (hw && hwQs.length) { startHWPractice(assignId, hw.Title, part); return; }
+  }
+
+  // The assignment may be missing from the cached list (student reached retry
+  // without opening the Homework tab, or a fetch failed). Rebuild from the
+  // questions saved on their own last session — they were stored with it, along
+  // with the teacher's keywords — and KEEP the assignId so it still counts as
+  // homework rather than becoming free practice with a hand-typed topic.
+  A.assignId = assignId || '';
   A.topic    = topic;
   A.freePart = part || 'part1';
   if (savedQs.length) {
-    buildSetup('homework', { Title: topic, Part: part || 'part1', Questions: JSON.stringify(savedQs) });
+    buildSetup('homework', { AssignID: assignId || '', Title: topic, Part: part || 'part1', Questions: JSON.stringify(savedQs) });
   } else {
     buildSetup('free', null);
   }
@@ -2967,6 +2973,14 @@ function buildSetup(type, hwData) {
   const part  = A.mode;
   const isP2  = part === 'part2';
   const isHW  = type === 'homework';
+  // Homework identity travels on hwData. Restore assignId and topic from it
+  // here so a retry that rebuilds from a saved session keeps counting as
+  // homework — otherwise A.assignId could be stale and the attempt would be
+  // saved as free practice with a hand-typed topic.
+  if (isHW && hwData) {
+    if (hwData.AssignID) A.assignId = hwData.AssignID;
+    if (hwData.Title)    A.topic    = hwData.Title;
+  }
   let questions = [];
   if (isHW && hwData) {
     try { questions = JSON.parse(hwData.Questions || '[]'); } catch(e) {}
