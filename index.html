@@ -2065,9 +2065,10 @@ function renderProgressUI(c, classes) {
 }
 
 function buildProgressRows(sessions, classFilter) {
-  // Group by studentId+topic
+  // Group by studentId+topic. JAM runs live in their own tab, never here.
   const map = {};
   sessions.forEach(s => {
+    if (String(s.Type) === 'jam' || String(s.Part) === 'jam') return;
     const key = s.StudentID + '|' + (s.Topic||'');
     if (!map[key]) map[key] = { StudentID:s.StudentID, StudentName:s.StudentName, ClassID:s.ClassID, ClassName:s.ClassName, Part:s.Part, Topic:s.Topic, Type:s.Type, sessions:[] };
     map[key].sessions.push(s);
