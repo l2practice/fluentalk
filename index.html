@@ -2898,6 +2898,22 @@ function jamDone() {
   studentTab('practice');
 }
 
+let _historyGroups = [];
+function retryFromGroup(gi) {
+  const g = _historyGroups[gi];
+  if (!g) return;
+  const last = g.sessions[g.sessions.length - 1];
+  retryFromHistory(g.topic || '', g.assignId || '', g.part || 'part1', last?.QuestionsJSON || '[]');
+}
+
+// Retry the attempt just finished, reading straight from live state so no
+// question text or keyword has to be embedded in an HTML attribute (which broke
+// on apostrophes like "What's your…").
+function retryCurrent() {
+  const qs = (A.qs || []).map(q => ({ question: q.question, keywords: q.keywords || [] }));
+  retryFromHistory(A.topic || '', A.assignId || '', A.mode || 'part1', JSON.stringify(qs));
+}
+
 async function renderMyHistory(c) {
   const res = await gasCall('student.getMyHistory');
   if (!res.success) { c.innerHTML = '<div class="empty">' + res.error + '</div>'; return; }
@@ -2910,9 +2926,10 @@ async function renderMyHistory(c) {
     map[key].sessions.push(s);
   });
   const groups = Object.values(map);
+  _historyGroups = groups;   // retry indexes into this, avoiding fragile JSON-in-HTML
   c.innerHTML = `
     <h2 style="margin-bottom:16px">📋 My History</h2>
-    ${groups.length ? groups.map(g => {
+    ${groups.length ? groups.map((g, gi) => {
       // getMyHistory hands sessions back newest-first, so sort before treating
       // the last element as "the latest attempt" — otherwise every export and
       // every score strip silently refers to the oldest one.
@@ -2928,7 +2945,7 @@ async function renderMyHistory(c) {
             </div>
             <div style="display:flex;gap:6px">
               ${milestones.length ? `<button class="btn btn-outline btn-sm doc-export-btn" style="color:var(--green-d)" onclick="exportToDoc('${milestones[milestones.length-1].SessionID}')">📄 Google Doc</button>` : ''}
-              <button class="btn btn-primary btn-sm" onclick='retryFromHistory(${JSON.stringify(g.topic||"")}, ${JSON.stringify(g.assignId||"")}, ${JSON.stringify(g.part||"part1")}, ${JSON.stringify(g.sessions[g.sessions.length-1]?.QuestionsJSON || "[]")})'>Re-try</button>
+              <button class="btn btn-primary btn-sm" onclick="retryFromGroup(${gi})">Re-try</button>
             </div>
           </div>
           ${milestones.length ? `
@@ -4049,7 +4066,7 @@ function renderNextStep(answered, isMilestone, attemptNo) {
         ${targets.map(t => `<li>${t}</li>`).join('') || '<li>Say a little more, and give a reason for each answer.</li>'}
       </ul>
       <button class="btn btn-primary" id="cooldown-btn" disabled style="margin-top:12px"
-              onclick='retryFromHistory(${JSON.stringify(A.topic||"")}, ${JSON.stringify(A.assignId||"")}, ${JSON.stringify(A.mode||"part1")}, ${JSON.stringify(JSON.stringify((A.qs||[]).map(q => ({question:q.question, keywords:q.keywords||[]}))))})'>
+              onclick="retryCurrent()">
         🔄 Practice again
       </button>
     </div>`;
