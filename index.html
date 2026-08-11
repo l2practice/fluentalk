@@ -536,7 +536,6 @@ textarea.form-input{resize:vertical;min-height:72px;line-height:1.6}
       <div class="sidenav-item" onclick="teacherTab('classroom')"><span class="sidenav-icon">🏫</span> Classroom</div>
       <div class="sidenav-item" onclick="teacherTab('homework')"><span class="sidenav-icon">📚</span> Homework Book</div>
       <div class="sidenav-item" onclick="teacherTab('library')"><span class="sidenav-icon">📖</span> Question Library</div>
-      <div class="sidenav-item" onclick="teacherTab('jam')"><span class="sidenav-icon">⏱️</span> JAM Practice</div>
       <div class="sidenav-item" onclick="teacherTab('progress')"><span class="sidenav-icon">📈</span> Study Progress</div>
       <div class="sidenav-section">Archive</div>
       <div class="sidenav-item" onclick="teacherTab('studentArchive')"><span class="sidenav-icon">🗄️</span> Student Archive</div>
@@ -1272,7 +1271,7 @@ let _sortCol = '', _sortDir = 1;
 
 async function teacherTab(tab) {
   document.querySelectorAll('.sidenav-item').forEach((el,i) => {
-    const tabs = ['overview','classroom','homework','library','jam','progress','studentArchive','classArchive','settings'];
+    const tabs = ['overview','classroom','homework','library','progress','studentArchive','classArchive','settings'];
     el.classList.toggle('active', tabs[i] === tab);
   });
   const c = document.getElementById('teacher-content');
@@ -1282,7 +1281,6 @@ async function teacherTab(tab) {
     if (tab === 'classroom') await renderTeacherClassroom(c);
     if (tab === 'homework')  await renderTeacherHomework(c);
     if (tab === 'library')   await renderLibrary(c);
-    if (tab === 'jam')       await renderJamStats(c);
     if (tab === 'progress')  await renderTeacherProgress(c);
     if (tab === 'studentArchive') await renderStudentArchive(c);
     if (tab === 'classArchive')   await renderClassArchive(c);
@@ -1848,27 +1846,6 @@ async function deleteLibraryItem(libId, title) {
   } catch(e) { toast(e.message, 'error'); }
 }
 
-async function renderJamStats(c) {
-  const res = await gasCall('teacher.getJamStats', {});
-  const stats = res.data || [];
-  c.innerHTML = `
-    <h2 style="margin-bottom:6px">⏱️ JAM Practice</h2>
-    <p style="font-size:13px;color:var(--g600);margin-bottom:18px">Just-A-Minute fluency drills your students ran on their own. No band score — this tracks how much they practised speaking non-stop.</p>
-    ${stats.length ? `<div class="tbl-wrap"><table class="tbl">
-      <thead><tr><th>Student</th><th>Class</th><th>Topics practised</th><th style="text-align:center">Runs</th><th style="text-align:center">Minutes</th><th>Last</th></tr></thead>
-      <tbody>
-        ${stats.map(st => `<tr>
-          <td style="font-weight:600">${st.name || st.studentId}<div style="font-size:10px;color:var(--g400);font-family:var(--fm)">${st.studentId}</div></td>
-          <td style="font-size:12px">${classNameOf(st.classId) || st.classId || '—'}</td>
-          <td style="font-size:12px">${(st.topicList||[]).map(t => `<span class="badge badge-blue" style="margin:2px">${t.topic} ×${t.runs}</span>`).join(' ')}</td>
-          <td style="text-align:center;font-weight:700">${st.totalRuns}</td>
-          <td style="text-align:center">${st.totalMinutes}m</td>
-          <td style="font-size:11px;color:var(--g500)">${st.last ? fmtDT(st.last) : '—'}</td>
-        </tr>`).join('')}
-      </tbody>
-    </table></div>` : '<div class="empty">No JAM practice yet. Students can start it from their Practice screen.</div>'}`;
-}
-
 async function renderTeacherHomework(c) {
   const [asnRes, clsRes] = await Promise.all([
     gasCall('teacher.getAssignments', {}),
@@ -2019,7 +1996,7 @@ async function deleteAsn(assignId, title) {
 }
 
 // ── STUDY PROGRESS ───────────────────────────
-let _progSessions = [], _progFilter = '';
+let _progSessions = [], _progFilter = '', _progMode = '';
 
 function filterProgressByClass(classId) {
   _progFilter = classId;
@@ -2042,6 +2019,12 @@ function renderProgressUI(c, classes) {
         <option value="">All classes</option>
         ${classes.map(cl => `<option value="${cl.ClassID}" ${_progFilter===cl.ClassID?'selected':''}>${cl.ClassName || cl.ClassID}</option>`).join('')}
       </select>
+      <select class="search-inp" style="max-width:150px" onchange="_progMode=this.value;filterProgressTable()">
+        <option value="">All modes</option>
+        <option value="homework" ${_progMode==='homework'?'selected':''}>📚 Homework</option>
+        <option value="free" ${_progMode==='free'?'selected':''}>✏️ Free</option>
+        <option value="jam" ${_progMode==='jam'?'selected':''}>⏱️ JAM</option>
+      </select>
       <input class="search-inp" placeholder="Name / ID / Topic…" id="prog-search" oninput="filterProgressTable()" style="max-width:280px">
       <span style="font-size:12px;color:var(--g600)">${rows.length} results</span>
     </div>
@@ -2053,7 +2036,9 @@ function renderProgressUI(c, classes) {
           <th onclick="sortProg('ClassID')">Class ⇅</th>
           <th onclick="sortProg('Part')">Mode ⇅</th>
           <th onclick="sortProg('Topic')">Topic ⇅</th>
-          <th>First attempt</th><th>Latest attempt</th><th>Duration</th>
+          <th onclick="sortProg('_first')">First attempt ⇅</th>
+          <th onclick="sortProg('_last')">Latest attempt ⇅</th>
+          <th>Duration</th>
           <th>Q</th><th>Attempts</th>
           <th>Milestone Scores ⇅</th><th>⚠</th><th></th>
         </tr></thead>
@@ -2065,11 +2050,10 @@ function renderProgressUI(c, classes) {
 }
 
 function buildProgressRows(sessions, classFilter) {
-  // Group by studentId+topic. JAM runs live in their own tab, never here.
+  // Group by studentId+topic.
   const map = {};
   sessions.forEach(s => {
-    if (String(s.Type) === 'jam' || String(s.Part) === 'jam') return;
-    const key = s.StudentID + '|' + (s.Topic||'');
+    const key = s.StudentID + '|' + (s.Topic||'') + '|' + (s.Type||'');
     if (!map[key]) map[key] = { StudentID:s.StudentID, StudentName:s.StudentName, ClassID:s.ClassID, ClassName:s.ClassName, Part:s.Part, Topic:s.Topic, Type:s.Type, sessions:[] };
     map[key].sessions.push(s);
     // A topic counts as free practice only if every attempt in it was free —
@@ -2080,8 +2064,11 @@ function buildProgressRows(sessions, classFilter) {
   if (classFilter) rows = rows.filter(r => String(r.ClassID||'').toUpperCase() === classFilter.toUpperCase());
   // Order each group oldest-first so "first attempt" and "latest attempt" mean
   // what they say; the backend hands sessions back newest-first.
-  rows.forEach(r => r.sessions.sort((a, b) =>
-    String(a.StartTime || '').localeCompare(String(b.StartTime || ''))));
+  rows.forEach(r => {
+    r.sessions.sort((a, b) => String(a.StartTime || '').localeCompare(String(b.StartTime || '')));
+    r._first = r.sessions[0]?.StartTime || '';
+    r._last  = r.sessions[r.sessions.length - 1]?.StartTime || '';
+  });
   rows.sort((a,b) => {
     const la = a.sessions.slice(-1)[0]?.StartTime || '';
     const lb = b.sessions.slice(-1)[0]?.StartTime || '';
@@ -2095,9 +2082,13 @@ function renderProgressRows(rows) {
   if (!rows.length) return '<tr><td colspan="13" class="empty">No data yet</td></tr>';
   return rows.map((r, ri) => {
     const count    = r.sessions.length;
-    const lastSess = r.sessions.slice(-1)[0];
-    const start    = fmtDT(r.sessions[0]?.StartTime);   // first ever attempt
-    const end      = fmtDT(lastSess?.StartTime);        // most recent attempt
+    // Sort chronologically so first/latest are correct regardless of row order.
+    const ordered  = r.sessions.slice().sort((a,b)=>String(a.StartTime||'').localeCompare(String(b.StartTime||'')));
+    const lastSess = ordered[ordered.length-1];
+    r._first = ordered[0]?.StartTime || '';
+    r._last  = lastSess?.StartTime || '';
+    const start    = fmtDT(ordered[0]?.StartTime);   // first ever attempt
+    const end      = fmtDT(lastSess?.StartTime);     // most recent attempt
     const dur      = lastSess?.DurationMin ? lastSess.DurationMin + 'm' : '—';
     const qCount   = (() => { try { return (JSON.parse(lastSess?.QuestionsJSON || '[]')).length; } catch(e) { return '—'; } })();
     // Milestones: find sessions where IsMilestone is true
@@ -2116,7 +2107,11 @@ function renderProgressRows(rows) {
       <td style="font-family:var(--fm);font-size:12px">${r.StudentID}</td>
       <td style="font-weight:600">${r.StudentName||'—'}</td>
       <td>${r.ClassID ? `<div style="font-weight:600;font-size:12px">${r.ClassName || classNameOf(r.ClassID)}</div><div style="font-size:10px;color:var(--g400);font-family:var(--fm)">${r.ClassID}</div>` : '—'}</td>
-      <td><span class="badge badge-blue">${r.Part||'—'}</span>${(r.Type==='free') ? ' <span class="badge badge-grey" title="Student practised this on their own, not assigned homework" style="background:#EDE9FE;color:#6D28D9">Free</span>' : ''}</td>
+      <td><span class="badge badge-blue">${r.Part||'—'}</span>${
+        (String(r.Type)==='jam'||String(r.Part)==='jam')
+          ? ' <span class="badge" title="JAM — one-minute fluency drill" style="background:#FEF3C7;color:#B45309">⏱️ JAM</span>'
+          : (r.Type==='free' ? ' <span class="badge" title="Student practised this on their own, not assigned homework" style="background:#EDE9FE;color:#6D28D9">Free</span>' : '')
+      }</td>
       <td style="font-weight:600;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.Topic||''}">${r.Topic||'—'}</td>
       <td style="font-size:12px">${start}</td>
       <td style="font-size:12px">${end}</td>
@@ -2141,16 +2136,19 @@ let _progView = [];   // what is currently rendered (sorted/filtered) — Detail
 
 function sortProg(col) {
   if (_sortCol === col) _sortDir *= -1; else { _sortCol = col; _sortDir = 1; }
-  _progRows.sort((a,b) => String(a[col]||'').localeCompare(String(b[col]||'')) * _sortDir);
+  // _first / _last are ISO timestamps → string compare already sorts by time.
+  _progRows.sort((a,b) => String(a[col]||'').localeCompare(String(b[col]||''), undefined, { numeric: true }) * _sortDir);
   filterProgressTable();
 }
 
 function filterProgressTable() {
   const q = (document.getElementById('prog-search')?.value || '').toLowerCase();
+  const modeOf = r => (String(r.Type)==='jam'||String(r.Part)==='jam') ? 'jam' : (r.Type==='free' ? 'free' : 'homework');
   const filtered = _progRows.filter(r =>
-    !q || String(r.StudentName||'').toLowerCase().includes(q) ||
-    String(r.StudentID||'').toLowerCase().includes(q) ||
-    String(r.Topic||'').toLowerCase().includes(q)
+    (!_progMode || modeOf(r) === _progMode) &&
+    (!q || String(r.StudentName||'').toLowerCase().includes(q) ||
+     String(r.StudentID||'').toLowerCase().includes(q) ||
+     String(r.Topic||'').toLowerCase().includes(q))
   );
   const tb = document.getElementById('prog-tbody');
   if (tb) tb.innerHTML = renderProgressRows(filtered);
