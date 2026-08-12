@@ -2024,14 +2024,14 @@ function renderProgressUI(c, classes) {
   const MILESTONES = [3,5,8,10];
   c.innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px">
-      <h2 style="font-size:1.3rem">📈 Study Progress</h2>
+      <h2 style="font-size:1.3rem">📈 Study Progress — ${classNameOf(_progFilter) || _progFilter}</h2>
       <div style="display:flex;gap:8px">
+        <button class="btn btn-outline btn-sm" onclick="_progFilter='';renderTeacherProgress(document.getElementById('teacher-content'))">← Change class</button>
         <button class="btn btn-outline btn-sm" onclick="exportSessions()">⬇ Export to Sheet</button>
       </div>
     </div>
     <div class="search-row">
       <select class="search-inp" style="max-width:180px" onchange="_progFilter=this.value;renderTeacherProgress(document.getElementById('teacher-content'))">
-        <option value="">All classes</option>
         ${classes.map(cl => `<option value="${cl.ClassID}" ${_progFilter===cl.ClassID?'selected':''}>${cl.ClassName || cl.ClassID}</option>`).join('')}
       </select>
       <select class="search-inp" style="max-width:150px" onchange="_progMode=this.value;filterProgressTable()">
@@ -2105,7 +2105,7 @@ function renderProgressRows(rows) {
     const start    = fmtDT(ordered[0]?.StartTime);   // first ever attempt
     const end      = fmtDT(lastSess?.StartTime);     // most recent attempt
     const dur      = lastSess?.DurationMin ? lastSess.DurationMin + 'm' : '—';
-    const qCount   = (() => { try { return (JSON.parse(lastSess?.QuestionsJSON || '[]')).length; } catch(e) { return '—'; } })();
+    const qCount   = lastSess?.QCount || '—';
     // Milestones: find sessions where IsMilestone is true
     const milestones = r.sessions.filter(s => String(s.IsMilestone) === 'true' && s.Overall);
     const latestBatch = milestones.slice(-4);
@@ -2169,9 +2169,23 @@ function filterProgressTable() {
   if (tb) tb.innerHTML = renderProgressRows(filtered);
 }
 
-function showProgressDetail(rowIdx) {
+async function showProgressDetail(rowIdx) {
   const row = _progView[rowIdx];
   if (!row) return;
+  // The light progress payload has no ResultsJSON. Fetch the heavy per-question
+  // detail for just this student+topic now, on demand, then merge it in.
+  document.getElementById('dm-title').textContent = row.StudentName + ' · ' + (row.ClassName || classNameOf(row.ClassID) || '');
+  document.getElementById('dm-meta').textContent = 'Loading…';
+  document.getElementById('dm-body').innerHTML = '<div class="empty" style="padding:40px">Loading detail…</div>';
+  openModal('detail-modal');
+  try {
+    const res = await gasCall('teacher.getSessionDetail', { studentId: row.StudentID, topic: row.Topic || '' });
+    if (res.success && Array.isArray(res.data)) {
+      const bySess = {};
+      res.data.forEach(d => { bySess[d.SessionID] = d; });
+      row.sessions.forEach(s => { const d = bySess[s.SessionID]; if (d) { s.ResultsJSON = d.ResultsJSON; s.ReportText = d.ReportText; } });
+    }
+  } catch(e) { /* fall through and render what we have */ }
   const milestones = row.sessions.filter(s => String(s.IsMilestone) === 'true');
   const latestBatch = milestones.slice(-4);
   const latestAttemptNo = latestBatch.slice(-1)[0]?.AttemptNo || '';
@@ -2231,7 +2245,6 @@ function showProgressDetail(rowIdx) {
   document.getElementById('dm-title').textContent = row.StudentName + ' · ' + (row.ClassName || classNameOf(row.ClassID) || '') + ' · 📌 ' + (row.Topic||'');
   document.getElementById('dm-meta').textContent = (row.Part||'').toUpperCase() + ' · ' + row.sessions.length + ' sessions';
   document.getElementById('dm-body').innerHTML = dmHtml;
-  openModal('detail-modal');
 }
 
 async function exportSessions() {
@@ -4945,8 +4958,52 @@ window.addEventListener('load', () => {
 // Patch renderTeacherProgress to store rows
 const _origRenderProgress = renderTeacherProgress;
 async function renderTeacherProgress(c) {
+  if (!_progFilter) {
+    // No class chosen yet: show class stat cards (like Class Overview) and load
+    // no session data. Picking a class then loads only that class's results.
+    c.innerHTML = '<div class="empty" style="padding:40px">Loading classes…</div>';
+    const res = await gasCall('teacher.getClassStats');
+    const stats = res.success ? (res.data || []) : [];
+    _teacherClasses = stats.map(s => ({ ClassID: s.classId, ClassName: s.className, Status: 'Active' }));
+    c.innerHTML = `
+      <h2 style="margin-bottom:6px;font-size:1.3rem">📈 Study Progress</h2>
+      <p style="font-size:13px;color:var(--g600);margin-bottom:20px">Choose a class to view its results.</p>
+      <div class="class-card-grid">
+        ${stats.map(cl => `
+          <div class="class-card" onclick="_progFilter='${cl.classId}';renderTeacherProgress(document.getElementById('teacher-content'))">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px">
+              <div>
+                <div style="font-weight:800;font-size:1.05rem;color:var(--black);letter-spacing:-.02em">${cl.className || cl.classId}</div>
+                <div style="font-size:11px;color:var(--g400);margin-top:2px">${[cl.academicYear,cl.semester].filter(Boolean).join(' · ')}</div>
+              </div>
+              <span class="badge badge-grey" style="font-family:var(--fm)">${cl.classId}</span>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center;margin-bottom:12px">
+              <div style="padding:8px;background:var(--g50);border-radius:10px;border:1px solid var(--g100)">
+                <div style="font-size:1.5rem;font-weight:800;color:var(--black);font-family:var(--fm);line-height:1">${cl.totalStudents}</div>
+                <div style="font-size:10px;color:var(--g600);margin-top:3px;font-weight:600;text-transform:uppercase;letter-spacing:.04em">Total</div>
+              </div>
+              <div style="padding:8px;background:#D1FAE5;border-radius:10px;border:1px solid #A7F3D0">
+                <div style="font-size:1.5rem;font-weight:800;color:var(--green-d);font-family:var(--fm);line-height:1">${cl.practiced}</div>
+                <div style="font-size:10px;color:var(--green-d);margin-top:3px;font-weight:600;text-transform:uppercase;letter-spacing:.04em">Practiced</div>
+              </div>
+              <div style="padding:8px;background:var(--red-l);border-radius:10px;border:1px solid #FECDD3">
+                <div style="font-size:1.5rem;font-weight:800;color:var(--red-d);font-family:var(--fm);line-height:1">${cl.notPracticed}</div>
+                <div style="font-size:10px;color:var(--red-d);margin-top:3px;font-weight:600;text-transform:uppercase;letter-spacing:.04em">Not yet</div>
+              </div>
+            </div>
+            <div style="height:6px;background:var(--g100);border-radius:3px;overflow:hidden;margin-bottom:8px">
+              <div style="height:100%;background:linear-gradient(90deg,var(--green),var(--teal));border-radius:3px;width:${cl.totalStudents>0?Math.round(cl.practiced/cl.totalStudents*100):0}%"></div>
+            </div>
+            <div style="font-size:11px;color:var(--g500);text-align:right">${cl.totalSessions} sessions →</div>
+          </div>`).join('') || '<div class="empty">No classes yet.</div>'}
+      </div>`;
+    return;
+  }
+
+  c.innerHTML = '<div class="empty" style="padding:40px">Loading results…</div>';
   const [sessRes, clsRes] = await Promise.all([
-    gasCall('teacher.getAllSessions', {}),
+    gasCall('teacher.getAllSessions', { classId: _progFilter }),
     gasCall('teacher.getClasses')
   ]);
   _progSessions = sessRes.data || [];
