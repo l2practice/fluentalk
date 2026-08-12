@@ -1020,19 +1020,34 @@ function SS(id) {
 // ════════════════════════════════════════════
 // GAS API
 // ════════════════════════════════════════════
-async function gasCall(action, payload = {}) {
+async function gasCall(action, payload = {}, _attempt = 0) {
   const body = { action, payload,
     sessionToken: A.sessionToken || '',
     teacherToken: A.teacherToken || ''
   };
-  const r = await fetch(GAS_URL, {
-    method: 'POST',
-    body: JSON.stringify(body)
-  });
-  if (!r.ok) throw new Error('Network error ' + r.status);
-  const j = await r.json();
-  if (j && j.success === false && j.error === 'SESSION_EXPIRED') { handleSessionExpired(); }
-  return j;
+  // Apps Script occasionally stalls under load; a request with no ceiling then
+  // hangs the whole UI. Abort after 30s and retry once for transient network
+  // failures before surfacing the error.
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 30000);
+  try {
+    const r = await fetch(GAS_URL, { method: 'POST', body: JSON.stringify(body), signal: ctrl.signal });
+    clearTimeout(timer);
+    if (!r.ok) throw new Error('Network error ' + r.status);
+    const j = await r.json();
+    if (j && j.success === false && j.error === 'SESSION_EXPIRED') { handleSessionExpired(); }
+    return j;
+  } catch (e) {
+    clearTimeout(timer);
+    const transient = e.name === 'AbortError' || /failed to fetch|network/i.test(e.message || '');
+    if (transient && _attempt < 1) {
+      await new Promise(res => setTimeout(res, 800));
+      return gasCall(action, payload, _attempt + 1);
+    }
+    if (e.name === 'AbortError')
+      throw new Error('The server took too long to respond. It may be busy — please try again in a moment.');
+    throw e;
+  }
 }
 
 let _expiredHandled = false;
@@ -2856,6 +2871,7 @@ function renderJAMResult(text, lex) {
       <div class="card-title">🎧 Listen back &amp; try again</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
         <audio id="jam-audio" src="${_jam.audioUrl}" controls style="flex:1;min-width:200px;height:40px"></audio>
+        <button class="btn btn-outline btn-sm" onclick="const a=document.getElementById('jam-audio');if(a){a.pause();a.currentTime=0;}">⏹ Stop</button>
         <button class="btn btn-primary" onclick="startJAM('${_jam.libId}','${String(_jam.topic).replace(/'/g,'&#39;')}')">🔄 Re-try</button>
         <button class="btn btn-green" onclick="jamDone()">✓ Done</button>
       </div>
@@ -3098,7 +3114,30 @@ function checkTopic() {
   el.className = 'form-input topic-select ' + (el.value.trim().length >= 2 ? 'ok' : '');
 }
 
+let _busyOverlay = false;
+function showOverlay(msg) {
+  _busyOverlay = true;
+  let ov = document.getElementById('busy-overlay');
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.id = 'busy-overlay';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(15,23,42,.55);backdrop-filter:blur(2px);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px';
+    ov.innerHTML = `<div style="width:48px;height:48px;border:4px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin 0.8s linear infinite"></div>
+      <div id="busy-msg" style="color:#fff;font-weight:600;font-size:15px;text-align:center;max-width:280px"></div>
+      <style>@keyframes spin{to{transform:rotate(360deg)}}</style>`;
+    document.body.appendChild(ov);
+  }
+  document.getElementById('busy-msg').textContent = msg || 'Loading…';
+  ov.style.display = 'flex';
+}
+function hideOverlay() {
+  _busyOverlay = false;
+  const ov = document.getElementById('busy-overlay');
+  if (ov) ov.style.display = 'none';
+}
+
 function startSetup(nQ, type) {
+  if (_busyOverlay) return;   // a start is already in flight — ignore extra clicks
   if (!A.gkey)    { toast('Please enter your Gemini API key first', 'error'); return; }
   if (!A.groqKey) { toast('Please enter your Groq API key first', 'error'); return; }
 
@@ -3127,6 +3166,7 @@ function isMilestone(n) { return MILESTONES.includes(parseInt(n)); }
 function nextMilestone(n) { return MILESTONES.find(m => m > n) || null; }
 
 async function launch(mode, qs, retryCount) {
+  showOverlay('Setting up your session…');
   // Check if existing session for this topic
   try {
     const chk = await gasCall('speak.findExisting', { topic: A.topic, assignId: A.assignId || '' });
@@ -3152,6 +3192,7 @@ async function launch(mode, qs, retryCount) {
   updProg();
   SS('S-session');
   loadQ(0);
+  hideOverlay();
 }
 
 function loadQ(idx) {
@@ -3349,7 +3390,12 @@ async function stopCaptureAndTranscribe() {
     const warn = document.getElementById('short-answer-warn');
     if (warn && warn.style.display === 'block' && wordCount(A.curAnswer) >= MIN_ANSWER_WORDS) warn.style.display = 'none';
     return true;
-  } catch(e) { toast('Transcription error: ' + e.message, 'error', 6000); return false; }
+  } catch(e) {
+    console.error('[transcribe] failed:', e.message, '| mime:', rec.mime, '| size:', rec.blob?.size);
+    const detail = `${e.message}  ·  format ${rec.mime||'?'}, ${Math.round((rec.blob?.size||0)/1024)}KB`;
+    toast('Transcription error: ' + detail, 'error', 8000);
+    return false;
+  }
 }
 
 // ── GROQ TRANSCRIBE ───────────────────────
@@ -3386,10 +3432,18 @@ async function transcribeGroq(blob, mime, model) {
     const e = await r.json().catch(() => ({}));
     const msg = e.error?.message || 'Groq error ' + r.status;
     if (/could not process file|valid media file|failed to decode|invalid/i.test(msg)) {
-      // turbo can be stricter about container quirks than the full model, so
-      // retry once on whisper-large-v3 before surfacing a read error.
+      // Two things can cause this: a genuinely malformed container (iOS Safari
+      // sometimes finalises mp4 headers late) or a transient decode hiccup on
+      // Groq's side. Try the fuller model first, then one delayed retry, before
+      // surfacing a read error — many "could not read" cases clear on retry.
       if ((model || 'whisper-large-v3-turbo') !== 'whisper-large-v3')
         return transcribeGroq(blob, mime, 'whisper-large-v3');
+      if (!A._transcribeRetried) {
+        A._transcribeRetried = true;
+        await new Promise(res => setTimeout(res, 700));
+        try { return await transcribeGroq(blob, mime, 'whisper-large-v3-turbo'); }
+        finally { A._transcribeRetried = false; }
+      }
       const err = new Error('Could not read the recording. Xin hãy thu âm lại — nói ngay sau khi nhấn, và giữ ít nhất 2 giây.');
       err.audioRead = true;
       throw err;
@@ -3967,17 +4021,6 @@ async function finishSession() {
     shouldGrade = false;   // record the attempt, but attach no score to it
   }
 
-  // Audio upload runs after the student already has feedback on screen.
-  setGradingStatus('Saving your recordings…');
-  await Promise.all(answered.map(async (r, qi) => {
-    if (!r._audioBlob) return;
-    try {
-      const b64 = await new Promise((res, rej) => { const rd = new FileReader(); rd.onloadend = () => res(rd.result.split(',')[1]); rd.onerror = rej; rd.readAsDataURL(r._audioBlob); });
-      const up = await gasCall('speak.uploadAudio', { audioBase64: b64, mimeType: r._audioMime || 'audio/webm', topic: A.topic || 'practice', attemptNum: attemptNo, qIdx: qi + 1 });
-      if (up?.success) r.audioUrl = up.url;
-    } catch(e) {}
-  }));
-
   const overall = calcOverall(answered);
   const fc = avg(answered, 'fluency'), lr = avg(answered, 'lexical'),
         gr = avg(answered, 'grammar'), p = avg(answered, 'pronunciation');
@@ -4006,8 +4049,7 @@ async function finishSession() {
         question: r.question, keywords: r.keywords || [],
         studentAnswer: r.studentAnswer, overall: r.overall || '',
         scores: r.scores || null, errors: r.errors || [],
-        suggestion: r.suggestion || '', natural: r.natural || '',
-        audioUrl: r.audioUrl || ''
+        suggestion: r.suggestion || '', natural: r.natural || ''
       })),
       reportText: buildReport(answered, rpt, shouldGrade, attemptNo),
       type: A.assignId ? 'homework' : 'free',
@@ -4230,7 +4272,6 @@ function renderResults(answered, rpt, isMilestone, attemptNo, overall, fc, lr, g
                 return `<div class="score-row"><div class="score-badge ${cls}">${v}</div><div><div class="score-nm">${n}</div></div></div>`;
               }).join('')}
             </div>
-            ${r.audioUrl ? `<audio controls src="${r.audioUrl}" style="width:100%;margin-top:10px;border-radius:8px"></audio>` : ''}
           </div>
         </div>
       </div>`).join('') : ''}
