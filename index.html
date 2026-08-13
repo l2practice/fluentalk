@@ -2514,8 +2514,9 @@ async function renderStudentOverview(c) {
       </div>` : '<div class="empty">You have not practiced yet. Go to Practice to get started!</div>'}`;
 }
 
+let _peerDays = 14;
 async function renderPeerComparison(c) {
-  const res = await gasCall('student.getPeerComparison');
+  const res = await gasCall('student.getPeerComparison', { sinceDays: _peerDays });
   if (!res.success) { c.innerHTML = '<div class="empty">' + res.error + '</div>'; return; }
   const topics = res.data || [];
   const clsName = res.className || A.user?.className || A.user?.classId || 'My Class';
@@ -2531,7 +2532,8 @@ async function renderPeerComparison(c) {
   c.innerHTML = `
     <h2 style="margin-bottom:4px">👥 Peer Comparison</h2>
     <div style="font-size:13px;color:var(--g600);margin-bottom:16px">${clsName}${A.user?.classId ? ` <span style="font-family:var(--fm);font-size:11px;color:var(--g400)">· ${A.user.classId}</span>` : ''}</div>
-    <p style="font-size:13px;color:var(--g600);margin-bottom:16px">How much your class has practised each topic. 💪</p>
+    <p style="font-size:13px;color:var(--g600);margin-bottom:12px">How much your class has practised each topic. 💪</p>
+    <button class="btn btn-outline btn-sm" style="margin-bottom:16px" onclick="_peerDays = _peerDays ? 0 : 14; renderPeerComparison(document.getElementById('student-content'))">${_peerDays ? '📅 Last 2 weeks · show all topics' : '📅 Showing all · last 2 weeks'}</button>
     ${topics.length ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px">
       ${topics.map(t => `
         <div class="card" style="margin:0">
@@ -2567,7 +2569,7 @@ async function renderPeerComparison(c) {
           </div>
           ${t.lastPractice ? `<div style="font-size:10px;color:var(--g400);margin-top:8px">Class last practised ${fmtDT(t.lastPractice)}</div>` : ''}
         </div>`).join('')}
-    </div>` : '<div class="empty">No practice in your class yet — be the first!</div>'}`;
+    </div>` : `<div class="empty">${_peerDays ? 'No practice in the last 2 weeks. Tap “show all topics” above to see older ones.' : 'No practice in your class yet — be the first!'}</div>`}`;
 }
 
 let _studentHW = [];
