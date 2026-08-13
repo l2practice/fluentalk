@@ -2235,13 +2235,26 @@ function showProgressDetail(rowIdx) {
 }
 
 async function exportSessions() {
+  if (_busyOverlay) return;
+  showOverlay('Building your export sheet…');
   try {
-    toast('Exporting…', 'info');
-    const res = await gasCall('teacher.exportSessions', { classId: _progFilter || '' });
-    if (!res.success) { toast(res.error, 'error'); return; }
-    window.open(res.url, '_blank');
-    toast('Export successful!', 'success');
-  } catch(e) { toast(e.message, 'error'); }
+    const res = await gasCall('teacher.exportSessions', { classId: _progFilter || '', sinceDays: _progDays });
+    hideOverlay();
+    if (!res.success) { toast('Export failed: ' + (res.error || 'unknown error'), 'error', 8000); return; }
+    // window.open() after an await is treated as a non-user gesture and gets
+    // blocked by most pop-up blockers, which looked like "export does nothing".
+    // Try to open, but always also show a clickable link that can't be blocked.
+    const win = window.open(res.url, '_blank');
+    const zone = document.getElementById('teacher-content');
+    const bar = document.createElement('div');
+    bar.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:9998;background:#fff;border:1px solid var(--g200);box-shadow:var(--shm);border-radius:12px;padding:14px 18px;display:flex;align-items:center;gap:14px;max-width:90%';
+    bar.innerHTML = `<span style="font-size:20px">✅</span>
+      <div style="font-size:13px;color:var(--g700)">Your export is ready.${win ? '' : ' Your browser blocked the pop-up — use this link:'}</div>
+      <a href="${res.url}" target="_blank" rel="noopener" class="btn btn-primary btn-sm" style="text-decoration:none">Open Google Sheet</a>
+      <button class="btn btn-outline btn-sm" onclick="this.parentElement.remove()">Close</button>`;
+    document.body.appendChild(bar);
+    setTimeout(() => { if (bar.parentElement) bar.remove(); }, 30000);
+  } catch(e) { hideOverlay(); toast('Export error: ' + e.message, 'error', 8000); }
 }
 
 // ── ARCHIVES ────────────────────────────────
