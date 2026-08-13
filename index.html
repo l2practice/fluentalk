@@ -1062,9 +1062,7 @@ function handleSessionExpired() {
   if (_expiredHandled) return;   // one redirect, however many calls were in flight
   _expiredHandled = true;
   const wasTeacher = !!A.teacherToken;
-  A.user = null; A.sessionToken = null; A.teacherToken = null;
-  localStorage.removeItem('speak_session');
-  localStorage.removeItem('speak_teacher');
+  clearSession();
   SS('S-auth');
   switchAuthTab('login');
   toast(wasTeacher
@@ -1072,6 +1070,48 @@ function handleSessionExpired() {
     : 'Your session ended. Please sign in again.', 'info', 6000);
   setTimeout(() => { _expiredHandled = false; }, 1500);
 }
+
+// Session tokens live in sessionStorage, not localStorage: they are wiped the
+// moment the tab closes, so a dead token can never persist to the next visit
+// and trap the app in a broken "already logged in" state. API keys stay in
+// localStorage (they don't expire, and re-entering them every visit is painful).
+function clearSession() {
+  A.user = null; A.sessionToken = null; A.teacherToken = null;
+  try {
+    sessionStorage.removeItem('speak_session');
+    sessionStorage.removeItem('speak_teacher');
+    localStorage.removeItem('speak_session');   // clean up any old localStorage copies
+    localStorage.removeItem('speak_teacher');
+  } catch(_) {}
+  stopIdleTimer();
+}
+
+function signOut() {
+  clearSession();
+  SS('S-auth');
+  switchAuthTab('login');
+  toast('Signed out.', 'info', 3000);
+}
+
+// ── Idle auto-sign-out ──────────────────────
+// After 30 minutes with no interaction, sign the user out and clear the session,
+// so an unattended tab can't be resumed with a stale token later.
+const IDLE_MS = 30 * 60 * 1000;
+let _idleTimer = null;
+function resetIdleTimer() {
+  if (!A.user && !A.teacherToken) return;   // only while signed in
+  clearTimeout(_idleTimer);
+  _idleTimer = setTimeout(() => {
+    clearSession();
+    SS('S-auth');
+    switchAuthTab('login');
+    toast('Signed out after 30 minutes of inactivity. Please sign in again.', 'info', 7000);
+  }, IDLE_MS);
+}
+function stopIdleTimer() { clearTimeout(_idleTimer); _idleTimer = null; }
+['click','keydown','mousemove','touchstart'].forEach(function(ev){
+  window.addEventListener(ev, function(){ if (A.user || A.teacherToken) resetIdleTimer(); }, { passive: true });
+});
 
 // ════════════════════════════════════════════
 // PRACTICE PACING GATE
@@ -1208,9 +1248,10 @@ async function doLogin() {
     A.sessionToken = res.sessionToken;
     A.scoreAdjust = parseFloat(res.scoreAdjust) || 0;
     localStorage.setItem('speak_adjust', String(A.scoreAdjust));
-    localStorage.setItem('speak_session', JSON.stringify({ user: A.user, token: A.sessionToken }));
+    sessionStorage.setItem('speak_session', JSON.stringify({ user: A.user, token: A.sessionToken }));
     loadGate();
     hideOverlay();
+    resetIdleTimer();
     toast('Welcome, ' + A.user.fullName + '!', 'success');
     SS('S-student');
     studentTab('overview');
@@ -1252,11 +1293,12 @@ async function doTeacherLogin() {
     const res = await gasCall('auth.teacherLogin', { password: pass });
     if (!res.success) { toast(res.error, 'error'); return; }
     A.teacherToken = res.teacherToken;
-    localStorage.setItem('speak_teacher', res.teacherToken);
+    sessionStorage.setItem('speak_teacher', res.teacherToken);
     closeModal('teacher-login-modal');
     toast('Teacher portal loaded', 'success');
     SS('S-teacher');
     teacherTab('overview');
+    resetIdleTimer();
   } catch(e) { toast('Error: ' + e.message, 'error'); }
 }
 
@@ -1287,9 +1329,7 @@ async function doResetPass(email) {
 }
 
 function logout() {
-  A.user = null; A.sessionToken = null; A.teacherToken = null;
-  localStorage.removeItem('speak_session');
-  localStorage.removeItem('speak_teacher');
+  clearSession();
   SS('S-auth');
 }
 
@@ -4954,14 +4994,18 @@ function scoreColor(v) {
 // INIT
 // ════════════════════════════════════════════
 window.addEventListener('load', () => {
-  // Restore session
+  // One-time cleanup: remove any session token left in localStorage by an older
+  // build, so it can't auto-log-in past a tab close.
+  try { localStorage.removeItem('speak_session'); localStorage.removeItem('speak_teacher'); } catch(_) {}
+  // Restore session from sessionStorage — present only if the tab was never
+  // closed since sign-in.
   try {
-    const saved = JSON.parse(localStorage.getItem('speak_session') || 'null');
+    const saved = JSON.parse(sessionStorage.getItem('speak_session') || 'null');
     if (saved?.token && saved?.user) { A.user = saved.user; A.sessionToken = saved.token; loadGate(); }
     A.scoreAdjust = parseFloat(localStorage.getItem('speak_adjust')) || 0;
   } catch(_) {}
   try {
-    const tTok = localStorage.getItem('speak_teacher');
+    const tTok = sessionStorage.getItem('speak_teacher');
     if (tTok) A.teacherToken = tTok;
   } catch(_) {}
   A.gkey    = localStorage.getItem('speak_gemini_key') || '';
@@ -4974,11 +5018,34 @@ window.addEventListener('load', () => {
   setTimeout(() => {
     const loading = document.getElementById('S-loading');
     loading.style.opacity = '0';
-    setTimeout(() => {
+    setTimeout(async () => {
       loading.style.display = 'none';
-      if (A.teacherToken) { SS('S-teacher'); teacherTab('overview'); }
-      else if (A.user) { SS('S-student'); studentTab('overview'); }
-      else SS('S-auth');
+      // A token restored from localStorage may be dead — expired, or pushed out
+      // of the 5-device list by a login elsewhere. Entering the dashboard with a
+      // dead token made every call fail and the app feel "stuck" until you
+      // switched browser (which has no stale token). Verify once up front, and
+      // fall back to the login screen cleanly if it is no longer valid.
+      if (A.teacherToken) {
+        SS('S-teacher'); teacherTab('overview'); resetIdleTimer();
+      } else if (A.user && A.sessionToken) {
+        try {
+          const chk = await gasCall('student.getOverview');
+          if (chk && chk.success === false && (chk.error === 'SESSION_EXPIRED' || /token|session|not found/i.test(chk.error || ''))) {
+            clearSession();
+            SS('S-auth'); switchAuthTab('login');
+            toast('Please sign in again.', 'info', 5000);
+          } else {
+            SS('S-student'); studentTab('overview'); resetIdleTimer();
+          }
+        } catch(e) {
+          // Network/timeout: don't trap the user in a broken dashboard.
+          clearSession();
+          SS('S-auth'); switchAuthTab('login');
+          toast('Could not reach the server. Please sign in again.', 'info', 5000);
+        }
+      } else {
+        SS('S-auth');
+      }
     }, 600);
   }, 1800);
 });
