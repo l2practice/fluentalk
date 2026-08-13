@@ -2239,9 +2239,11 @@ function showProgressDetail(rowIdx) {
     <div class="score-strip">
       ${latestBatch.length ? (() => {
         const last = latestBatch.slice(-1)[0];
-        return ['Overall|overall','FC|fc','LR|lr','GR|gr','P|p'].map(k => {
-          const [lbl, field] = k.split('|');
-          const val = last[field.toUpperCase()] || last[field] || '—';
+        // Column names are Overall, FC, LR, GR, P — Overall is the odd one out
+        // (mixed case), so map each label to its exact key rather than guessing
+        // with toUpperCase(), which left Overall blank.
+        return [['Overall','Overall'],['FC','FC'],['LR','LR'],['GR','GR'],['P','P']].map(([lbl, key]) => {
+          const val = last[key] || '—';
           return `<div class="score-col"><div class="score-val s${String(val).replace('.','')}">${val}</div><div class="score-lbl">${lbl}</div></div>`;
         }).join('');
       })() : '<div class="score-col" style="padding:20px;color:var(--g400)">No milestone scores</div>'}
@@ -4102,9 +4104,9 @@ async function finishSession() {
     shouldGrade = false;   // record the attempt, but attach no score to it
   }
 
-  const overall = calcOverall(answered);
   const fc = avg(answered, 'fluency'), lr = avg(answered, 'lexical'),
         gr = avg(answered, 'grammar'), p = avg(answered, 'pronunciation');
+  const overall = calcOverall(fc, lr, gr, p);
 
   try {
     const saved = await gasCall('speak.saveResult', {
@@ -4222,10 +4224,13 @@ function avg(answered, field) {
   const a = vals.reduce((s, v) => s + v, 0) / vals.length;
   return Math.round(a);
 }
-function calcOverall(answered) {
-  // Overall speaking band is reported on half-bands.
-  const vals = answered.map(r => parseFloat(r.overall) || 0).filter(v => v > 0);
-  if (!vals.length) return '';
+function calcOverall(fc, lr, gr, p) {
+  // Official IELTS speaking: the overall band is the average of the four
+  // criteria, rounded to the nearest half-band. Deriving it here from the same
+  // four numbers we display means Overall can never contradict them (e.g. all
+  // four = 7 must give Overall 7, not 6.5).
+  const vals = [fc, lr, gr, p].map(v => parseFloat(v) || 0).filter(v => v > 0);
+  if (vals.length < 4) return '';
   const a = vals.reduce((s, v) => s + v, 0) / vals.length;
   return Math.round(a * 2) / 2;
 }
