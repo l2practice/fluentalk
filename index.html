@@ -2011,7 +2011,7 @@ async function deleteAsn(assignId, title) {
 }
 
 // ── STUDY PROGRESS ───────────────────────────
-let _progSessions = [], _progFilter = '', _progMode = '';
+let _progSessions = [], _progFilter = '', _progMode = '', _progDays = 6;
 
 function filterProgressByClass(classId) {
   _progFilter = classId;
@@ -2027,6 +2027,7 @@ function renderProgressUI(c, classes) {
       <h2 style="font-size:1.3rem">📈 Study Progress — ${classNameOf(_progFilter) || _progFilter}</h2>
       <div style="display:flex;gap:8px">
         <button class="btn btn-outline btn-sm" onclick="_progFilter='';renderTeacherProgress(document.getElementById('teacher-content'))">← Change class</button>
+        <button class="btn btn-outline btn-sm" onclick="_progDays = _progDays ? 0 : 6; renderTeacherProgress(document.getElementById('teacher-content'))">${_progDays ? '📅 Last 6 days · show all' : '📅 Showing all · last 6 days'}</button>
         <button class="btn btn-outline btn-sm" onclick="exportSessions()">⬇ Export to Sheet</button>
       </div>
     </div>
@@ -2169,23 +2170,12 @@ function filterProgressTable() {
   if (tb) tb.innerHTML = renderProgressRows(filtered);
 }
 
-async function showProgressDetail(rowIdx) {
+function showProgressDetail(rowIdx) {
   const row = _progView[rowIdx];
   if (!row) return;
-  // The light progress payload has no ResultsJSON. Fetch the heavy per-question
-  // detail for just this student+topic now, on demand, then merge it in.
-  document.getElementById('dm-title').textContent = row.StudentName + ' · ' + (row.ClassName || classNameOf(row.ClassID) || '');
-  document.getElementById('dm-meta').textContent = 'Loading…';
-  document.getElementById('dm-body').innerHTML = '<div class="empty" style="padding:40px">Loading detail…</div>';
-  openModal('detail-modal');
-  try {
-    const res = await gasCall('teacher.getSessionDetail', { studentId: row.StudentID, topic: row.Topic || '' });
-    if (res.success && Array.isArray(res.data)) {
-      const bySess = {};
-      res.data.forEach(d => { bySess[d.SessionID] = d; });
-      row.sessions.forEach(s => { const d = bySess[s.SessionID]; if (d) { s.ResultsJSON = d.ResultsJSON; s.ReportText = d.ReportText; } });
-    }
-  } catch(e) { /* fall through and render what we have */ }
+  // Detail shows scores only — no ResultsJSON fetch. The per-question feedback
+  // (transcript, suggestions, rewrites) lives in the Google Doc, opened via the
+  // export button per session. This keeps the modal instant and light.
   const milestones = row.sessions.filter(s => String(s.IsMilestone) === 'true');
   const latestBatch = milestones.slice(-4);
   const latestAttemptNo = latestBatch.slice(-1)[0]?.AttemptNo || '';
@@ -2217,34 +2207,22 @@ async function showProgressDetail(rowIdx) {
     </div>
     <div style="padding:0 20px 16px">
       <div style="font-size:12px;font-weight:700;color:var(--g600);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">🗣 All Sessions (${row.sessions.length})</div>
-      ${row.sessions.slice().reverse().map((s, si) => {
-        let results = [];
-        try { results = JSON.parse(s.ResultsJSON || '[]'); } catch(e) {}
-        return `
+      <div style="font-size:12px;color:var(--g500);margin-bottom:12px">Open the Google Doc on any graded attempt to read the full per-question feedback.</div>
+      ${row.sessions.slice().reverse().map((s, si) => `
           <div class="qacc">
             <div class="qacc-hdr">
-              <div class="qa-n" style="cursor:pointer" onclick="this.parentElement.nextElementSibling.classList.toggle('open')">${s.AttemptNo||si+1}</div>
-              <div class="qa-q" style="flex:1;cursor:pointer" onclick="this.parentElement.nextElementSibling.classList.toggle('open')">${fmtDT(s.StartTime)} · ${s.DurationMin||0} min</div>
+              <div class="qa-n">${s.AttemptNo||si+1}</div>
+              <div class="qa-q" style="flex:1">${fmtDT(s.StartTime)} · ${s.DurationMin||0} min</div>
               ${s.Overall ? `<div class="qa-band">${s.Overall}</div>
-                <button class="btn btn-outline btn-sm doc-export-btn" style="color:var(--green-d)" onclick="event.stopPropagation();exportToDoc('${s.SessionID}',true)">📄 Export to Google Doc</button>`
+                <button class="btn btn-outline btn-sm doc-export-btn" style="color:var(--green-d)" onclick="exportToDoc('${s.SessionID}',true)">📄 Export to Google Doc</button>`
                 : `<span style="font-size:11px;color:var(--g400)">not graded</span>`}
             </div>
-            <div class="qacc-body" style="display:none">
-              ${results.map((r, qi) => `
-                <div style="margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--g100)">
-                  <div style="font-weight:700;font-size:13px;margin-bottom:6px">Q${qi+1}: ${r.question||''}</div>
-                  <div class="qs-lbl">Student's Answer</div>
-                  <div class="qs-student">"${r.studentAnswer||'(no answer)'}"</div>
-                  ${r.suggestion ? `<div class="qs-sugg" style="margin-top:6px">${r.suggestion}</div>` : ''}
-                  ${r.overall ? `<div style="margin-top:8px;font-size:12px">Band: <strong style="color:${scoreColor(r.overall)}">${r.overall}</strong> · FC:${r.scores?.fluency?.score||'—'} · LR:${r.scores?.lexical?.score||'—'} · GR:${r.scores?.grammar?.score||'—'} · P:${r.scores?.pronunciation?.score||'—'}</div>` : ''}
-                </div>`).join('') || '<div class="empty" style="padding:14px">No detail data</div>'}
-            </div>
-          </div>`;
-      }).join('')}
+          </div>`).join('')}
     </div>`;
   document.getElementById('dm-title').textContent = row.StudentName + ' · ' + (row.ClassName || classNameOf(row.ClassID) || '') + ' · 📌 ' + (row.Topic||'');
   document.getElementById('dm-meta').textContent = (row.Part||'').toUpperCase() + ' · ' + row.sessions.length + ' sessions';
   document.getElementById('dm-body').innerHTML = dmHtml;
+  openModal('detail-modal');
 }
 
 async function exportSessions() {
@@ -5003,7 +4981,7 @@ async function renderTeacherProgress(c) {
 
   c.innerHTML = '<div class="empty" style="padding:40px">Loading results…</div>';
   const [sessRes, clsRes] = await Promise.all([
-    gasCall('teacher.getAllSessions', { classId: _progFilter }),
+    gasCall('teacher.getAllSessions', { classId: _progFilter, sinceDays: _progDays }),
     gasCall('teacher.getClasses')
   ]);
   _progSessions = sessRes.data || [];
