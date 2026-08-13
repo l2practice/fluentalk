@@ -612,6 +612,13 @@ textarea.form-input{resize:vertical;min-height:72px;line-height:1.6}
         <div class="prep-bar"><div class="prep-fill" id="prep-fill" style="width:100%"></div></div>
       </div>
     </div>
+    <div id="qcd-wrap" style="display:none;margin-bottom:12px">
+      <div style="display:flex;align-items:center;gap:10px;background:var(--navy);border-radius:12px;padding:12px 16px;color:#fff">
+        <span style="font-size:12px;font-weight:600;opacity:.75;white-space:nowrap">🗣 Speaking time</span>
+        <div style="flex:1;height:8px;background:rgba(255,255,255,.2);border-radius:4px;overflow:hidden"><div id="qcd-fill" style="height:100%;background:#fff;border-radius:4px;width:100%;transition:width 1s linear,background .3s"></div></div>
+        <span id="qcd-cd" style="font-family:var(--fm);font-size:1.1rem;font-weight:800;min-width:52px;text-align:right">2:00</span>
+      </div>
+    </div>
     <div class="q-box">
       <div class="q-box-lbl" id="q-lbl">QUESTION</div>
       <div class="q-box-txt" id="q-txt">Loading…</div>
@@ -988,7 +995,7 @@ const A = {
   recStartTs: 0, curAnswer: '',
   mr: null, chunks: [], lastBlob: null, lastMime: null,
   prepLeft: 0, prepTm: null, recTm: null,
-  qSeconds: 0, qcdTm: null
+  qSeconds: 0, qcdTm: null, qcdTotal: 0
 };
 
 // ════════════════════════════════════════════
@@ -3282,12 +3289,31 @@ function updPrepUI() {
 
 function startQCountdown(sec) {
   clearInterval(A.qcdTm);
-  if (!sec) return;
+  const wrap = document.getElementById('qcd-wrap');
+  if (!sec) { if (wrap) wrap.style.display = 'none'; return; }
+  // A visible countdown for Part 2 (2 min) and Part 3 so students can pace
+  // themselves, like the JAM timer. Time is fixed by the part, never shortened
+  // for non-milestone attempts.
+  if (wrap) wrap.style.display = 'block';
   A.qcdLeft = sec;
+  A.qcdTotal = sec;
+  updQcdUI();
   A.qcdTm = setInterval(() => {
     A.qcdLeft--;
+    updQcdUI();
     if (A.qcdLeft <= 0) { clearInterval(A.qcdTm); toast('Time is up for this question', 'info'); (async () => { if (A.talking) await stopTalk(); nextQ(); })(); }
   }, 1000);
+}
+function updQcdUI() {
+  const cd = document.getElementById('qcd-cd');
+  const fill = document.getElementById('qcd-fill');
+  const m = Math.floor(Math.max(0, A.qcdLeft) / 60), s = Math.max(0, A.qcdLeft) % 60;
+  if (cd) cd.textContent = m + ':' + String(s).padStart(2, '0');
+  if (fill) {
+    const frac = A.qcdTotal ? A.qcdLeft / A.qcdTotal : 0;
+    fill.style.width = Math.max(0, frac * 100) + '%';
+    fill.style.background = frac > 0.5 ? '#fff' : frac > 0.2 ? 'var(--gold)' : 'var(--red)';
+  }
 }
 
 // ── PUSH-TO-TALK ──────────────────────────
