@@ -1189,25 +1189,29 @@ function switchAuthTab(tab) {
 }
 
 async function doLogin() {
+  if (_busyOverlay) return;
   const email = document.getElementById('login-email').value.trim();
   const pass  = document.getElementById('login-pass').value;
   if (!email || !pass) { toast('Please fill in all required fields', 'error'); return; }
+  showOverlay('Signing you in…');
   try {
     const res = await gasCall('auth.login', { email, password: pass });
-    if (!res.success) { toast(res.error, 'error'); return; }
+    if (!res.success) { hideOverlay(); toast(res.error, 'error'); return; }
     A.user = res.user;
     A.sessionToken = res.sessionToken;
     A.scoreAdjust = parseFloat(res.scoreAdjust) || 0;
     localStorage.setItem('speak_adjust', String(A.scoreAdjust));
     localStorage.setItem('speak_session', JSON.stringify({ user: A.user, token: A.sessionToken }));
     loadGate();
+    hideOverlay();
     toast('Welcome, ' + A.user.fullName + '!', 'success');
     SS('S-student');
     studentTab('overview');
-  } catch(e) { toast('Error: ' + e.message, 'error'); }
+  } catch(e) { hideOverlay(); toast('Error: ' + e.message, 'error'); }
 }
 
 async function doRegister() {
+  if (_busyOverlay) return;   // a submit is already in flight
   const studentId = document.getElementById('reg-id').value.trim();
   const fullName  = document.getElementById('reg-name').value.trim();
   const email     = document.getElementById('reg-email').value.trim();
@@ -1215,16 +1219,21 @@ async function doRegister() {
   const classId   = document.getElementById('reg-class').value.trim();
   const dob       = document.getElementById('reg-dob').value;
   const phone     = document.getElementById('reg-phone').value.trim();
-  if (!studentId || !fullName || !email || !password || !classId) { toast('Please fill in all required fields', 'error'); return; }
+  // Every field is required.
+  if (!studentId || !fullName || !email || !password || !classId || !dob || !phone) {
+    toast('Please fill in every field — none can be left blank.', 'error', 5000); return;
+  }
   if (password.length < 6) { toast('Password must be at least 6 characters', 'error'); return; }
+  showOverlay('Creating your account…');
   try {
     const res = await gasCall('auth.register', { studentId, fullName, email, password, classId: classId.toUpperCase(), dob, phone });
+    hideOverlay();
     if (!res.success) { toast(res.error, 'error', 6000); return; }
     toast(res.message, 'success', 5000);
     switchAuthTab('login');
     document.getElementById('login-email').value = email;
     document.getElementById('login-pass').focus();
-  } catch(e) { toast('Error: ' + e.message, 'error'); }
+  } catch(e) { hideOverlay(); toast('Error: ' + e.message, 'error'); }
 }
 
 function showTeacherLogin() { openModal('teacher-login-modal'); document.getElementById('teacher-pass').focus(); }
