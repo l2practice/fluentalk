@@ -1352,7 +1352,7 @@ async function teacherTab(tab) {
     if (tab === 'classroom') await renderTeacherClassroom(c);
     if (tab === 'homework')  await renderTeacherHomework(c);
     if (tab === 'library')   await renderLibrary(c);
-    if (tab === 'progress')  { _progFilter=''; _progTopic=''; _progLoaded=false; await renderTeacherProgress(c); }
+    if (tab === 'progress')  { _progFilter=''; _progTopic=''; _progMode=''; _progLoaded=false; await renderTeacherProgress(c); }
     if (tab === 'studentArchive') await renderStudentArchive(c);
     if (tab === 'classArchive')   await renderClassArchive(c);
     if (tab === 'settings')  await renderTeacherSettings(c);
@@ -5119,7 +5119,7 @@ async function renderTeacherProgress(c) {
           <option value="__ALL__">All topics (${topics.reduce((n,t)=>n+t.sessions,0)} sessions — may be slow)</option>
           ${topics.map(t => `<option value="${String(t.topic).replace(/"/g,'&quot;')}">${t.topic} — ${t.students} student${t.students===1?'':'s'}, ${t.sessions} session${t.sessions===1?'':'s'}</option>`).join('')}
         </select>
-        <button class="btn btn-primary" style="width:100%" onclick="_progTopic=document.getElementById('prog-topic-sel').value;_progLoaded=true;renderTeacherProgress(document.getElementById('teacher-content'))">📊 Load results</button>
+        <button class="btn btn-primary" style="width:100%" onclick="_progTopic=document.getElementById('prog-topic-sel').value;_progMode='';_progLoaded=true;renderTeacherProgress(document.getElementById('teacher-content'))">📊 Load results</button>
       </div>
       ${topics.length === 0 ? '<div class="empty" style="margin-top:16px">This class has no practice yet.</div>' : ''}`;
     return;
