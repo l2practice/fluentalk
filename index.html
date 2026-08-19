@@ -1352,7 +1352,7 @@ async function teacherTab(tab) {
     if (tab === 'classroom') await renderTeacherClassroom(c);
     if (tab === 'homework')  await renderTeacherHomework(c);
     if (tab === 'library')   await renderLibrary(c);
-    if (tab === 'progress')  { _progFilter=''; _progTopic=''; _progMode=''; _progTaskType=''; _progLoaded=false; await renderTeacherProgress(c); }
+    if (tab === 'progress')  { _progFilter=''; _progTopic=''; _progMode=''; _progTaskType='homework'; _progTopicsFor=''; _progLoaded=false; _progReload=false; await renderTeacherProgress(c); }
     if (tab === 'studentArchive') await renderStudentArchive(c);
     if (tab === 'classArchive')   await renderClassArchive(c);
     if (tab === 'settings')  await renderTeacherSettings(c);
@@ -2067,7 +2067,7 @@ async function deleteAsn(assignId, title) {
 }
 
 // ── STUDY PROGRESS ───────────────────────────
-let _progSessions = [], _progFilter = '', _progMode = '', _progDays = 6, _progTopic = '', _progLoaded = false, _progTopics = [], _progTaskType = '';
+let _progSessions = [], _progFilter = '', _progMode = '', _progDays = 6, _progTopic = '', _progLoaded = false, _progTopics = [], _progTaskType = 'homework', _progTopicsFor = '', _progReload = false;
 
 function filterProgressByClass(classId) {
   _progFilter = classId;
@@ -2079,29 +2079,8 @@ function renderProgressUI(c, classes) {
   const rows = buildProgressRows(_progSessions, _progFilter);
   const MILESTONES = [3,5,8,10];
   c.innerHTML = `
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px">
-      <h2 style="font-size:1.3rem">📈 ${classNameOf(_progFilter) || _progFilter}${_progTopic && _progTopic !== '__ALL__' ? ` · <span style="color:var(--blue)">${_progTopic}</span>` : ' · All topics'}</h2>
-      <div style="display:flex;gap:8px">
-        <button class="btn btn-outline btn-sm" onclick="_progFilter='';_progTopic='';_progTaskType='';_progLoaded=false;renderTeacherProgress(document.getElementById('teacher-content'))">🏫 Change class</button>
-        <button class="btn btn-outline btn-sm" onclick="exportSessions()">⬇ Export to Sheet</button>
-      </div>
-    </div>
     <div class="search-row">
-      <select class="search-inp" style="max-width:150px" title="Task type" onchange="_progTaskType=this.value;_progTopic='';_progLoaded=false;renderTeacherProgress(document.getElementById('teacher-content'))">
-        <option value="homework" ${_progTaskType==='homework'?'selected':''}>📚 Homework</option>
-        <option value="jam" ${_progTaskType==='jam'?'selected':''}>⏱️ JAM</option>
-        <option value="free" ${_progTaskType==='free'?'selected':''}>✏️ Free</option>
-      </select>
-      <select class="search-inp" style="max-width:200px" title="Topic" onchange="_progTopic=this.value;renderTeacherProgress(document.getElementById('teacher-content'))">
-        <option value="__ALL__" ${!_progTopic||_progTopic==='__ALL__'?'selected':''}>All topics</option>
-        ${_progTopics.map(t => `<option value="${String(t.topic).replace(/"/g,'&quot;')}" ${_progTopic===t.topic?'selected':''}>${t.topic}</option>`).join('')}
-      </select>
-      <select class="search-inp" style="max-width:150px" title="Date range" onchange="_progDays=parseInt(this.value);renderTeacherProgress(document.getElementById('teacher-content'))">
-        <option value="6" ${_progDays===6?'selected':''}>📅 Last 6 days</option>
-        <option value="14" ${_progDays===14?'selected':''}>📅 Last 14 days</option>
-        <option value="0" ${_progDays===0?'selected':''}>📅 All results</option>
-      </select>
-      <input class="search-inp" placeholder="Name / ID / Topic…" id="prog-search" oninput="filterProgressTable()" style="max-width:220px">
+      <input class="search-inp" placeholder="Filter by name / ID…" id="prog-search" oninput="filterProgressTable()" style="max-width:260px">
       <span style="font-size:12px;color:var(--g600)">${rows.length} results</span>
     </div>
     <div class="tbl-wrap">
@@ -5074,7 +5053,7 @@ async function renderTeacherProgress(c) {
       <p style="font-size:13px;color:var(--g600);margin-bottom:20px">Choose a class to view its results.</p>
       <div class="class-card-grid">
         ${stats.map(cl => `
-          <div class="class-card" onclick="_progFilter='${cl.classId}';_progTopic='';_progTaskType='';_progLoaded=false;renderTeacherProgress(document.getElementById('teacher-content'))">
+          <div class="class-card" onclick="_progFilter='${cl.classId}';_progTopic='';_progTaskType='homework';_progTopicsFor='';_progLoaded=false;_progReload=false;renderTeacherProgress(document.getElementById('teacher-content'))">
             <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px">
               <div>
                 <div style="font-weight:800;font-size:1.05rem;color:var(--black);letter-spacing:-.02em">${cl.className || cl.classId}</div>
@@ -5105,56 +5084,83 @@ async function renderTeacherProgress(c) {
     return;
   }
 
-  // Class chosen but results not loaded yet: show the topic picker. Nothing
-  // heavy is fetched here — only the light topic list — and no results load
-  // until the teacher picks a topic (or All) and presses Load results.
-  if (!_progLoaded) {
-    const clsName = classNameOf(_progFilter) || _progFilter;
-    // Task type chosen → load that type's topic list (homework=Library,
-    // jam/free=this class's sessions). Nothing loads until a type is picked.
-    let topicsHtml = '';
-    if (_progTaskType) {
-      _progTopics = [];
+  // Class chosen: go straight to the results view with an empty table and a
+  // toolbar (task type, topic, days, Load). Picking the class fetches nothing
+  // heavy — results load only when Load results is pressed.
+  const clsName = classNameOf(_progFilter) || _progFilter;
+
+  // When a task type is set we fetch its topic list (light). Wrapped so a flaky
+  // GAS response can't blank the whole page — worst case the topic list is just
+  // "All topics".
+  if (_progTaskType && !_progTopicsFor) {
+    try {
       const tRes = await gasCall('teacher.getClassTopics', { classId: _progFilter, taskType: _progTaskType });
-      _progTopics = tRes.success ? (tRes.data || []) : [];
-      topicsHtml = `
-        <label style="font-size:12px;font-weight:700;color:var(--g600);text-transform:uppercase;letter-spacing:.05em">Topic</label>
-        <select id="prog-topic-sel" class="search-inp" style="width:100%;margin:8px 0 16px">
-          <option value="__ALL__">All topics</option>
-          ${_progTopics.map(t => `<option value="${String(t.topic).replace(/"/g,'&quot;')}" ${_progTopic===t.topic?'selected':''}>${t.topic}${t.students!=null ? ` — ${t.students} student${t.students===1?'':'s'}, ${t.sessions} session${t.sessions===1?'':'s'}` : ''}</option>`).join('')}
-        </select>
-        <button class="btn btn-primary" style="width:100%" onclick="_progTopic=document.getElementById('prog-topic-sel').value;_progMode='';_progLoaded=true;renderTeacherProgress(document.getElementById('teacher-content'))">📊 Load results</button>
-        ${_progTopics.length === 0 ? `<div style="font-size:12px;color:var(--g500);margin-top:10px">No ${_progTaskType} topics found for this class yet.</div>` : ''}`;
-    }
-    c.innerHTML = `
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
-        <h2 style="font-size:1.3rem">📈 Study Progress — ${clsName}</h2>
-        <button class="btn btn-outline btn-sm" onclick="_progFilter='';_progTopic='';_progTaskType='';renderTeacherProgress(document.getElementById('teacher-content'))">← Change class</button>
+      _progTopics = (tRes && tRes.success) ? (tRes.data || []) : [];
+    } catch(e) { _progTopics = []; }
+    _progTopicsFor = _progTaskType;   // remember which type these topics are for
+  }
+
+  const toolbar = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+      <h2 style="font-size:1.3rem">📈 ${clsName}${_progLoaded && _progTopic && _progTopic!=='__ALL__' ? ` · <span style="color:var(--blue)">${_progTopic}</span>` : ''}</h2>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-outline btn-sm" onclick="_progFilter='';_progTopic='';_progTaskType='';_progTopicsFor='';_progLoaded=false;renderTeacherProgress(document.getElementById('teacher-content'))">🏫 Change class</button>
+        ${_progLoaded ? '<button class="btn btn-outline btn-sm" onclick="exportSessions()">⬇ Export to Sheet</button>' : ''}
       </div>
-      <div class="card" style="max-width:520px">
-        <div style="font-size:13px;color:var(--g600);margin-bottom:14px">Pick a task type and topic, then press <strong>Load results</strong>.</div>
-        <label style="font-size:12px;font-weight:700;color:var(--g600);text-transform:uppercase;letter-spacing:.05em">Task type</label>
-        <select id="prog-tasktype-sel" class="search-inp" style="width:100%;margin:8px 0 16px" onchange="_progTaskType=this.value;_progTopic='';renderTeacherProgress(document.getElementById('teacher-content'))">
-          <option value="" ${!_progTaskType?'selected':''}>— Choose —</option>
+    </div>
+    <div class="search-row" style="align-items:flex-end">
+      <div>
+        <label style="font-size:11px;font-weight:700;color:var(--g500);text-transform:uppercase;display:block;margin-bottom:4px">Task type</label>
+        <select class="search-inp" style="max-width:160px" onchange="_progTaskType=this.value;_progTopic='';_progTopicsFor='';_progLoaded=false;renderTeacherProgress(document.getElementById('teacher-content'))">
           <option value="homework" ${_progTaskType==='homework'?'selected':''}>📚 Homework</option>
           <option value="jam" ${_progTaskType==='jam'?'selected':''}>⏱️ JAM</option>
           <option value="free" ${_progTaskType==='free'?'selected':''}>✏️ Free Speaking</option>
         </select>
-        ${topicsHtml}
-      </div>`;
+      </div>
+      <div>
+        <label style="font-size:11px;font-weight:700;color:var(--g500);text-transform:uppercase;display:block;margin-bottom:4px">Topic</label>
+        <select id="prog-topic-sel" class="search-inp" style="max-width:220px" onchange="_progTopic=this.value">
+          <option value="__ALL__" ${!_progTopic||_progTopic==='__ALL__'?'selected':''}>All topics</option>
+          ${_progTopics.map(t => `<option value="${String(t.topic).replace(/"/g,'&quot;')}" ${_progTopic===t.topic?'selected':''}>${t.topic}${t.students!=null ? ` (${t.students}/${t.sessions})` : ''}</option>`).join('')}
+        </select>
+      </div>
+      <div>
+        <label style="font-size:11px;font-weight:700;color:var(--g500);text-transform:uppercase;display:block;margin-bottom:4px">Date range</label>
+        <select id="prog-days-sel" class="search-inp" style="max-width:150px" onchange="_progDays=parseInt(this.value)">
+          <option value="6" ${_progDays===6?'selected':''}>Last 6 days</option>
+          <option value="14" ${_progDays===14?'selected':''}>Last 14 days</option>
+          <option value="0" ${_progDays===0?'selected':''}>All results</option>
+        </select>
+      </div>
+      <button class="btn btn-primary" onclick="_progTopic=document.getElementById('prog-topic-sel').value;_progDays=parseInt(document.getElementById('prog-days-sel').value);_progMode='';_progLoaded=true;_progReload=true;renderTeacherProgress(document.getElementById('teacher-content'))">📊 Load results</button>
+    </div>`;
+
+  if (!_progLoaded) {
+    c.innerHTML = toolbar + '<div class="empty" style="padding:50px">Choose a task type, topic and date range, then press <strong>Load results</strong>.</div>';
     return;
   }
 
-  c.innerHTML = '<div class="empty" style="padding:40px">Loading results…</div>';
-  const [sessRes, clsRes] = await Promise.all([
-    gasCall('teacher.getAllSessions', { classId: _progFilter, topic: _progTopic || '__ALL__', taskType: _progTaskType, sinceDays: _progDays }),
-    gasCall('teacher.getClasses')
-  ]);
-  _progSessions = sessRes.data || [];
-  const classes = (clsRes.data || []).filter(cl => cl.Status !== 'Archived');
-  _teacherClasses = classes;
-  _progRows = buildProgressRows(_progSessions, _progFilter);
-  renderProgressUI(c, classes);
+  // Loaded: fetch sessions only when a load was just requested; re-renders from
+  // dropdown changes on an already-loaded table don't refetch.
+  if (_progReload) {
+    _progReload = false;
+    c.innerHTML = toolbar + '<div class="empty" style="padding:50px">Loading results…</div>';
+    try {
+      const sessRes = await gasCall('teacher.getAllSessions', { classId: _progFilter, topic: _progTopic || '__ALL__', taskType: _progTaskType, sinceDays: _progDays });
+      _progSessions = sessRes.data || [];
+    } catch(e) {
+      c.innerHTML = toolbar + '<div class="empty" style="padding:50px;color:var(--red-d)">Could not load — the server may be busy. Press Load results again.</div>';
+      return;
+    }
+    if (!_teacherClasses.length) {
+      try { const clsRes = await gasCall('teacher.getClasses'); _teacherClasses = (clsRes.data||[]).filter(cl=>cl.Status!=='Archived'); } catch(e) {}
+    }
+    _progRows = buildProgressRows(_progSessions, _progFilter);
+  }
+  c.innerHTML = toolbar;
+  const wrap = document.createElement('div');
+  renderProgressUI(wrap, _teacherClasses);
+  c.appendChild(wrap);
 }
 </script>
 </body>
