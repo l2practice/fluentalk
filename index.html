@@ -123,6 +123,8 @@ textarea.form-input{resize:vertical;min-height:72px;line-height:1.6}
 .modal-footer{padding:14px 22px;border-top:1px solid var(--g100);display:flex;gap:10px;justify-content:flex-end;background:var(--g50)}
 .spinner{width:42px;height:42px;border:3px solid var(--g200);border-top-color:var(--blue);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto}
 @keyframes spin{to{transform:rotate(360deg)}}
+@keyframes qcdBlink{0%,100%{background:var(--red)}50%{background:#7f1d1d}}
+#qcd-box.overtime{animation:qcdBlink 1s ease-in-out infinite}
 
 /* ═══════════════════════════════════════
    LOADING SCREEN
@@ -613,8 +615,8 @@ textarea.form-input{resize:vertical;min-height:72px;line-height:1.6}
       </div>
     </div>
     <div id="qcd-wrap" style="display:none;margin-bottom:12px">
-      <div style="display:flex;align-items:center;gap:10px;background:var(--navy);border-radius:12px;padding:12px 16px;color:#fff">
-        <span style="font-size:12px;font-weight:600;opacity:.75;white-space:nowrap">🗣 Speaking time</span>
+      <div id="qcd-box" style="display:flex;align-items:center;gap:10px;background:var(--navy);border-radius:12px;padding:12px 16px;color:#fff">
+        <span id="qcd-label" style="font-size:12px;font-weight:600;opacity:.75;white-space:nowrap">🗣 Speaking time</span>
         <div style="flex:1;height:8px;background:rgba(255,255,255,.2);border-radius:4px;overflow:hidden"><div id="qcd-fill" style="height:100%;background:#fff;border-radius:4px;width:100%;transition:width 1s linear,background .3s"></div></div>
         <span id="qcd-cd" style="font-family:var(--fm);font-size:1.1rem;font-weight:800;min-width:52px;text-align:right">2:00</span>
       </div>
@@ -995,7 +997,7 @@ const A = {
   recStartTs: 0, curAnswer: '',
   mr: null, chunks: [], lastBlob: null, lastMime: null,
   prepLeft: 0, prepTm: null, recTm: null,
-  qSeconds: 0, qcdTm: null, qcdTotal: 0
+  qSeconds: 0, qcdTm: null, qcdTotal: 0, qcdOver: false, overtimeSec: 0
 };
 
 // ════════════════════════════════════════════
@@ -3276,9 +3278,9 @@ function loadQ(idx) {
   kwBar.style.display  = hasKW ? '' : 'none';
   kwDisp.style.display = 'none';
   if (hasKW) kwDisp.innerHTML = qo.keywords.map(k => `<div class="kw-pill">${k}</div>`).join('');
-  // Part 2 prep timer
-  if (A.mode === 'part2') startPrep();
-  else { document.getElementById('prep-wrap').style.display = 'none'; clearInterval(A.prepTm); }
+  // Part 2 has no prep timer anymore — the student can speak immediately.
+  document.getElementById('prep-wrap').style.display = 'none';
+  clearInterval(A.prepTm);
   startQCountdown(A.qSeconds);
 }
 
@@ -3315,25 +3317,63 @@ function updPrepUI() {
 function startQCountdown(sec) {
   clearInterval(A.qcdTm);
   const wrap = document.getElementById('qcd-wrap');
+  const box  = document.getElementById('qcd-box');
+  if (box) box.classList.remove('overtime');
+  A.qcdOver = false;
+  A.overtimeSec = 0;
   if (!sec) { if (wrap) wrap.style.display = 'none'; return; }
-  // A visible countdown for Part 2 (2 min) and Part 3 so students can pace
-  // themselves, like the JAM timer. Time is fixed by the part, never shortened
-  // for non-milestone attempts.
   if (wrap) wrap.style.display = 'block';
   A.qcdLeft = sec;
   A.qcdTotal = sec;
+  const isPart2 = (A.mode === 'part2');
+  const HARD_STOP = 180;   // Part 2 hard cap: 3 minutes from the start
   updQcdUI();
   A.qcdTm = setInterval(() => {
-    A.qcdLeft--;
-    updQcdUI();
-    if (A.qcdLeft <= 0) { clearInterval(A.qcdTm); toast('Time is up for this question', 'info'); (async () => { if (A.talking) await stopTalk(); nextQ(); })(); }
+    if (!A.qcdOver) {
+      A.qcdLeft--;
+      updQcdUI();
+      if (A.qcdLeft <= 0) {
+        if (isPart2) {
+          // Part 2: do NOT stop at 2:00. Enter overtime — the bar blinks red and
+          // counts up (+0:01, +0:02…). The student may keep speaking.
+          A.qcdOver = true;
+          A.overtimeSec = 0;
+          if (box) box.classList.add('overtime');
+          updQcdUI();
+        } else {
+          // Part 3 (and any other timed part): unchanged — stop and move on.
+          clearInterval(A.qcdTm);
+          toast('Time is up for this question', 'info');
+          (async () => { if (A.talking) await stopTalk(); nextQ(); })();
+        }
+      }
+    } else {
+      // Overtime phase (Part 2 only): count up until the 3-minute hard cap.
+      A.overtimeSec++;
+      updQcdUI();
+      if (A.qcdTotal + A.overtimeSec >= HARD_STOP) {
+        clearInterval(A.qcdTm);
+        toast('Maximum speaking time reached (3 min)', 'info');
+        (async () => { if (A.talking) await stopTalk(); nextQ(); })();
+      }
+    }
   }, 1000);
 }
 function updQcdUI() {
   const cd = document.getElementById('qcd-cd');
   const fill = document.getElementById('qcd-fill');
+  const label = document.getElementById('qcd-label');
+  if (A.qcdOver) {
+    // Overtime: show +M:SS climbing, bar full red.
+    const m = Math.floor(A.overtimeSec / 60), s = A.overtimeSec % 60;
+    if (cd) cd.textContent = '+' + m + ':' + String(s).padStart(2, '0');
+    if (label) label.textContent = '⚠ Over time';
+    if (fill) { fill.style.width = '100%'; fill.style.background = 'var(--red)'; }
+    return;
+  }
   const m = Math.floor(Math.max(0, A.qcdLeft) / 60), s = Math.max(0, A.qcdLeft) % 60;
   if (cd) cd.textContent = m + ':' + String(s).padStart(2, '0');
+  if (label) label.textContent = '🗣 Speaking time';
   if (fill) {
     const frac = A.qcdTotal ? A.qcdLeft / A.qcdTotal : 0;
     fill.style.width = Math.max(0, frac * 100) + '%';
@@ -3615,6 +3655,9 @@ async function nextQ() {
   A.recs[idx].studentAnswer = ans;
   A.recs[idx].question      = A.qs[idx].question;
   A.recs[idx].keywords      = A.qs[idx].keywords || [];
+  // Flag Part 2 answers that ran past the 2-minute limit so grading and the Doc
+  // can note it (real IELTS penalises going over on Fluency & Coherence).
+  A.recs[idx].overtimeSec   = (A.mode === 'part2' && A.qcdOver) ? A.overtimeSec : 0;
   const next = idx + 1;
   if (next < A.qs.length) { A.idx = next; loadQ(next); }
   else finishSession();
@@ -3795,6 +3838,15 @@ consistently with them):
 === END MEASUREMENTS ===
 ` : '';
 
+  const p2 = part === 'part2' ? `
+PART 2 NOTE: the standard Part 2 long turn is a maximum of 2 minutes. If any
+answer is marked [TIMING: ... OVER the 2-minute limit], state clearly in the
+feedback that the candidate spoke past the allowed time. Explain that in a real
+IELTS test the examiner stops the candidate at 2 minutes, so speaking over does
+not add credit and can signal weaker planning/coherence — note the impact on
+Fluency & Coherence. Do not otherwise change how you score the language itself.
+` : '';
+
   const p3 = part === 'part3' ? `
 PART 3 NOTE: this is the abstract discussion section. If the candidate answers
 only with personal anecdotes, tell them to address the topic at a general or
@@ -3802,7 +3854,7 @@ societal level first, then use a personal example as support.
 ` : '';
 
   return `You are an experienced IELTS Speaking examiner. Grade these ${n} answers.
-${ev}${p3}
+${ev}${p2}${p3}
 Apply these rules when scoring. Each one is IF-THEN; only fire it when the
 condition is genuinely met.
 
@@ -3978,7 +4030,10 @@ async function finishSession() {
     if (shouldGrade) {
       const qaBlock = answered.map((r, i) => {
         const kw = (r.keywords || []).join(', ');
-        return `Q${i+1}: "${r.question}"\nA${i+1}: "${r.studentAnswer}"${kw ? '\nKeywords: ' + kw : ''}`;
+        const ot = (r.overtimeSec > 0)
+          ? `\n[TIMING: candidate spoke ~${Math.round((120 + r.overtimeSec))}s — ${r.overtimeSec}s OVER the 2-minute Part 2 limit]`
+          : '';
+        return `Q${i+1}: "${r.question}"\nA${i+1}: "${r.studentAnswer}"${kw ? '\nKeywords: ' + kw : ''}${ot}`;
       }).join('\n\n');
       const prompt = buildGradePrompt(qaBlock, answered.length, A.langEvidence, A.mode);
       const sys    = 'IELTS Speaking examiner. Return ONLY valid JSON.';
@@ -4115,7 +4170,8 @@ async function finishSession() {
         question: r.question, keywords: r.keywords || [],
         studentAnswer: r.studentAnswer, overall: r.overall || '',
         scores: r.scores || null, errors: r.errors || [],
-        suggestion: r.suggestion || '', natural: r.natural || ''
+        suggestion: r.suggestion || '', natural: r.natural || '',
+        overtimeSec: r.overtimeSec || 0
       })),
       reportText: buildReport(answered, rpt, shouldGrade, attemptNo),
       type: A.assignId ? 'homework' : 'free',
