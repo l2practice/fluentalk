@@ -1686,19 +1686,59 @@ async function renderLibrary(c) {
   const res = await gasCall('teacher.getLibrary', {});
   _library = res.data || [];
   let items = _library.filter(x => (x.Part || 'part1') === _libPart);
-  // Sort the visible topics by the teacher's chosen order.
+let _hwView = 'Active';
+let _library = {};  // { part1: [...], part2: [...], part3: [...] }
+let _libPart = 'part1';
+let _libSort = 'newest';
+let _libLoaded = {};  // track which parts have been loaded { part1: true, ... }
+
+async function loadLibraryPart(part) {
+  if (_libLoaded[part]) return;  // already loaded
+  try {
+    const res = await gasCall('teacher.getLibrary', { part });
+    _library[part] = res.data || [];
+    _libLoaded[part] = true;
+  } catch(e) { toast('Failed to load ' + part + ' topics: ' + e.message, 'error'); }
+  teacherTab('library');
+}
+
+async function renderLibrary(c) {
+  // No automatic fetch — library is loaded on demand by the Load Topics button.
+  let items = _library[_libPart] || [];
+  if (!_libLoaded[_libPart]) {
+    // Show placeholder with Load button
+    c.innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:10px">
+        <h2 style="font-size:1.3rem">📖 Question Library</h2>
+        <button class="btn btn-primary btn-sm" onclick="openLibraryEditor()">+ New ${partLabel[_libPart].split(' — ')[0]} topic</button>
+      </div>
+      <p style="font-size:13px;color:var(--g600);margin-bottom:16px">
+        Topics are grouped by IELTS part. Click "Load Topics" to view topics for this part, then launch to a class to set homework.
+      </p>
+      <div class="auth-tabs" style="max-width:420px;margin-bottom:18px">
+        <div class="auth-tab ${_libPart==='part1'?'active':''}" onclick="_libPart='part1';teacherTab('library')">Part 1 <span style="opacity:.6">(loading…)</span></div>
+        <div class="auth-tab ${_libPart==='part2'?'active':''}" onclick="_libPart='part2';teacherTab('library')">Part 2 <span style="opacity:.6">(loading…)</span></div>
+        <div class="auth-tab ${_libPart==='part3'?'active':''}" onclick="_libPart='part3';teacherTab('library')">Part 3 <span style="opacity:.6">(loading…)</span></div>
+      </div>
+      <button class="btn btn-primary" onclick="loadLibraryPart('${_libPart}')">📥 Load ${partLabel[_libPart].split(' — ')[0]} Topics</button>`;
+    return;
+  }
+  
+  // Topics are loaded — render normally
+  const partLabel = { part1: 'Part 1 — Introduction', part2: 'Part 2 — Long Turn (cue card)', part3: 'Part 3 — Discussion' };
+  const count = p => (_library[p] || []).length;
+  
+  // Sort items by the teacher's chosen order
   items = items.slice().sort((a, b) => {
     switch (_libSort) {
       case 'az':      return String(a.Title).localeCompare(String(b.Title), undefined, { sensitivity: 'base' });
       case 'za':      return String(b.Title).localeCompare(String(a.Title), undefined, { sensitivity: 'base' });
       case 'newest':  return String(b.CreatedAt || '').localeCompare(String(a.CreatedAt || ''));
       case 'oldest':  return String(a.CreatedAt || '').localeCompare(String(b.CreatedAt || ''));
-      case 'used':    return (parseInt(b.UsedCount) || 0) - (parseInt(a.UsedCount) || 0);
+      case 'used':    return (b.UsedCount || 0) - (a.UsedCount || 0);
       default:        return 0;
     }
   });
-  const partLabel = { part1: 'Part 1 — Introduction', part2: 'Part 2 — Long Turn (cue card)', part3: 'Part 3 — Discussion' };
-  const count = p => _library.filter(x => (x.Part || 'part1') === p).length;
 
   c.innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:10px">
@@ -1747,7 +1787,7 @@ async function renderLibrary(c) {
 // ── LAUNCH A TOPIC ──────────────────────────
 let _launchLibId = '';
 function openLaunch(libId) {
-  const item = _library.find(x => String(x.LibID) === String(libId));
+  const item = (_library[_libPart] || []).find(x => String(x.LibID) === String(libId));
   if (!item) return;
   if (!_teacherClasses.length) {
     gasCall('teacher.getClasses').then(r => {
@@ -1919,14 +1959,79 @@ async function deleteLibraryItem(libId, title) {
   } catch(e) { toast(e.message, 'error'); }
 }
 
+let _hwFilters = { class: 'all', part: 'all', status: 'Active' };
+let _hwLoaded = false;
+
+async function applyHomeworkFilters() {
+  try {
+    _hwFilters.class = document.getElementById('hw-filter-class').value || 'all';
+    _hwFilters.part = document.getElementById('hw-filter-part').value || 'all';
+    _hwFilters.status = document.getElementById('hw-filter-status').value || 'Active';
+    
+    const filters = {};
+    if (_hwFilters.status) filters.status = _hwFilters.status;
+    if (_hwFilters.class && _hwFilters.class !== 'all') filters.classId = _hwFilters.class;
+    if (_hwFilters.part && _hwFilters.part !== 'all') filters.part = _hwFilters.part;
+    
+    const res = await gasCall('teacher.getAssignments', filters);
+    _teacherAssignments = res.data || [];
+    _hwLoaded = true;
+  } catch(e) { toast('Failed to load assignments: ' + e.message, 'error'); }
+  teacherTab('homework');
+}
+
 async function renderTeacherHomework(c) {
-  const [asnRes, clsRes] = await Promise.all([
-    gasCall('teacher.getAssignments', {}),
-    gasCall('teacher.getClasses')
-  ]);
-  _teacherAssignments = asnRes.data || [];
-  _teacherClasses = (clsRes.data || []).filter(c => c.Status !== 'Archived');
-  const list = _teacherAssignments.filter(a => (a.Status || 'Active') === _hwView);
+  // First-time setup: fetch classes
+  if (!_teacherClasses.length) {
+    try {
+      const clsRes = await gasCall('teacher.getClasses');
+      _teacherClasses = (clsRes.data || []).filter(c => c.Status !== 'Archived');
+    } catch(e) { toast('Failed to load classes: ' + e.message, 'error'); }
+  }
+  
+  // If no data loaded yet, show filter form
+  if (!_hwLoaded) {
+    c.innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px">
+        <h2 style="font-size:1.3rem">📚 Homework Book</h2>
+        <button class="btn btn-primary btn-sm" onclick="openCreateAsn()">+ Create Assignment</button>
+      </div>
+      <div style="background:var(--g50);border-radius:8px;padding:20px;max-width:500px">
+        <h3 style="margin:0 0 12px;font-size:1rem">📋 Filter Assignments</h3>
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <div>
+            <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px">Class:</label>
+            <select id="hw-filter-class" class="form-input form-select" style="width:100%;font-size:13px;padding:8px 10px">
+              <option value="all">All classes</option>
+              ${_teacherClasses.map(cl => `<option value="${cl.ClassID}">${cl.ClassName || cl.ClassID}</option>`).join('')}
+            </select>
+          </div>
+          <div>
+            <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px">Part/Mode:</label>
+            <select id="hw-filter-part" class="form-input form-select" style="width:100%;font-size:13px;padding:8px 10px">
+              <option value="all">All parts</option>
+              <option value="part1">Part 1 — Introduction</option>
+              <option value="part2">Part 2 — Long Turn (cue card)</option>
+              <option value="part3">Part 3 — Discussion</option>
+              <option value="jam">JAM — Fluency Drill</option>
+              <option value="free">Free Speaking Practice</option>
+            </select>
+          </div>
+          <div>
+            <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px">Status:</label>
+            <select id="hw-filter-status" class="form-input form-select" style="width:100%;font-size:13px;padding:8px 10px">
+              <option value="Active">Active</option>
+              <option value="Archived">Archived</option>
+            </select>
+          </div>
+          <button class="btn btn-primary" onclick="applyHomeworkFilters()">🔍 Load Assignments</button>
+        </div>
+      </div>`;
+    return;
+  }
+
+  // Data is loaded — render table
+  const list = _teacherAssignments.filter(a => (a.Status || 'Active') === _hwFilters.status);
   c.innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px">
       <h2 style="font-size:1.3rem">📚 Homework Book</h2>
@@ -3988,13 +4093,67 @@ function _parseGradeJSON(raw) {
   try { const m = raw.match(/\{[\s\S]*\}/); return m ? JSON.parse(m[0]) : null; } catch(_) { return null; }
 }
 
+// Anti-cheating: reject answers that are suspiciously short, silent, or gibberish
+function isValidAnswer(rec) {
+  if (!rec?.studentAnswer?.trim()) return { valid: false, reason: 'empty' };
+  const ans = rec.studentAnswer.trim();
+  // Count actual English words (ignore pure punctuation)
+  const words = ans.split(/\s+/).filter(w => /[a-zA-Z]/.test(w));
+  const dur = rec._dur || 0;  // duration in seconds
+  
+  // Rule 0: Content must have actual words (no pure punctuation/numbers)
+  if (!/[a-zA-Z]/.test(ans)) {
+    return { valid: false, reason: 'no_words' };
+  }
+  
+  // Rule 1: Accept if >= 10 words (good answer regardless of duration)
+  if (words.length >= 10) {
+    return { valid: true, reason: null };
+  }
+  
+  // Rule 2: For < 10 words, check speech rate (words per second)
+  // Normal speech: 2-2.5 words/sec. Silence/gibberish: < 1 word/sec
+  if (dur > 0) {
+    const rate = words.length / dur;
+    if (rate < 1.0) {
+      // Speaking too slowly for this many words — suspect silence/gaps
+      return { valid: false, reason: 'too_slow' };
+    }
+  }
+  
+  // Rule 3: Allow quick short answers (e.g., "Yes" in 1-2 sec, "I'm from Vietnam" in 3 sec)
+  if (dur > 0 && dur <= 8) {
+    return { valid: true, reason: null };
+  }
+  
+  // If none of above conditions pass, reject
+  return { valid: false, reason: 'too_short' };
+}
+
 async function finishSession() {
   if (A.talking) await stopTalk();
   clearInterval(A.qcdTm);
   const lastAns = (A.curAnswer || '').trim();
   if (lastAns && A.recs[A.idx]) A.recs[A.idx].studentAnswer = lastAns;
-  const answered = A.recs.filter(r => r.studentAnswer?.trim()?.length >= 2);
-  if (!answered.length) { if (confirm('No answers recorded. Exit?')) { SS('S-student'); studentTab('practice'); } return; }
+  
+  // Filter answers using anti-cheating rules
+  const answered = [];
+  for (const rec of A.recs) {
+    const check = isValidAnswer(rec);
+    if (check.valid) {
+      answered.push(rec);
+    } else {
+      // Show why answer was rejected
+      if (check.reason === 'too_short') {
+        toast('Answer too short — need at least 10 words. Please record again.', 'error', 4000);
+      } else if (check.reason === 'too_slow') {
+        toast('You recorded this too slowly with too few words (sign of silence). Please try again.', 'error', 4000);
+      } else if (check.reason === 'no_words') {
+        toast('Your answer has no real words. Please record again.', 'error', 3000);
+      }
+    }
+  }
+  if (!answered.length) { if (confirm('No valid answers recorded. Exit?')) { SS('S-student'); studentTab('practice'); } return; }
 
   // The local pass is deterministic and finishes in about a second, so the
   // student can start reading real feedback immediately instead of staring at
