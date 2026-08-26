@@ -1686,59 +1686,18 @@ async function renderLibrary(c) {
   const res = await gasCall('teacher.getLibrary', {});
   _library = res.data || [];
   let items = _library.filter(x => (x.Part || 'part1') === _libPart);
-let _hwView = 'Active';
-let _library = {};  // { part1: [...], part2: [...], part3: [...] }
-let _libPart = 'part1';
-let _libSort = 'newest';
-let _libLoaded = {};  // track which parts have been loaded { part1: true, ... }
-
-async function loadLibraryPart(part) {
-  if (_libLoaded[part]) return;  // already loaded
-  try {
-    const res = await gasCall('teacher.getLibrary', { part });
-    _library[part] = res.data || [];
-    _libLoaded[part] = true;
-  } catch(e) { toast('Failed to load ' + part + ' topics: ' + e.message, 'error'); }
-  teacherTab('library');
-}
-
-async function renderLibrary(c) {
-  // No automatic fetch — library is loaded on demand by the Load Topics button.
-  let items = _library[_libPart] || [];
-  if (!_libLoaded[_libPart]) {
-    // Show placeholder with Load button
-    c.innerHTML = `
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:10px">
-        <h2 style="font-size:1.3rem">📖 Question Library</h2>
-        <button class="btn btn-primary btn-sm" onclick="openLibraryEditor()">+ New ${partLabel[_libPart].split(' — ')[0]} topic</button>
-      </div>
-      <p style="font-size:13px;color:var(--g600);margin-bottom:16px">
-        Topics are grouped by IELTS part. Click "Load Topics" to view topics for this part, then launch to a class to set homework.
-      </p>
-      <div class="auth-tabs" style="max-width:420px;margin-bottom:18px">
-        <div class="auth-tab ${_libPart==='part1'?'active':''}" onclick="_libPart='part1';teacherTab('library')">Part 1 <span style="opacity:.6">(loading…)</span></div>
-        <div class="auth-tab ${_libPart==='part2'?'active':''}" onclick="_libPart='part2';teacherTab('library')">Part 2 <span style="opacity:.6">(loading…)</span></div>
-        <div class="auth-tab ${_libPart==='part3'?'active':''}" onclick="_libPart='part3';teacherTab('library')">Part 3 <span style="opacity:.6">(loading…)</span></div>
-      </div>
-      <button class="btn btn-primary" onclick="loadLibraryPart('${_libPart}')">📥 Load ${partLabel[_libPart].split(' — ')[0]} Topics</button>`;
-    return;
-  }
-  
-  // Topics are loaded — render normally
-  const partLabel = { part1: 'Part 1 — Introduction', part2: 'Part 2 — Long Turn (cue card)', part3: 'Part 3 — Discussion' };
-  const count = p => (_library[p] || []).length;
-  
-  // Sort items by the teacher's chosen order
   items = items.slice().sort((a, b) => {
     switch (_libSort) {
       case 'az':      return String(a.Title).localeCompare(String(b.Title), undefined, { sensitivity: 'base' });
       case 'za':      return String(b.Title).localeCompare(String(a.Title), undefined, { sensitivity: 'base' });
       case 'newest':  return String(b.CreatedAt || '').localeCompare(String(a.CreatedAt || ''));
       case 'oldest':  return String(a.CreatedAt || '').localeCompare(String(b.CreatedAt || ''));
-      case 'used':    return (b.UsedCount || 0) - (a.UsedCount || 0);
+      case 'used':    return (parseInt(b.UsedCount) || 0) - (parseInt(a.UsedCount) || 0);
       default:        return 0;
     }
   });
+  const partLabel = { part1: 'Part 1 — Introduction', part2: 'Part 2 — Long Turn (cue card)', part3: 'Part 3 — Discussion' };
+  const count = p => _library.filter(x => (x.Part || 'part1') === p).length;
 
   c.innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:10px">
@@ -1787,7 +1746,7 @@ async function renderLibrary(c) {
 // ── LAUNCH A TOPIC ──────────────────────────
 let _launchLibId = '';
 function openLaunch(libId) {
-  const item = (_library[_libPart] || []).find(x => String(x.LibID) === String(libId));
+  const item = _library.find(x => String(x.LibID) === String(libId));
   if (!item) return;
   if (!_teacherClasses.length) {
     gasCall('teacher.getClasses').then(r => {
@@ -5377,8 +5336,6 @@ async function renderTeacherProgress(c) {
   renderProgressUI(wrap, _teacherClasses);
   c.appendChild(wrap);
 }
-}
-`
 </script>
 </body>
 </html>
