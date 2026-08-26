@@ -536,7 +536,7 @@ textarea.form-input{resize:vertical;min-height:72px;line-height:1.6}
       <div class="sidenav-section">Management</div>
       <div class="sidenav-item active" onclick="teacherTab('overview')"><span class="sidenav-icon">📊</span> Class Overview</div>
       <div class="sidenav-item" onclick="teacherTab('classroom')"><span class="sidenav-icon">🏫</span> Classroom</div>
-      <div class="sidenav-item" onclick="teacherTab('homework')"><span class="sidenav-icon">📚</span> Homework Book</div>
+      <div class="sidenav-item" onclick="_hwLoaded=false;teacherTab('homework')"><span class="sidenav-icon">📚</span> Homework Book</div>
       <div class="sidenav-item" onclick="teacherTab('library')"><span class="sidenav-icon">📖</span> Question Library</div>
       <div class="sidenav-item" onclick="teacherTab('progress')"><span class="sidenav-icon">📈</span> Study Progress</div>
       <div class="sidenav-section">Archive</div>
@@ -1677,7 +1677,6 @@ function asnAddQ() {
   list.appendChild(div);
 }
 
-let _hwView = 'Active';
 let _library = [];
 let _libPart = 'part1';
 let _libSort = 'newest';
@@ -1921,21 +1920,41 @@ async function deleteLibraryItem(libId, title) {
 let _hwFilters = { class: 'all', part: 'all', status: 'Active' };
 let _hwLoaded = false;
 
+async function _fetchHomework() {
+  const filters = {};
+  if (_hwFilters.status) filters.status = _hwFilters.status;
+  if (_hwFilters.class && _hwFilters.class !== 'all') filters.classId = _hwFilters.class;
+  if (_hwFilters.part && _hwFilters.part !== 'all') filters.part = _hwFilters.part;
+  const res = await gasCall('teacher.getAssignments', filters);
+  _teacherAssignments = res.data || [];
+  _hwLoaded = true;
+}
+
 async function applyHomeworkFilters() {
   try {
     _hwFilters.class = document.getElementById('hw-filter-class').value || 'all';
     _hwFilters.part = document.getElementById('hw-filter-part').value || 'all';
     _hwFilters.status = document.getElementById('hw-filter-status').value || 'Active';
-    
-    const filters = {};
-    if (_hwFilters.status) filters.status = _hwFilters.status;
-    if (_hwFilters.class && _hwFilters.class !== 'all') filters.classId = _hwFilters.class;
-    if (_hwFilters.part && _hwFilters.part !== 'all') filters.part = _hwFilters.part;
-    
-    const res = await gasCall('teacher.getAssignments', filters);
-    _teacherAssignments = res.data || [];
-    _hwLoaded = true;
+    await _fetchHomework();
   } catch(e) { toast('Failed to load assignments: ' + e.message, 'error'); }
+  teacherTab('homework');
+}
+
+// Load every assignment with no class/part filter (keeps the current status tab).
+async function loadAllAssignments() {
+  try {
+    const status = document.getElementById('hw-filter-status');
+    _hwFilters = { class: 'all', part: 'all', status: (status && status.value) || 'Active' };
+    await _fetchHomework();
+  } catch(e) { toast('Failed to load assignments: ' + e.message, 'error'); }
+  teacherTab('homework');
+}
+
+// Refetch using the current filters (used after archive/delete/relaunch/create so
+// the table reflects the change instead of showing stale in-memory rows).
+async function reloadHomework() {
+  if (!_hwLoaded) { teacherTab('homework'); return; }
+  try { await _fetchHomework(); } catch(e) { toast('Failed to reload: ' + e.message, 'error'); }
   teacherTab('homework');
 }
 
@@ -1961,14 +1980,14 @@ async function renderTeacherHomework(c) {
           <div>
             <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px">Class:</label>
             <select id="hw-filter-class" class="form-input form-select" style="width:100%;font-size:13px;padding:8px 10px">
-              <option value="all">All classes</option>
+              <option value="all">📋 All classes</option>
               ${_teacherClasses.map(cl => `<option value="${cl.ClassID}">${cl.ClassName || cl.ClassID}</option>`).join('')}
             </select>
           </div>
           <div>
             <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px">Part/Mode:</label>
             <select id="hw-filter-part" class="form-input form-select" style="width:100%;font-size:13px;padding:8px 10px">
-              <option value="all">All parts</option>
+              <option value="all">📋 All parts</option>
               <option value="part1">Part 1 — Introduction</option>
               <option value="part2">Part 2 — Long Turn (cue card)</option>
               <option value="part3">Part 3 — Discussion</option>
@@ -1983,7 +2002,10 @@ async function renderTeacherHomework(c) {
               <option value="Archived">Archived</option>
             </select>
           </div>
-          <button class="btn btn-primary" onclick="applyHomeworkFilters()">🔍 Load Assignments</button>
+          <div style="display:flex;gap:8px;margin-top:4px">
+            <button class="btn btn-primary" style="flex:1" onclick="applyHomeworkFilters()">🔍 Load with filters</button>
+            <button class="btn btn-outline" style="flex:1" onclick="loadAllAssignments()">📋 Load ALL results</button>
+          </div>
         </div>
       </div>`;
     return;
@@ -1991,14 +2013,23 @@ async function renderTeacherHomework(c) {
 
   // Data is loaded — render table
   const list = _teacherAssignments.filter(a => (a.Status || 'Active') === _hwFilters.status);
+  const clsLabel = _hwFilters.class === 'all' ? 'All classes' : (classNameOf(_hwFilters.class) || _hwFilters.class);
+  const partLabel = _hwFilters.part === 'all' ? 'All parts' : _hwFilters.part;
   c.innerHTML = `
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px">
       <h2 style="font-size:1.3rem">📚 Homework Book</h2>
-      <button class="btn btn-primary btn-sm" onclick="openCreateAsn()">+ Create Assignment</button>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-outline btn-sm" onclick="_hwLoaded=false;teacherTab('homework')">← Change filters</button>
+        <button class="btn btn-primary btn-sm" onclick="openCreateAsn()">+ Create Assignment</button>
+      </div>
     </div>
-    <div class="auth-tabs" style="max-width:320px;margin-bottom:16px">
-      <div class="auth-tab ${_hwView==='Active'?'active':''}" onclick="_hwView='Active';teacherTab('homework')">Active</div>
-      <div class="auth-tab ${_hwView==='Archived'?'active':''}" onclick="_hwView='Archived';teacherTab('homework')">Archived</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+      <span style="font-size:13px;color:var(--g600)">
+        <strong>${list.length}</strong> assignment${list.length!==1?'s':''} ·
+        <span class="badge badge-grey">${clsLabel}</span>
+        <span class="badge badge-blue">${partLabel}</span>
+        <span class="badge ${_hwFilters.status==='Active'?'badge-green':'badge-gold'}">${_hwFilters.status}</span>
+      </span>
     </div>
     <div class="tbl-wrap">
       <table class="tbl">
@@ -2012,14 +2043,14 @@ async function renderTeacherHomework(c) {
               <td style="font-size:12px;white-space:nowrap">${a.Deadline ? fmtDT(a.Deadline).split(' ')[0] : '—'}</td>
               <td style="white-space:nowrap;text-align:right">
                 <div style="display:inline-flex;gap:6px">
-                  ${_hwView==='Active'
+                  ${_hwFilters.status==='Active'
                     ? `<button class="btn btn-outline btn-sm" onclick="archiveAsn('${a.AssignID}','${(a.Title||'').replace(/'/g,'&#39;')}')">Archive</button>`
                     : `<button class="btn btn-outline btn-sm" style="color:var(--blue)" onclick="openRelaunch('${a.AssignID}','${(a.Title||'').replace(/'/g,'&#39;')}')">Re-launch</button>
                        <button class="btn btn-ghost btn-sm" style="color:var(--green-d)" onclick="unarchiveAsn('${a.AssignID}')">Restore</button>`}
                   <button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="deleteAsn('${a.AssignID}','${(a.Title||'').replace(/'/g,'&#39;')}')">Delete</button>
                 </div>
               </td>
-            </tr>`).join('') : `<tr><td colspan="5" class="empty">No ${_hwView.toLowerCase()} assignments</td></tr>`}
+            </tr>`).join('') : `<tr><td colspan="5" class="empty">No assignments match these filters. Press "← Change filters" to adjust.</td></tr>`}
         </tbody>
       </table>
     </div>`;
@@ -2031,7 +2062,7 @@ async function archiveAsn(assignId, title) {
     const res = await gasCall('teacher.setAssignmentStatus', { assignId, status: 'Archived' });
     if (!res.success) { toast(res.error, 'error'); return; }
     toast('Assignment archived', 'success');
-    teacherTab('homework');
+    reloadHomework();
   } catch(e) { toast(e.message, 'error'); }
 }
 
@@ -2040,7 +2071,7 @@ async function unarchiveAsn(assignId) {
     const res = await gasCall('teacher.setAssignmentStatus', { assignId, status: 'Active' });
     if (!res.success) { toast(res.error, 'error'); return; }
     toast('Assignment restored', 'success');
-    teacherTab('homework');
+    reloadHomework();
   } catch(e) { toast(e.message, 'error'); }
 }
 
@@ -2067,8 +2098,8 @@ async function doRelaunch() {
     if (!res.success) { toast(res.error, 'error'); return; }
     toast('Assignment re-launched to ' + classes.length + ' class(es)', 'success');
     closeModal('relaunch-modal');
-    _hwView = 'Active';
-    teacherTab('homework');
+    _hwFilters.status = 'Active';
+    reloadHomework();
   } catch(e) { toast(e.message, 'error'); }
 }
 
@@ -2118,7 +2149,7 @@ async function doCreateAssignment() {
     if (!res.success) { toast(res.error, 'error'); return; }
     toast('Assignment created successfully!', 'success');
     closeModal('create-asn-modal');
-    teacherTab('homework');
+    reloadHomework();
   } catch(e) { toast(e.message, 'error'); }
 }
 
@@ -2128,7 +2159,7 @@ async function deleteAsn(assignId, title) {
     const res = await gasCall('teacher.deleteAssignment', { assignId });
     if (!res.success) { toast(res.error, 'error'); return; }
     toast('Deleted', 'success');
-    teacherTab('homework');
+    reloadHomework();
   } catch(e) { toast(e.message, 'error'); }
 }
 
