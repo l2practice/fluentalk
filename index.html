@@ -1747,13 +1747,6 @@ let _launchLibId = '';
 function openLaunch(libId) {
   const item = _library.find(x => String(x.LibID) === String(libId));
   if (!item) return;
-  if (!_teacherClasses.length) {
-    gasCall('teacher.getClasses').then(r => {
-      _teacherClasses = (r.data || []).filter(c => c.Status !== 'Archived');
-      openLaunch(libId);
-    });
-    return;
-  }
   _launchLibId = libId;
   let qs = []; try { qs = JSON.parse(item.Questions || '[]'); } catch(e) {}
 
@@ -1774,12 +1767,27 @@ function openLaunch(libId) {
   }).join('');
   document.getElementById('launch-questions')._qs = qs;
 
-  document.getElementById('launch-classes').innerHTML = _teacherClasses.map(cl => `
-    <label style="display:flex;align-items:center;gap:8px;padding:5px 0;cursor:pointer;font-size:13px">
-      <input type="checkbox" class="launch-cls" value="${cl.ClassID}">
-      ${cl.ClassName || cl.ClassID} <span style="font-family:var(--fm);color:var(--g400);font-size:11px">${cl.ClassID}</span>
-    </label>`).join('');
+  // Open the modal straight away so it never feels frozen; fill the class list
+  // once it arrives (from cache if we already have it, else fetch in the
+  // background). Under load a getClasses call can be slow — don't block on it.
+  const clsBox = document.getElementById('launch-classes');
+  const paint = () => {
+    clsBox.innerHTML = _teacherClasses.map(cl => `
+      <label style="display:flex;align-items:center;gap:8px;padding:5px 0;cursor:pointer;font-size:13px">
+        <input type="checkbox" class="launch-cls" value="${cl.ClassID}">
+        ${cl.ClassName || cl.ClassID} <span style="font-family:var(--fm);color:var(--g400);font-size:11px">${cl.ClassID}</span>
+      </label>`).join('') || '<div class="empty" style="padding:12px">No classes yet — create one first.</div>';
+  };
   openModal('launch-modal');
+  if (_teacherClasses.length) {
+    paint();
+  } else {
+    clsBox.innerHTML = '<div class="spinner" style="margin:20px auto"></div>';
+    gasCall('teacher.getClasses').then(r => {
+      _teacherClasses = (r.data || []).filter(c => c.Status !== 'Archived');
+      paint();
+    }).catch(e => { clsBox.innerHTML = '<div class="empty" style="padding:12px;color:var(--red-d)">Could not load classes — server busy. Close and try again.</div>'; });
+  }
 }
 
 function launchToggleAllQ(on) {
