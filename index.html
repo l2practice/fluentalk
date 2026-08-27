@@ -3619,22 +3619,22 @@ function classifyTranscribeError(e) {
   // Safari says "Load failed", Chrome "Failed to fetch", Firefox "NetworkError".
   if (/load failed|failed to fetch|networkerror|network request failed|connection (was )?lost|timed? ?out/i.test(msg)) {
     return { kind: 'network', isApp: false,
-      text: '📶 Lỗi MẠNG của thiết bị bạn (không phải lỗi ứng dụng). Ghi âm gửi lên không thành công. Kiểm tra wifi/4G rồi nhấn thu lại. Bạn KHÔNG cần báo giáo viên.' };
+      text: '📶 Lỗi MẠNG của thiết bị bạn. Ghi âm gửi lên không thành công. Kiểm tra wifi/4G rồi nhấn thu lại.' };
   }
   // Groq busy / rate limited for this student's key.
   if (/rate limit|429|too many requests/i.test(msg)) {
     return { kind: 'ratelimit', isApp: false,
-      text: '⏳ Máy chủ nhận diện giọng nói đang bận (phía bạn). Đợi vài giây rồi thu lại. Bạn KHÔNG cần báo giáo viên.' };
+      text: '⏳ Máy chủ nhận diện giọng nói đang bận. Đợi vài giây rồi thu lại.' };
   }
   // Missing or wrong Groq key — student configuration.
   if (/invalid.*key|api key|not set groq|401|unauthor/i.test(msg)) {
     return { kind: 'key', isApp: false,
-      text: '🔑 Khóa API (Groq key) của bạn chưa đúng hoặc chưa nhập. Vào phần Cài đặt để nhập lại. Bạn KHÔNG cần báo giáo viên.' };
+      text: '🔑 Khóa API (Groq key) của bạn chưa đúng hoặc chưa nhập. Vào phần Cài đặt để nhập lại.' };
   }
   // Recording couldn't be read or was too short — student mic/recording.
   if ((e && e.audioRead) || /could not read|recording too short|too short|no audio/i.test(msg)) {
     return { kind: 'recording', isApp: false,
-      text: '🎤 Không đọc được ghi âm (phía bạn). Hãy nói NGAY sau khi nhấn và giữ ít nhất 2 giây, rồi thu lại. Bạn KHÔNG cần báo giáo viên.' };
+      text: '🎤 Không đọc được ghi âm. Hãy nhấn Spacebar (ghi âm) để thu lại.' };
   }
   // Anything else is genuinely unexpected — treat as an app problem to report.
   return { kind: 'app', isApp: true,
@@ -3687,7 +3687,7 @@ async function transcribeGroq(blob, mime, model) {
         try { return await transcribeGroq(blob, mime, 'whisper-large-v3-turbo'); }
         finally { A._transcribeRetried = false; }
       }
-      const err = new Error('Could not read the recording. Xin hãy thu âm lại — nói ngay sau khi nhấn, và giữ ít nhất 2 giây.');
+      const err = new Error('Could not read the recording. Xin hãy thu âm lại — nói ngay sau khi nhấn Spacebar (Ghi âm).');
       err.audioRead = true;
       throw err;
     }
