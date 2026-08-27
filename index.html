@@ -2991,7 +2991,8 @@ async function finishJAM() {
     const tr = await transcribeGroq(rec.blob, rec.mime);
     text = tr.text || '';
   } catch(e) {
-    c.innerHTML = `<div class="empty">Could not transcribe: ${e.message}<br><button class="btn btn-primary btn-sm" style="margin-top:10px" onclick="startJAM('${_jam.libId}','${String(_jam.topic).replace(/'/g,'&#39;')}')">Try again</button></div>`;
+    const info = classifyTranscribeError(e);
+    c.innerHTML = `<div class="empty">${info.text}<br><button class="btn btn-primary btn-sm" style="margin-top:10px" onclick="startJAM('${_jam.libId}','${String(_jam.topic).replace(/'/g,'&#39;')}')">Thu lại</button></div>`;
     return;
   }
   _jam.runs++;
@@ -3601,10 +3602,43 @@ async function stopCaptureAndTranscribe() {
     return true;
   } catch(e) {
     console.error('[transcribe] failed:', e.message, '| mime:', rec.mime, '| size:', rec.blob?.size);
-    const detail = `${e.message}  ·  format ${rec.mime||'?'}, ${Math.round((rec.blob?.size||0)/1024)}KB`;
-    toast('Transcription error: ' + detail, 'error', 8000);
+    const info = classifyTranscribeError(e);
+    toast(info.text, 'error', info.isApp ? 10000 : 8000);
     return false;
   }
+}
+
+// Turn a raw transcription error into a clear message that tells the student
+// whether the problem is on THEIR side (network, key, mic, Groq busy) — which
+// they can fix and retry themselves — or a genuine APP bug they should report
+// to the teacher. This stops students reporting normal network hiccups as app
+// failures. Returns { kind, text, isApp }.
+function classifyTranscribeError(e) {
+  const msg = String((e && e.message) || '');
+  // Network-level failure: fetch threw before reaching Groq.
+  // Safari says "Load failed", Chrome "Failed to fetch", Firefox "NetworkError".
+  if (/load failed|failed to fetch|networkerror|network request failed|connection (was )?lost|timed? ?out/i.test(msg)) {
+    return { kind: 'network', isApp: false,
+      text: '📶 Lỗi MẠNG của thiết bị bạn (không phải lỗi ứng dụng). Ghi âm gửi lên không thành công. Kiểm tra wifi/4G rồi nhấn thu lại. Bạn KHÔNG cần báo giáo viên.' };
+  }
+  // Groq busy / rate limited for this student's key.
+  if (/rate limit|429|too many requests/i.test(msg)) {
+    return { kind: 'ratelimit', isApp: false,
+      text: '⏳ Máy chủ nhận diện giọng nói đang bận (phía bạn). Đợi vài giây rồi thu lại. Bạn KHÔNG cần báo giáo viên.' };
+  }
+  // Missing or wrong Groq key — student configuration.
+  if (/invalid.*key|api key|not set groq|401|unauthor/i.test(msg)) {
+    return { kind: 'key', isApp: false,
+      text: '🔑 Khóa API (Groq key) của bạn chưa đúng hoặc chưa nhập. Vào phần Cài đặt để nhập lại. Bạn KHÔNG cần báo giáo viên.' };
+  }
+  // Recording couldn't be read or was too short — student mic/recording.
+  if ((e && e.audioRead) || /could not read|recording too short|too short|no audio/i.test(msg)) {
+    return { kind: 'recording', isApp: false,
+      text: '🎤 Không đọc được ghi âm (phía bạn). Hãy nói NGAY sau khi nhấn và giữ ít nhất 2 giây, rồi thu lại. Bạn KHÔNG cần báo giáo viên.' };
+  }
+  // Anything else is genuinely unexpected — treat as an app problem to report.
+  return { kind: 'app', isApp: true,
+    text: '⚠️ LỖI ỨNG DỤNG: ' + msg + '. Vui lòng chụp màn hình và báo giáo viên để được sửa.' };
 }
 
 // ── GROQ TRANSCRIBE ───────────────────────
