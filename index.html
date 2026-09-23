@@ -523,6 +523,7 @@ textarea.form-input{resize:vertical;min-height:72px;line-height:1.6}
     <span class="tb-brand">Speaking <em>App</em></span>
     <span class="tb-sub">/ Teacher Portal</span>
     <div class="tb-right">
+      <button class="tb-btn" style="background:var(--red);color:#fff;border:none;font-weight:600" onclick="openClearDataModal()">🗑 Clear Data</button>
       <span class="tb-user">👩‍🏫 Teacher</span>
       <button class="tb-btn" onclick="logout()">Sign Out</button>
     </div>
@@ -671,6 +672,43 @@ textarea.form-input{resize:vertical;min-height:72px;line-height:1.6}
 </div>
 
 <!-- ══════ MODALS ══════ -->
+<!-- Clear Data Modal -->
+<div class="modal-overlay" id="clear-data-modal" style="display:none">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-header">
+      <span class="modal-title">🗑 Clear Session Data</span>
+      <button class="modal-close" onclick="closeModal('clear-data-modal')">&times;</button>
+    </div>
+    <div class="modal-body" style="padding:20px">
+      <p style="font-size:13px;color:var(--g600);line-height:1.6;margin:0 0 16px">
+        Xóa dữ liệu nặng (bài nói, nhận xét AI, JSON) trong <strong>Sessions</strong> sheet.
+        <strong>SessionIndex</strong> (lịch sử nhẹ: tên, giờ, điểm) <strong>được giữ nguyên</strong>.
+        Sinh viên vẫn xem được lịch sử luyện tập.
+      </p>
+      <p style="font-size:12px;color:var(--red-d);margin:0 0 20px">⚠ Hành động này không thể hoàn tác.</p>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <button class="btn btn-outline" style="width:100%;text-align:left;padding:12px 16px" onclick="doClearData(7)">
+          <strong>🗓 Older than 7 days</strong><br>
+          <span style="font-size:12px;color:var(--g600)">Xóa sessions cũ hơn 1 tuần</span>
+        </button>
+        <button class="btn btn-outline" style="width:100%;text-align:left;padding:12px 16px" onclick="doClearData(14)">
+          <strong>🗓 Older than 14 days</strong><br>
+          <span style="font-size:12px;color:var(--g600)">Xóa sessions cũ hơn 2 tuần</span>
+        </button>
+        <button class="btn btn-outline" style="width:100%;text-align:left;padding:12px 16px" onclick="doClearData(21)">
+          <strong>🗓 Older than 21 days</strong><br>
+          <span style="font-size:12px;color:var(--g600)">Xóa sessions cũ hơn 3 tuần</span>
+        </button>
+        <button class="btn" style="width:100%;text-align:left;padding:12px 16px;background:var(--red);color:#fff" onclick="doClearData(0)">
+          <strong>💣 Clear ALL sessions</strong><br>
+          <span style="font-size:12px;opacity:.85">Xóa toàn bộ — chỉ giữ SessionIndex</span>
+        </button>
+      </div>
+      <div id="clear-result" style="margin-top:14px;font-size:13px;text-align:center"></div>
+    </div>
+  </div>
+</div>
+
 <!-- Teacher Login -->
 <div class="modal-overlay" id="teacher-login-modal">
   <div class="modal">
@@ -2601,18 +2639,6 @@ async function renderTeacherSettings(c) {
         <div class="form-hint">Where exported feedback docs are filed. Each student gets one document per topic, shared as view-only by link.</div>
       </div>
       <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
-    </div>
-    <div class="card" style="margin-top:20px;border:2px solid var(--red-l)">
-      <div class="card-title" style="color:var(--red-d);margin-bottom:14px">🗑 Data Cleanup</div>
-      <p style="font-size:13px;color:var(--g600);line-height:1.6;margin-bottom:14px">
-        Xóa dữ liệu nặng (bài nói, nhận xét AI, JSON) trong Sessions sheet cũ hơn 20 ngày.
-        <strong>SessionIndex (lịch sử nhẹ: tên, giờ, điểm) sẽ được giữ nguyên.</strong>
-        Sinh viên vẫn xem được lịch sử luyện tập trong app. Hành động này không thể hoàn tác.
-      </p>
-      <div style="display:flex;gap:10px;flex-wrap:wrap">
-        <button class="btn" style="background:var(--red);color:#fff" onclick="clearOldData()">🗑 Clear sessions > 20 days</button>
-      </div>
-      <div id="clear-result" style="margin-top:10px;font-size:13px"></div>
     </div>`;
 }
 
@@ -2636,20 +2662,36 @@ async function saveSettings() {
   } catch(e) { toast(e.message, 'error'); }
 }
 
-async function clearOldData() {
-  if (!confirm('⚠️ Bạn chắc chắn muốn xóa dữ liệu Sessions cũ hơn 20 ngày?\n\nSessionIndex (lịch sử nhẹ) sẽ được giữ nguyên.\nHành động này KHÔNG THỂ hoàn tác.')) return;
-  if (!confirm('Xác nhận lần cuối: XÓA dữ liệu Sessions cũ hơn 20 ngày?')) return;
-  const box = document.getElementById('clear-result');
-  if (box) box.innerHTML = '<div class="spinner" style="width:20px;height:20px;display:inline-block;vertical-align:middle"></div> Đang xóa…';
-  try {
-    const res = await gasCall('teacher.clearOldData', { days: 20 });
-    if (!res.success) { if (box) box.innerHTML = '<span style="color:var(--red-d)">Lỗi: ' + res.error + '</span>'; return; }
-    if (box) box.innerHTML = '<span style="color:var(--green-d)">✓ Đã xóa ' + (res.deleted || 0) + ' sessions cũ.</span>';
-    toast('Cleared ' + (res.deleted || 0) + ' old sessions', 'success');
-  } catch(e) { if (box) box.innerHTML = '<span style="color:var(--red-d)">Lỗi: ' + e.message + '</span>'; }
+// ════════════════════════════════════════════
+function openClearDataModal() {
+  document.getElementById('clear-result').innerHTML = '';
+  openModal('clear-data-modal');
 }
 
-// ════════════════════════════════════════════
+async function doClearData(days) {
+  const label = days > 0 ? `sessions cũ hơn ${days} ngày` : 'TOÀN BỘ sessions';
+  if (!confirm(`⚠️ Bạn chắc chắn muốn xóa ${label}?\n\nSessionIndex (lịch sử nhẹ) sẽ được giữ nguyên.\nHành động này KHÔNG THỂ hoàn tác.`)) return;
+
+  const box = document.getElementById('clear-result');
+  if (box) box.innerHTML = '<div class="spinner" style="width:20px;height:20px;display:inline-block;vertical-align:middle"></div> Đang xóa…';
+
+  // Disable all buttons in modal during operation
+  document.querySelectorAll('#clear-data-modal button').forEach(b => b.disabled = true);
+
+  try {
+    const res = await gasCall('teacher.clearOldData', { days });
+    if (!res.success) {
+      if (box) box.innerHTML = '<span style="color:var(--red-d)">Lỗi: ' + res.error + '</span>';
+    } else {
+      if (box) box.innerHTML = `<span style="color:var(--green-d)">✓ Đã xóa <strong>${res.deleted}</strong> sessions. Giữ lại <strong>${res.kept || 0}</strong> sessions gần đây.</span>`;
+      toast('Cleared ' + res.deleted + ' old sessions', 'success');
+    }
+  } catch(e) {
+    if (box) box.innerHTML = '<span style="color:var(--red-d)">Lỗi: ' + e.message + '</span>';
+  }
+  document.querySelectorAll('#clear-data-modal button').forEach(b => b.disabled = false);
+}
+
 // STUDENT DASHBOARD
 // ════════════════════════════════════════════
 async function studentTab(tab) {
