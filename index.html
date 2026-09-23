@@ -2601,6 +2601,18 @@ async function renderTeacherSettings(c) {
         <div class="form-hint">Where exported feedback docs are filed. Each student gets one document per topic, shared as view-only by link.</div>
       </div>
       <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
+    </div>
+    <div class="card" style="margin-top:20px;border:2px solid var(--red-l)">
+      <div class="card-title" style="color:var(--red-d);margin-bottom:14px">🗑 Data Cleanup</div>
+      <p style="font-size:13px;color:var(--g600);line-height:1.6;margin-bottom:14px">
+        Xóa dữ liệu nặng (bài nói, nhận xét AI, JSON) trong Sessions sheet cũ hơn 20 ngày.
+        <strong>SessionIndex (lịch sử nhẹ: tên, giờ, điểm) sẽ được giữ nguyên.</strong>
+        Sinh viên vẫn xem được lịch sử luyện tập trong app. Hành động này không thể hoàn tác.
+      </p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn" style="background:var(--red);color:#fff" onclick="clearOldData()">🗑 Clear sessions > 20 days</button>
+      </div>
+      <div id="clear-result" style="margin-top:10px;font-size:13px"></div>
     </div>`;
 }
 
@@ -2622,6 +2634,19 @@ async function saveSettings() {
     }
     toast('Settings saved!', 'success');
   } catch(e) { toast(e.message, 'error'); }
+}
+
+async function clearOldData() {
+  if (!confirm('⚠️ Bạn chắc chắn muốn xóa dữ liệu Sessions cũ hơn 20 ngày?\n\nSessionIndex (lịch sử nhẹ) sẽ được giữ nguyên.\nHành động này KHÔNG THỂ hoàn tác.')) return;
+  if (!confirm('Xác nhận lần cuối: XÓA dữ liệu Sessions cũ hơn 20 ngày?')) return;
+  const box = document.getElementById('clear-result');
+  if (box) box.innerHTML = '<div class="spinner" style="width:20px;height:20px;display:inline-block;vertical-align:middle"></div> Đang xóa…';
+  try {
+    const res = await gasCall('teacher.clearOldData', { days: 20 });
+    if (!res.success) { if (box) box.innerHTML = '<span style="color:var(--red-d)">Lỗi: ' + res.error + '</span>'; return; }
+    if (box) box.innerHTML = '<span style="color:var(--green-d)">✓ Đã xóa ' + (res.deleted || 0) + ' sessions cũ.</span>';
+    toast('Cleared ' + (res.deleted || 0) + ' old sessions', 'success');
+  } catch(e) { if (box) box.innerHTML = '<span style="color:var(--red-d)">Lỗi: ' + e.message + '</span>'; }
 }
 
 // ════════════════════════════════════════════
