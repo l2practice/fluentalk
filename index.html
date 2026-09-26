@@ -2673,8 +2673,8 @@ async function showTeacherClassPicker() {
 
   c.innerHTML = `
     <div style="max-width:600px;margin:40px auto;text-align:center">
-      <h2 style="margin-bottom:8px">🏫 Chọn lớp</h2>
-      <p style="font-size:13px;color:var(--g600);margin-bottom:24px">Chọn lớp để xem dữ liệu luyện tập. Dữ liệu chỉ load cho lớp được chọn.</p>
+      <h2 style="margin-bottom:8px">🏫 Selec a class</h2>
+      <p style="font-size:13px;color:var(--g600);margin-bottom:24px">Select a class to view training data. Data will only be loaded for the selected class.</p>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px;text-align:left">
         ${_teacherClasses.map(cl => `
           <div class="card" style="margin:0;cursor:pointer;transition:transform .15s,box-shadow .15s"
@@ -2706,8 +2706,8 @@ function openClearDataModal() {
 }
 
 async function doClearData(days) {
-  const label = days > 0 ? `sessions cũ hơn ${days} ngày` : 'TOÀN BỘ sessions';
-  if (!confirm(`⚠️ Xóa ${label}?\nSessionIndex giữ nguyên. Không thể hoàn tác.`)) return;
+  const label = days > 0 ? `sessions which are older than ${days} day(s)` : 'ALL sessions';
+  if (!confirm(`⚠️ Delete ${label}?\nSessionIndex still maintain. CAN'T UNDO.`)) return;
   const box = document.getElementById('clear-result');
   if (box) box.innerHTML = '<div class="spinner" style="width:20px;height:20px;display:inline-block;vertical-align:middle"></div> Đang xóa…';
   document.querySelectorAll('#clear-data-modal button').forEach(b => b.disabled = true);
@@ -2790,7 +2790,7 @@ async function renderPeerComparison(c) {
   c.innerHTML = `
     <h2 style="margin-bottom:4px">Peer Comparison</h2>
     <div style="font-size:13px;color:var(--g600);margin-bottom:16px">${clsName}${A.user?.classId ? ` <span style="font-family:var(--fm);font-size:11px;color:var(--g400)">${A.user.classId}</span>` : ''}</div>
-    <p style="font-size:13px;color:var(--g600);margin-bottom:12px">Xem ban be da luyen bao nhieu lan. Bam vao topic de xem bang xep hang.</p>
+    <p style="font-size:13px;color:var(--g600);margin-bottom:12px">See how many times your friends have practiced. Click on the topic to see the leaderboard.</p>
     <button class="btn btn-outline btn-sm" style="margin-bottom:16px" onclick="_peerDays = _peerDays ? 0 : 14; renderPeerComparison(document.getElementById('student-content'))">${_peerDays ? 'Last 2 weeks - show all topics' : 'Showing all - last 2 weeks'}</button>
     ${topics.length ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px">
       ${topics.map((t, idx) => `
