@@ -1403,55 +1403,51 @@ async function teacherTab(tab) {
 }
 
 async function renderTeacherOverview(c) {
+  if (!_teacherClassId) {
+    c.innerHTML = `
+      <div style="max-width:500px;margin:60px auto;text-align:center">
+        <div style="font-size:3rem;margin-bottom:16px">🏫</div>
+        <h2 style="margin-bottom:8px">Chọn lớp trước</h2>
+        <p style="font-size:14px;color:var(--g600);margin-bottom:20px">Vui lòng chọn lớp ở thanh trên cùng để xem thông tin.</p>
+        <button class="btn btn-primary" onclick="showTeacherClassPicker()">🏫 Chọn lớp</button>
+      </div>`;
+    return;
+  }
   const res = await gasCall('teacher.getClassStats');
   if (!res.success) { c.innerHTML = '<div class="empty">' + res.error + '</div>'; return; }
   const stats = res.data;
+  const cl = stats.find(s => String(s.classId).toUpperCase() === _teacherClassId.toUpperCase()) || {};
+  const cls = _teacherClasses.find(x => x.ClassID === _teacherClassId) || {};
+  const totalAllTime = parseInt(cls.TotalSessionsAllTime) || cl.totalSessions || 0;
   c.innerHTML = `
-    <h2 style="margin-bottom:20px;font-size:1.3rem">📊 Class Overview</h2>
+    <h2 style="margin-bottom:20px;font-size:1.3rem">📊 Overview — ${cl.className || _teacherClassId}</h2>
     <div class="stat-grid">
-      <div class="stat-box"><div class="stat-val">${stats.length}</div><div class="stat-lbl">Active Classes</div></div>
-      <div class="stat-box"><div class="stat-val">${stats.reduce((s,c)=>s+c.totalStudents,0)}</div><div class="stat-lbl">Total Students</div></div>
-      <div class="stat-box"><div class="stat-val">${stats.reduce((s,c)=>s+c.practiced,0)}</div><div class="stat-lbl">Have Practiced</div></div>
-      <div class="stat-box"><div class="stat-val">${stats.reduce((s,c)=>s+c.totalSessions,0)}</div><div class="stat-lbl">Total Sessions</div></div>
+      <div class="stat-box"><div class="stat-val">${cl.totalStudents||0}</div><div class="stat-lbl">Students</div></div>
+      <div class="stat-box"><div class="stat-val">${cl.practiced||0}</div><div class="stat-lbl">Have Practiced</div></div>
+      <div class="stat-box"><div class="stat-val">${cl.notYet||0}</div><div class="stat-lbl">Not Yet</div></div>
+      <div class="stat-box"><div class="stat-val">${totalAllTime}</div><div class="stat-lbl">Total Sessions (all time)</div></div>
     </div>
-    <div class="class-card-grid">
-      ${stats.map(cl => `
-        <div class="class-card" onclick="teacherTab('progress');setTimeout(()=>filterProgressByClass('${cl.classId}'),500)">
-          <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px">
-            <div>
-              <div style="font-weight:800;font-size:1.05rem;color:var(--black);letter-spacing:-.02em">${cl.className || cl.classId}</div>
-              <div style="font-size:11px;color:var(--g400);margin-top:2px">${[cl.academicYear,cl.semester].filter(Boolean).join(' · ')}</div>
-            </div>
-            <span class="badge badge-grey" style="font-family:var(--fm)">${cl.classId}</span>
+    <div class="class-card-grid" style="margin-top:20px">
+      <div class="class-card">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px">
+          <div>
+            <div style="font-weight:700;font-size:1.15rem">${cl.className||_teacherClassId}</div>
+            <div style="font-size:12px;color:var(--g400)">${cls.AcademicYear||''} ${cls.Semester||''}</div>
           </div>
-          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center;margin-bottom:12px">
-            <div style="padding:8px;background:var(--g50);border-radius:10px;border:1px solid var(--g100)">
-              <div style="font-size:1.5rem;font-weight:800;color:var(--black);font-family:var(--fm);line-height:1">${cl.totalStudents}</div>
-              <div style="font-size:10px;color:var(--g600);margin-top:3px;font-weight:600;text-transform:uppercase;letter-spacing:.04em">Total</div>
-            </div>
-            <div style="padding:8px;background:#D1FAE5;border-radius:10px;border:1px solid #A7F3D0">
-              <div style="font-size:1.5rem;font-weight:800;color:var(--green-d);font-family:var(--fm);line-height:1">${cl.practiced}</div>
-              <div style="font-size:10px;color:var(--green-d);margin-top:3px;font-weight:600;text-transform:uppercase;letter-spacing:.04em">Practiced</div>
-            </div>
-            <div style="padding:8px;background:var(--red-l);border-radius:10px;border:1px solid #FECDD3">
-              <div style="font-size:1.5rem;font-weight:800;color:var(--red-d);font-family:var(--fm);line-height:1">${cl.notPracticed}</div>
-              <div style="font-size:10px;color:var(--red-d);margin-top:3px;font-weight:600;text-transform:uppercase;letter-spacing:.04em">Not yet</div>
-            </div>
-          </div>
-          <div style="height:6px;background:var(--g100);border-radius:3px;overflow:hidden;margin-bottom:8px">
-            <div style="height:100%;background:linear-gradient(90deg,var(--green),var(--teal));border-radius:3px;width:${cl.totalStudents>0?Math.round(cl.practiced/cl.totalStudents*100):0}%;transition:width .6s ease"></div>
-          </div>
-          <div style="display:flex;justify-content:space-between;align-items:center">
-            <div style="font-size:11px;color:var(--g400)">${cl.totalSessions} sessions total</div>
-            ${cl.avgScore ? `<div style="font-size:12px;font-weight:700;color:var(--blue)">avg ${cl.avgScore}</div>` : ''}
-          </div>
+          <span class="badge badge-grey" style="font-family:var(--fm)">${cl.classId||_teacherClassId}</span>
         </div>
-      `).join('')}
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px">
+          <div style="text-align:center"><div style="font-family:var(--fm);font-size:1.5rem;font-weight:800">${cl.totalStudents||0}</div><div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:600">Total</div></div>
+          <div style="text-align:center;background:var(--green-l);border-radius:8px;padding:6px"><div style="font-family:var(--fm);font-size:1.5rem;font-weight:800;color:var(--green-d)">${cl.practiced||0}</div><div style="font-size:10px;color:var(--green-d);text-transform:uppercase;font-weight:600">Practiced</div></div>
+          <div style="text-align:center;background:var(--red-l);border-radius:8px;padding:6px"><div style="font-family:var(--fm);font-size:1.5rem;font-weight:800;color:var(--red-d)">${cl.notYet||0}</div><div style="font-size:10px;color:var(--red-d);text-transform:uppercase;font-weight:600">Not Yet</div></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--g500)">
+          <span>${cl.totalSessions||0} sessions (current data)</span>
+          <span style="font-weight:700">avg ${cl.avgOverall || '—'}</span>
+        </div>
+      </div>
     </div>`;
 }
-
-let _classroomVisited = false;
-
 async function renderTeacherClassroom(c) {
   const [clRes, stuRes] = await Promise.all([
     gasCall('teacher.getClasses'),
@@ -2701,6 +2697,25 @@ function selectTeacherClass(classId) {
 }
 
 // Clear Data modal
+async function deleteClassData() {
+  const classId = _progFilter || _teacherClassId;
+  if (!classId) { toast('Chưa chọn lớp', 'error'); return; }
+  const cls = _teacherClasses.find(c => c.ClassID === classId);
+  const name = cls?.ClassName || classId;
+  if (!confirm(`⚠️ Xóa toàn bộ data luyện tập của lớp ${name}?\n\n• Google Sheet tổng hợp sẽ được tạo\n• Email kèm link Sheet sẽ gửi cho bạn\n• Data trong app sẽ bị xóa (SessionIndex vẫn giữ)\n\nHành động này không thể hoàn tác.`)) return;
+  showOverlay('Đang xuất và xóa data…');
+  try {
+    const res = await gasCall('teacher.deleteClassData', { classId });
+    hideOverlay();
+    if (!res.success) { toast('Lỗi: ' + res.error, 'error'); return; }
+    toast(`✓ Đã xóa ${res.deleted} sessions. Sheet tổng hợp đã gửi email.`, 'success', 8000);
+    if (res.sheetUrl) window.open(res.sheetUrl, '_blank');
+    _progLoaded = false;
+    _progReload = false;
+    teacherTab('progress');
+  } catch(e) { hideOverlay(); toast('Lỗi: ' + e.message, 'error'); }
+}
+
 function openClearDataModal() {
   document.getElementById('clear-result').innerHTML = '';
   openModal('clear-data-modal');
@@ -5609,6 +5624,19 @@ window.addEventListener('load', () => {
 // Patch renderTeacherProgress to store rows
 const _origRenderProgress = renderTeacherProgress;
 async function renderTeacherProgress(c) {
+  // Use the class selected at login; block if none
+  if (!_teacherClassId) {
+    c.innerHTML = `
+      <div style="max-width:500px;margin:60px auto;text-align:center">
+        <div style="font-size:3rem;margin-bottom:16px">🏫</div>
+        <h2 style="margin-bottom:8px">Chọn lớp trước</h2>
+        <p style="font-size:14px;color:var(--g600);margin-bottom:20px">Vui lòng chọn lớp ở thanh trên cùng để xem Study Progress.</p>
+        <button class="btn btn-primary" onclick="showTeacherClassPicker()">🏫 Chọn lớp</button>
+      </div>`;
+    return;
+  }
+  if (!_progFilter) _progFilter = _teacherClassId;
+  if (_progFilter !== _teacherClassId) { _progFilter = _teacherClassId; _progLoaded = false; _progReload = false; }
   if (!_progFilter) {
     // No class chosen yet: show class stat cards (like Class Overview) and load
     // no session data. Picking a class then loads only that class's results.
@@ -5674,6 +5702,7 @@ async function renderTeacherProgress(c) {
       <div style="display:flex;gap:8px">
         <button class="btn btn-outline btn-sm" onclick="_progFilter='';_progTopic='';_progTaskType='';_progTopicsFor='';_progLoaded=false;renderTeacherProgress(document.getElementById('teacher-content'))">🏫 Change class</button>
         ${_progLoaded ? '<button class="btn btn-outline btn-sm" onclick="exportSessions()">⬇ Export to Sheet</button>' : ''}
+        <button class="btn btn-sm" style="background:var(--red);color:#fff" onclick="deleteClassData()">🗑 Xóa Data Lớp</button>
       </div>
     </div>
     <div class="search-row" style="align-items:flex-end">
