@@ -1097,71 +1097,6 @@ async function gasCall(action, payload = {}, _attempt = 0) {
   }
 }
 
-// ════════════════════════════════════════════
-// SAVE OUTBOX
-//
-// An attempt is written to this device BEFORE it is sent, and removed only
-// once the server confirms it. A save that fails (server busy, timeout, token
-// expired, phone offline) is re-sent before the next practice starts, so a
-// finished attempt can no longer disappear while the screen says "recorded".
-// Each attempt carries its own id, so a re-send the server already has is
-// recognised and not counted twice.
-// ════════════════════════════════════════════
-const OUTBOX_MAX_AGE_MS = 30 * 24 * 3600 * 1000;
-function _outboxKey() { return 'speak_outbox_' + (A.user?.studentId || ''); }
-function _outboxRead() {
-  try {
-    const list = JSON.parse(localStorage.getItem(_outboxKey()) || '[]');
-    return list.filter(x => x && x.clientSessionId && Date.now() - (x._queuedAt || 0) < OUTBOX_MAX_AGE_MS);
-  } catch (_) { return []; }
-}
-function _outboxWrite(list) {
-  try {
-    if (list.length) localStorage.setItem(_outboxKey(), JSON.stringify(list));
-    else localStorage.removeItem(_outboxKey());
-  } catch (_) {}
-}
-function _outboxDrop(id) { _outboxWrite(_outboxRead().filter(x => x.clientSessionId !== id)); }
-function newAttemptId() {
-  return 'SESS-C' + Date.now().toString(36).toUpperCase() + Math.random().toString(36).slice(2, 8).toUpperCase();
-}
-
-async function saveAttempt(payload) {
-  payload.clientSessionId = payload.clientSessionId || newAttemptId();
-  payload._queuedAt = payload._queuedAt || Date.now();
-  // Anything queued earlier goes first: the server numbers attempts in the
-  // order they arrive.
-  await flushOutbox(true);
-  const list = _outboxRead().filter(x => x.clientSessionId !== payload.clientSessionId);
-  list.push(payload);
-  _outboxWrite(list);
-  let res;
-  try { res = await gasCall('speak.saveResult', payload); }
-  catch (e) { res = { success: false, error: e.message }; }
-  if (res && res.success) _outboxDrop(payload.clientSessionId);
-  return res || { success: false, error: 'No response from server' };
-}
-
-let _flushing = null;
-async function flushOutbox(quiet) {
-  if (!A.sessionToken || !A.user) return 0;
-  if (_flushing) return _flushing;
-  _flushing = (async () => {
-    let sent = 0;
-    for (const item of _outboxRead()) {
-      let r = null;
-      try { r = await gasCall('speak.saveResult', item); } catch (_) {}
-      if (!r || !r.success) break;   // keep it and everything after it, in order
-      _outboxDrop(item.clientSessionId);
-      sent++;
-    }
-    if (sent && !quiet) toast(`${sent} earlier attempt(s) that had not reached the server were saved now`, 'success', 6000);
-    return sent;
-  })();
-  try { return await _flushing; } finally { _flushing = null; }
-}
-window.addEventListener('online', () => { flushOutbox(); });
-
 let _expiredHandled = false;
 function handleSessionExpired() {
   if (_expiredHandled) return;   // one redirect, however many calls were in flight
@@ -2809,7 +2744,6 @@ async function studentTab(tab) {
   });
   const c = document.getElementById('student-content');
   c.innerHTML = '<div class="spinner" style="margin-top:60px"></div>';
-  if (_outboxRead().length) await flushOutbox();
   try {
     if (tab === 'overview')  await renderStudentOverview(c);
     if (tab === 'peer')      await renderPeerComparison(c);
@@ -3253,17 +3187,12 @@ async function finishJAM() {
   // Save the run so the teacher sees the practice happened. No band — JAM is
   // fluency drill, graded by the student's own eyes on the vocabulary.
   const durMin = Math.max(1, Math.round((Date.now() - _jam.startTs) / 60000 * 10) / 10);
-  // The server numbers the run; _jam.runs only counts this sitting. Sending it
-  // as the attempt number used to collide with earlier sittings (every sitting
-  // restarted at 1), and the server dropped those runs as duplicates.
-  saveAttempt({
+  gasCall('speak.saveResult', {
     topic: _jam.topic, part: 'jam', mode: 'jam', type: 'jam',
     attemptNo: _jam.runs, durationMin: durMin,
     startTime: new Date(_jam.startTs).toISOString(), endTime: new Date().toISOString(),
     resultsJSON: [{ text }], analysis: lex ? { cefr: lex.pct } : null
-  }).then(r => {
-    if (!r.success) toast('This run has not reached the server yet — it is kept on this device and will be sent automatically.', 'error', 7000);
-  });
+  }).catch(() => {});
 }
 
 function renderJAMResult(text, lex) {
@@ -3547,26 +3476,11 @@ function buildSetup(type, hwData) {
     ${topicSel}
     ${qHTML}
     ${!isHW && !isP2 ? `<button class="btn btn-outline btn-sm" onclick="addSetupQ()" style="margin-bottom:14px">+ Add another question</button>` : ''}
-    ${!(hwData && hwData.AssignID) && !isP2 ? `<label style="display:flex;align-items:center;gap:10px;background:var(--g50);border:1px solid var(--g200);border-radius:var(--r);padding:10px 14px;margin-bottom:10px;cursor:pointer">
-      <input type="checkbox" id="random-order" ${randomOrderOn() ? 'checked' : ''} onchange="setRandomOrder(this.checked)" style="width:18px;height:18px">
-      <span><strong>🔀 Random order</strong><br><span style="font-size:12px;color:var(--g600)">Questions come in a surprise order each time. Turn off to answer them in the order you typed. <em>Câu hỏi xuất hiện ngẫu nhiên — tắt để nói theo thứ tự.</em></span></span>
-    </label>` : ''}
     <div style="display:flex;gap:10px;margin-top:8px">
       <button class="btn btn-outline" onclick="SS('S-student');studentTab('practice')">← Back</button>
       <button class="btn btn-primary btn-lg" style="flex:1" onclick="startSetup(${nQ},'${type}')">🚀 Start Session</button>
     </div>`;
   SS('S-setup');
-}
-
-// Free practice only: homework keeps the teacher's order.
-function randomOrderOn() { try { return localStorage.getItem('speak_random_order') === '1'; } catch (_) { return false; } }
-function setRandomOrder(on) { try { localStorage.setItem('speak_random_order', on ? '1' : '0'); } catch (_) {} }
-function shuffled(arr) {
-  const a = arr.slice();
-  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
-  // Guarantee the order actually changes when it can, or "random" can look broken.
-  if (a.length > 1 && a.every((q, i) => q === arr[i])) a.push(a.shift());
-  return a;
 }
 
 let _extraQCount = 4;
@@ -3645,9 +3559,6 @@ function nextMilestone(n) { return MILESTONES.find(m => m > n) || null; }
 
 async function launch(mode, qs, retryCount) {
   showOverlay('Setting up your session…');
-  // Send any attempt still waiting on this device first, so the count below
-  // includes it.
-  await flushOutbox();
   // Check if existing session for this topic
   try {
     const chk = await gasCall('speak.findExisting', { topic: A.topic, assignId: A.assignId || '' });
@@ -3661,7 +3572,6 @@ async function launch(mode, qs, retryCount) {
   } catch(e) { A.retryCount = retryCount || 0; A.pendingMilestone = false; }
 
   A.mode = mode;
-  if (!A.assignId && mode !== 'part2' && qs.length > 1 && randomOrderOn()) qs = shuffled(qs);
   A.qs   = qs;
   A.recs = qs.map(q => ({ question: q.question, studentAnswer: '' }));
   A.gradeP = new Array(qs.length).fill(null);
@@ -4763,9 +4673,8 @@ async function finishSession() {
         gr = avg(answered, 'grammar'), p = avg(answered, 'pronunciation');
   const overall = calcOverall(fc, lr, gr, p);
 
-  let recordedNo = attemptNo;
   try {
-    const saved = await saveAttempt({
+    const saved = await gasCall('speak.saveResult', {
       assignId: A.assignId || '',
       topic:    A.topic || '',
       part:     A.mode || 'part1',
@@ -4795,22 +4704,14 @@ async function finishSession() {
       type: A.assignId ? 'homework' : 'free',
       analysis: buildAnalysisPayload()
     });
-    if (saved.success) {
-      A.lastSessionId = saved.sessionId || '';
-      // The server numbers attempts; trust its number over our local guess.
-      if (saved.attemptNo) recordedNo = saved.attemptNo;
-    } else {
-      A.lastSessionId = '';
-      toast('This attempt has not reached the server yet (' + (saved.error || 'network') + '). ' +
-            'It is kept on this device and will be sent before your next practice — do not clear browser data.', 'error', 10000);
-    }
+    A.lastSessionId = saved?.sessionId || '';
   } catch (e) {
     toast('Could not save this attempt: ' + e.message, 'error', 8000);
   }
-  A.retryCount = recordedNo;
+  A.retryCount = attemptNo;
 
   if (gradeFailed) toast('Grading failed — the attempt was saved without a score', 'error', 8000);
-  renderResults(answered, rpt, shouldGrade, recordedNo, overall, fc, lr, gr, p, gradeError, false, gradedBy, gradedCount);
+  renderResults(answered, rpt, shouldGrade, attemptNo, overall, fc, lr, gr, p, gradeError, false, gradedBy, gradedCount);
 }
 
 // How many per-question panels have been opened this session.
@@ -5027,8 +4928,6 @@ function renderResults(answered, rpt, isMilestone, attemptNo, overall, fc, lr, g
         </div>
       </div>`).join('') : ''}
 
-    ${A.langText ? renderProgressStrip(attemptNo) : ''}
-    ${!isMilestone ? renderTranscriptReview(answered) : ''}
     ${A.langText ? renderLanguageAnalysis(A.langText, A.prosody) : ''}
 
     ${rpt ? `
@@ -5474,138 +5373,6 @@ async function exportToDoc(sessionId, asTeacher) {
 }
 
 // ── RENDER ──────────────────────────────────
-// ── PER-ATTEMPT TRANSCRIPT REVIEW (no AI — zero tokens) ──────────
-// Every attempt is already transcribed (Whisper is needed to get the text at
-// all), and the CEFR list, accuracy scan and echo check all run in the
-// browser. So each ungraded attempt can show what was said and what to fix
-// without a single model call; the AI band stays on the milestone attempts.
-function _h(s) {
-  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
-}
-
-// Transcript with B1+ content words coloured by level and fillers greyed out.
-function highlightTranscript(text) {
-  const HI = { B1:1, B2:1, C1:1, C2:1 };
-  return String(text || '').split(/([A-Za-z][A-Za-z'-]*)/).map((part, i) => {
-    if (i % 2 === 0) return _h(part);
-    if (FILLER_RE.test(part)) { FILLER_RE.lastIndex = 0; return `<span style="color:var(--g400);text-decoration:line-through">${_h(part)}</span>`; }
-    FILLER_RE.lastIndex = 0;
-    const hit = cefrReady() ? cefrOf(part.toLowerCase()) : null;
-    if (hit && CONTENT_POS[hit.pos] && HI[hit.level])
-      return `<span title="${hit.level}" style="color:${CEFR_COLORS[hit.level]};font-weight:700;border-bottom:2px solid ${CEFR_COLORS[hit.level]}">${_h(part)}</span>`;
-    return _h(part);
-  }).join('');
-}
-
-function renderTranscriptReview(answered) {
-  if (!answered || !answered.length) return '';
-  const items = answered.map((r, i) => {
-    const text = r.studentAnswer || '';
-    const lex  = cefrProfile(text);
-    const acc  = grammarErrorScan(text);
-    const m    = r._m || localMetrics(text);
-    const mid  = lex ? [...lex.samples.B1, ...lex.samples.B2, ...lex.samples.C1, ...lex.samples.C2] : [];
-    const low  = text.toLowerCase();
-    const kws  = (r.keywords || []).map(k => String(k).trim()).filter(Boolean);
-    const kwUsed = kws.filter(k => low.indexOf(k.toLowerCase()) >= 0);
-    const kwMiss = kws.filter(k => low.indexOf(k.toLowerCase()) < 0);
-    const echo = r._echo || {};
-    const tips = [];
-    if (acc.findings.length)
-      tips.push(...acc.findings.slice(0, 4).map(f =>
-        `❌ <s style="color:var(--red)">${_h(f.snippet.trim())}</s> → ✅ <strong style="color:var(--green-d)">${_h(f.fix)}</strong>`));
-    if (echo.copied)
-      tips.push(`🔁 You copied the question wording "<em>${_h(echo.copied)}</em>" — paraphrase it in your own words.`);
-    else if (echo.count >= QUESTION_ECHO_LIMIT)
-      tips.push(`🔁 "<em>${_h(echo.worst)}</em>" from the question came back ${echo.count} times — find a synonym.`);
-    if (m.fillerCount >= 3)
-      tips.push(`⏸️ ${m.fillerCount} fillers (uh, um…). Replace them with a short pause or a linking phrase ("Well,", "Actually,").`);
-    if (m.wordCount && m.wordCount < 25)
-      tips.push(`📏 Only ${m.wordCount} words. Extend: answer → reason → example.`);
-    if (lex && lex.counted >= 8 && !mid.length)
-      tips.push('📚 Every content word was A1–A2. Swap two of them for more precise words next time.');
-
-    return `
-      <div class="qacc">
-        <div class="qacc-hdr" onclick="this.nextElementSibling.classList.toggle('open')">
-          <div class="qa-n">${i + 1}</div>
-          <div class="qa-q">${_h(r.question)}</div>
-          <div style="font-size:11px;color:var(--g500);white-space:nowrap">${m.wordCount} words</div>
-          <span style="color:var(--g400);font-size:12px;margin-left:4px">▾</span>
-        </div>
-        <div class="qacc-body${i === 0 ? ' open' : ''}" style="grid-template-columns:1fr"><div>
-          <div class="qs-lbl">What you said</div>
-          <div class="qs-student" style="line-height:1.8">${text ? highlightTranscript(text) : '(no answer)'}</div>
-          <div style="font-size:12px;color:var(--g600);margin-top:8px">
-            ${mid.length ? `B1+ words: ${mid.map(w => `<span class="badge badge-blue">${_h(w)}</span>`).join(' ')}` : 'No B1+ content words yet.'}
-          </div>
-          ${kws.length ? `<div style="font-size:12px;margin-top:6px">
-            Key words: ${kwUsed.map(k => `<span class="badge badge-green">✓ ${_h(k)}</span>`).join(' ')}
-            ${kwMiss.map(k => `<span class="badge badge-grey">✗ ${_h(k)}</span>`).join(' ')}
-          </div>` : ''}
-          ${tips.length ? `<div class="qs-lbl" style="margin-top:10px">Fix next time</div>
-            ${tips.map(t => `<div style="font-size:12px;margin-bottom:4px;line-height:1.6">${t}</div>`).join('')}` : ''}
-        </div></div>
-      </div>`;
-  }).join('');
-  return `
-    <div class="card">
-      <div class="card-title" style="margin-bottom:4px">📝 Your transcript &amp; quick review</div>
-      <div style="font-size:11px;color:var(--g400);margin-bottom:12px">
-        Coloured words are B1 and above (<span style="color:${CEFR_COLORS.B1};font-weight:700">B1</span>
-        <span style="color:${CEFR_COLORS.B2};font-weight:700">B2</span>
-        <span style="color:${CEFR_COLORS.C1};font-weight:700">C1</span>
-        <span style="color:${CEFR_COLORS.C2};font-weight:700">C2</span>); struck-through words are fillers.
-        Checked on your device — the AI band comes on the milestone attempts.
-      </div>
-      ${items}
-    </div>`;
-}
-
-// Attempt-over-attempt change on the same task, kept on this device only.
-function renderProgressStrip(attemptNo) {
-  let a;
-  try { a = analyzeLanguage(A.langText || '', A.prosody); } catch (_) { return ''; }
-  if (!a || !a.lex) return '';
-  const cur = {
-    id: A.t0 || '', n: attemptNo,
-    words: (A.langText.match(/\b[a-z']+\b/gi) || []).length,
-    b1: Math.round((a.lex.pct.B1 + a.lex.pct.B2 + a.lex.pct.C1 + a.lex.pct.C2) * 10) / 10,
-    wpm: a.prosody ? a.prosody.wpm : null,
-    mlr: a.prosody ? a.prosody.mlr : null,
-    err: a.acc ? a.acc.findings.length : 0
-  };
-  const key = 'speak_prog_' + (A.user?.studentId || '') + '_' + (A.assignId || ('t:' + String(A.topic || '').toLowerCase()));
-  // Results render twice per attempt (while marking, then final), so keep the
-  // attempt before this one separately instead of comparing it with itself.
-  let st = null;
-  try { st = JSON.parse(localStorage.getItem(key) || 'null'); } catch (_) {}
-  const prev = st && st.last && st.last.id === cur.id ? st.prev : (st && st.last) || null;
-  try { localStorage.setItem(key, JSON.stringify({ prev, last: cur })); } catch (_) {}
-  if (!prev) return '';
-  const cell = (label, now, before, higherIsBetter, unit) => {
-    if (now == null || before == null) return '';
-    const d = Math.round((now - before) * 10) / 10;
-    const good = d === 0 ? null : (d > 0) === higherIsBetter;
-    const col = good == null ? 'var(--g500)' : good ? 'var(--green-d)' : 'var(--red-d)';
-    return `<div style="background:var(--g50);border:1px solid var(--g100);border-radius:10px;padding:8px;text-align:center">
-      <div style="font-family:var(--fm);font-weight:800">${now}${unit || ''}</div>
-      <div style="font-size:11px;font-weight:700;color:${col}">${d > 0 ? '▲ +' : d < 0 ? '▼ ' : '= '}${d === 0 ? '' : d}</div>
-      <div style="font-size:10px;color:var(--g600);text-transform:uppercase">${label}</div></div>`;
-  };
-  return `
-    <div class="card">
-      <div class="card-title" style="margin-bottom:10px">📈 Compared with attempt ${prev.n}</div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(95px,1fr));gap:8px">
-        ${cell('Words', cur.words, prev.words, true)}
-        ${cell('B1+ words', cur.b1, prev.b1, true, '%')}
-        ${cell('Words / min', cur.wpm, prev.wpm, true)}
-        ${cell('Words between pauses', cur.mlr, prev.mlr, true)}
-        ${cell('Errors found', cur.err, prev.err, false)}
-      </div>
-    </div>`;
-}
-
 function renderLanguageAnalysis(text, prosody) {
   const a = analyzeLanguage(text, prosody);
   if (!a.lex) {
