@@ -1131,28 +1131,48 @@ async function saveAttempt(payload) {
   payload._queuedAt = payload._queuedAt || Date.now();
   // Anything queued earlier goes first: the server numbers attempts in the
   // order they arrive.
-  await flushOutbox(true);
+  await flushOutbox(true, true);
   const list = _outboxRead().filter(x => x.clientSessionId !== payload.clientSessionId);
   list.push(payload);
   _outboxWrite(list);
   let res;
   try { res = await gasCall('speak.saveResult', payload); }
   catch (e) { res = { success: false, error: e.message }; }
-  if (res && res.success) _outboxDrop(payload.clientSessionId);
+  if (res && res.success) { _outboxDrop(payload.clientSessionId); clearTabCache(); }
+  else _flushFailedAt = Date.now();
   return res || { success: false, error: 'No response from server' };
 }
 
-let _flushing = null;
-async function flushOutbox(quiet) {
+// Student tab data, kept for 60 s so switching back and forth between tabs
+// does not refetch. Any saved attempt clears it, so counts are never stale
+// after practising.
+const _tabCache = {};
+async function cachedCall(action, payload = {}, ttlMs = 60000) {
+  const key = action + '|' + JSON.stringify(payload);
+  const hit = _tabCache[key];
+  if (hit && Date.now() - hit.t < ttlMs) return hit.res;
+  const res = await gasCall(action, payload);
+  if (res && res.success) _tabCache[key] = { t: Date.now(), res };
+  return res;
+}
+function clearTabCache() { Object.keys(_tabCache).forEach(k => delete _tabCache[k]); }
+
+let _flushing = null, _flushFailedAt = 0;
+async function flushOutbox(quiet, force) {
   if (!A.sessionToken || !A.user) return 0;
   if (_flushing) return _flushing;
+  // After a failed re-send, wait a minute before trying again (unless a new
+  // practice is starting, which passes force) so a stuck item cannot slow
+  // down every click.
+  if (!force && Date.now() - _flushFailedAt < 60000) return 0;
   _flushing = (async () => {
     let sent = 0;
     for (const item of _outboxRead()) {
       let r = null;
       try { r = await gasCall('speak.saveResult', item); } catch (_) {}
-      if (!r || !r.success) break;   // keep it and everything after it, in order
+      if (!r || !r.success) { _flushFailedAt = Date.now(); break; }   // keep it and everything after it, in order
       _outboxDrop(item.clientSessionId);
+      clearTabCache();
       sent++;
     }
     if (sent && !quiet) toast(`${sent} earlier attempt(s) that had not reached the server were saved now`, 'success', 6000);
@@ -1181,6 +1201,7 @@ function handleSessionExpired() {
 // and trap the app in a broken "already logged in" state. API keys stay in
 // localStorage (they don't expire, and re-entering them every visit is painful).
 function clearSession() {
+  clearTabCache();
   A.user = null; A.sessionToken = null; A.teacherToken = null;
   try {
     sessionStorage.removeItem('speak_session');
@@ -2809,7 +2830,9 @@ async function studentTab(tab) {
   });
   const c = document.getElementById('student-content');
   c.innerHTML = '<div class="spinner" style="margin-top:60px"></div>';
-  if (_outboxRead().length) await flushOutbox();
+  // Re-send waiting attempts in the background: awaiting it here made every
+  // tab switch wait for a full save round-trip whenever one was queued.
+  if (_outboxRead().length) flushOutbox();
   try {
     if (tab === 'overview')  await renderStudentOverview(c);
     if (tab === 'peer')      await renderPeerComparison(c);
@@ -2819,7 +2842,7 @@ async function studentTab(tab) {
 }
 
 async function renderStudentOverview(c) {
-  const res = await gasCall('student.getOverview');
+  const res = await cachedCall('student.getOverview');
   if (!res.success) { c.innerHTML = '<div class="empty">' + res.error + '</div>'; return; }
   const { topics, totalSessions } = res.data;
   c.innerHTML = `
@@ -2858,7 +2881,7 @@ async function renderStudentOverview(c) {
 
 let _peerDays = 14;
 async function renderPeerComparison(c) {
-  const res = await gasCall('student.getPeerComparison', { sinceDays: _peerDays });
+  const res = await cachedCall('student.getPeerComparison', { sinceDays: _peerDays });
   if (!res.success) { c.innerHTML = '<div class="empty">' + res.error + '</div>'; return; }
   const topics = res.data || [];
   const clsName = res.className || A.user?.className || A.user?.classId || 'My Class';
@@ -2968,7 +2991,7 @@ async function openHomeworkChoice() {
 }
 
 async function renderStudentHomework(c) {
-  const res = await gasCall('student.getHomework');
+  const res = await cachedCall('student.getHomework');
   if (!res.success) { c.innerHTML = '<div class="empty">' + res.error + '</div>'; return; }
   // Only overwrite the cache with a real result. A transient empty response
   // must not wipe a list the student is mid-way through, which forced sign-outs.
@@ -3113,7 +3136,7 @@ async function startHWPractice(assignId, title, part) {
   // assignment — that was the bug behind "I had to sign out to see the topic".
   if (!hw) {
     try {
-      const res = await gasCall('student.getHomework');
+      const res = await cachedCall('student.getHomework');
       if (res.success && Array.isArray(res.data) && res.data.length) _studentHW = res.data;
       hw = _studentHW.find(h => h.AssignID === assignId);
     } catch(e) {}
@@ -3340,7 +3363,7 @@ function retryCurrent() {
 }
 
 async function renderMyHistory(c) {
-  const res = await gasCall('student.getMyHistory');
+  const res = await cachedCall('student.getMyHistory');
   if (!res.success) { c.innerHTML = '<div class="empty">' + res.error + '</div>'; return; }
   const sessions = res.data || [];
   const map = {};
@@ -3647,7 +3670,7 @@ async function launch(mode, qs, retryCount) {
   showOverlay('Setting up your session…');
   // Send any attempt still waiting on this device first, so the count below
   // includes it.
-  await flushOutbox();
+  await flushOutbox(false, true);
   // Check if existing session for this topic
   try {
     const chk = await gasCall('speak.findExisting', { topic: A.topic, assignId: A.assignId || '' });
@@ -5833,7 +5856,7 @@ window.addEventListener('load', () => {
         SS('S-teacher'); showTeacherClassPicker(); resetIdleTimer();
       } else if (A.user && A.sessionToken) {
         try {
-          const chk = await gasCall('student.getOverview');
+          const chk = await cachedCall('student.getOverview');
           if (chk && chk.success === false && (chk.error === 'SESSION_EXPIRED' || /token|session|not found/i.test(chk.error || ''))) {
             clearSession();
             SS('S-auth'); switchAuthTab('login');
