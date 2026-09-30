@@ -957,6 +957,32 @@ textarea.form-input{resize:vertical;min-height:72px;line-height:1.6}
   </div>
 </div>
 
+<!-- Edit Assignment -->
+<div class="modal-overlay" id="editasn-modal">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-header">
+      <span class="modal-title">✏️ Edit assignment</span>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('editasn-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--g600);margin-bottom:14px">
+        <strong id="editasn-title"></strong> — change the deadline or the classes. Attempts already made are kept.
+      </p>
+      <label class="form-label">Assigned classes</label>
+      <div id="editasn-classes" style="border:1.5px solid var(--g200);border-radius:var(--r);padding:10px 12px;max-height:190px;overflow-y:auto;background:#fff;margin-bottom:6px"></div>
+      <div id="editasn-warn" style="display:none;font-size:12px;color:var(--gold-d);background:var(--gold-l);border-radius:8px;padding:8px 10px;margin-bottom:12px"></div>
+      <div class="form-group" style="margin-top:10px">
+        <label class="form-label">Deadline <span style="font-weight:400;color:var(--g400)">(leave empty for no deadline)</span></label>
+        <input class="form-input" id="editasn-deadline" type="date">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('editasn-modal')">Cancel</button>
+      <button class="btn btn-primary" id="editasn-save" onclick="doEditAsn()">Save changes</button>
+    </div>
+  </div>
+</div>
+
 <!-- Re-launch Assignment -->
 <div class="modal-overlay" id="relaunch-modal">
   <div class="modal" style="max-width:440px">
@@ -2174,6 +2200,7 @@ async function renderTeacherHomework(c) {
               <td style="font-size:12px;white-space:nowrap">${a.Deadline ? fmtDT(a.Deadline).split(' ')[0] : '—'}</td>
               <td style="white-space:nowrap;text-align:right">
                 <div style="display:inline-flex;gap:6px">
+                  <button class="btn btn-outline btn-sm" onclick="openEditAsn('${a.AssignID}')">✏️ Edit</button>
                   ${_hwFilters.status==='Active'
                     ? `<button class="btn btn-outline btn-sm" onclick="archiveAsn('${a.AssignID}','${(a.Title||'').replace(/'/g,'&#39;')}')">Archive</button>`
                     : `<button class="btn btn-outline btn-sm" style="color:var(--blue)" onclick="openRelaunch('${a.AssignID}','${(a.Title||'').replace(/'/g,'&#39;')}')">Re-launch</button>
@@ -2204,6 +2231,65 @@ async function unarchiveAsn(assignId) {
     toast('Assignment restored', 'success');
     reloadHomework();
   } catch(e) { toast(e.message, 'error'); }
+}
+
+// ── Edit an assignment's deadline / classes ──
+function _dateInputValue(v) {
+  if (!v) return '';
+  const d = new Date(v);
+  if (isNaN(d)) return /^\d{4}-\d{2}-\d{2}/.test(String(v)) ? String(v).slice(0, 10) : '';
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+function openEditAsn(assignId) {
+  const a = _teacherAssignments.find(x => String(x.AssignID) === String(assignId));
+  if (!a) { toast('Assignment not found — reload the list', 'error'); return; }
+  const cur = String(a.AssignedClasses || '').toUpperCase().split(',').map(s => s.trim()).filter(Boolean);
+  const isAll = cur.includes('ALL');
+  const modal = document.getElementById('editasn-modal');
+  modal._assignId = assignId;
+  modal._orig = cur;
+  document.getElementById('editasn-title').textContent = a.Title || '';
+  document.getElementById('editasn-deadline').value = _dateInputValue(a.Deadline);
+  document.getElementById('editasn-classes').innerHTML = `
+    <label style="display:flex;align-items:center;gap:8px;padding:5px 0;cursor:pointer;font-size:13px;font-weight:600;border-bottom:1px solid var(--g100);margin-bottom:4px">
+      <input type="checkbox" id="editasn-all" ${isAll ? 'checked' : ''} onchange="document.querySelectorAll('.editasn-cls').forEach(cb=>{cb.checked=this.checked;});editAsnWarn()"> All classes
+    </label>` + _teacherClasses.map(cl => `
+    <label style="display:flex;align-items:center;gap:8px;padding:5px 0;cursor:pointer;font-size:13px">
+      <input type="checkbox" class="editasn-cls" value="${cl.ClassID}" ${isAll || cur.includes(String(cl.ClassID).toUpperCase()) ? 'checked' : ''} onchange="document.getElementById('editasn-all').checked=false;editAsnWarn()">
+      ${cl.ClassName || cl.ClassID} <span style="font-family:var(--fm);color:var(--g400);font-size:11px">${cl.ClassID}</span>
+    </label>`).join('');
+  editAsnWarn();
+  openModal('editasn-modal');
+}
+function editAsnWarn() {
+  const modal = document.getElementById('editasn-modal');
+  const warn = document.getElementById('editasn-warn');
+  if (document.getElementById('editasn-all').checked) { warn.style.display = 'none'; return; }
+  const now = Array.from(document.querySelectorAll('.editasn-cls:checked')).map(cb => cb.value.toUpperCase());
+  const orig = modal._orig.includes('ALL') ? _teacherClasses.map(c => String(c.ClassID).toUpperCase()) : modal._orig;
+  const removed = orig.filter(c => !now.includes(c));
+  warn.style.display = removed.length ? 'block' : 'none';
+  warn.textContent = removed.length
+    ? 'Removing ' + removed.join(', ') + ': students there will no longer see this assignment. Attempts they already made stay on record.'
+    : '';
+}
+async function doEditAsn() {
+  const modal = document.getElementById('editasn-modal');
+  const classes = document.getElementById('editasn-all').checked
+    ? ['ALL']
+    : Array.from(document.querySelectorAll('.editasn-cls:checked')).map(cb => cb.value);
+  if (!classes.length) { toast('Select at least one class', 'error'); return; }
+  const deadline = document.getElementById('editasn-deadline').value;
+  const btn = document.getElementById('editasn-save');
+  btn.disabled = true;
+  try {
+    const res = await gasCall('teacher.updateAssignment', { assignId: modal._assignId, classes, deadline });
+    if (!res.success) { toast(res.error, 'error'); return; }
+    toast('Assignment updated', 'success');
+    closeModal('editasn-modal');
+    reloadHomework();
+  } catch (e) { toast(e.message, 'error'); }
+  finally { btn.disabled = false; }
 }
 
 function openRelaunch(assignId, title) {
