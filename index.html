@@ -3317,7 +3317,7 @@ function renderPracticeHome(c) {
     <div class="key-wrap">
       <div style="font-weight:700;margin-bottom:10px">🔑 Gemini API Key <small style="font-weight:400;color:var(--g600)">(for grading)</small></div>
       <div class="key-row">
-        <input class="form-input" id="gemini-key-inp" type="password" value="${gemKey}" placeholder="AIzaSy..." style="flex:1">
+        <input class="form-input" id="gemini-key-inp" type="password" value="${gemKey}" placeholder="Gemini API key (aistudio.google.com)" style="flex:1">
         <button class="btn btn-gold btn-sm" onclick="saveKey('gemini')">Save</button>
         ${gemKey ? '<span class="key-st key-ok">✓ Key OK</span>' : '<span class="key-st key-bad">Not set</span>'}
       </div>
@@ -3326,7 +3326,7 @@ function renderPracticeHome(c) {
     <div class="key-wrap">
       <div style="font-weight:700;margin-bottom:10px">🔑 Groq API Key <small style="font-weight:400;color:var(--g600)">(for transcription)</small></div>
       <div class="key-row">
-        <input class="form-input" id="groq-key-inp" type="password" value="${groqKey}" placeholder="gsk_..." style="flex:1">
+        <input class="form-input" id="groq-key-inp" type="password" value="${groqKey}" placeholder="Groq API key (console.groq.com)" style="flex:1">
         <button class="btn btn-gold btn-sm" onclick="saveKey('groq')">Save</button>
         ${groqKey ? '<span class="key-st key-ok">✓ Key OK</span>' : '<span class="key-st key-bad">Not set</span>'}
       </div>
