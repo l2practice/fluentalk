@@ -26,12 +26,12 @@
 // Firebase console → Project settings → Your apps → Web app → firebaseConfig.
 // It is public by design; access is controlled by firestore.rules.
 const FIREBASE_CONFIG = {
-  apiKey: 'PASTE_API_KEY',
-  authDomain: 'PASTE_PROJECT_ID.firebaseapp.com',
-  projectId: 'PASTE_PROJECT_ID',
-  storageBucket: 'PASTE_PROJECT_ID.firebasestorage.app',
-  messagingSenderId: 'PASTE_SENDER_ID',
-  appId: 'PASTE_APP_ID'
+  apiKey: 'AIzaSyAeB-tcXD9QOkppW4oshpFI4aXe9T33kws',
+  authDomain: 'fluentalk-f2ed4.firebaseapp.com',
+  projectId: 'fluentalk-f2ed4',
+  storageBucket: 'fluentalk-f2ed4.firebasestorage.app',
+  messagingSenderId: '298459732541',
+  appId: '1:298459732541:web:c9372297de253f7f01e854'
 };
 // Sign-in names. Students sign in with their Student ID (or email, looked up
 // through loginIndex); Firebase Auth needs an email, so each account uses this
