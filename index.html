@@ -2934,14 +2934,17 @@ async function deleteClassData() {
   if (!classId) { toast('Chưa chọn lớp', 'error'); return; }
   const cls = _teacherClasses.find(c => c.ClassID === classId);
   const name = cls?.ClassName || classId;
-  if (!confirm(`⚠️ Xóa toàn bộ data luyện tập của lớp ${name}?\n\n• Google Sheet tổng hợp sẽ được tạo\n• Email kèm link Sheet sẽ gửi cho bạn\n• Data trong app sẽ bị xóa (SessionIndex vẫn giữ)\n\nHành động này không thể hoàn tác.`)) return;
-  showOverlay('Đang xuất và xóa data…');
+  if (!confirm(`⚠️ Đóng và xoá toàn bộ data luyện tập của lớp ${name}?\n\n` +
+      `• Mỗi sinh viên có Google Doc nhận xét + email tổng kết (bằng chứng bài làm)\n` +
+      `• Bạn nhận email kèm bảng tổng kết Google Sheet cho từng bài\n` +
+      `• Mọi lượt nói được lưu vào tab Archive của Google Sheet chính\n` +
+      `• Sau đó data của lớp được xoá khỏi app\n\nViệc này chạy nền vài phút. Không thể hoàn tác.`)) return;
+  showOverlay('Đang lên lịch…');
   try {
     const res = await gasCall('teacher.deleteClassData', { classId });
     hideOverlay();
     if (!res.success) { toast('Lỗi: ' + res.error, 'error'); return; }
-    toast(`✓ Đã xóa ${res.deleted} sessions. Sheet tổng hợp đã gửi email.`, 'success', 8000);
-    if (res.sheetUrl) window.open(res.sheetUrl, '_blank');
+    toast(`✓ Đã lên lịch dọn data lớp ${name}. Trong vài phút bạn sẽ nhận email bảng tổng kết; sinh viên nhận email kết quả. Data trong app được xoá sau khi gửi email xong.`, 'success', 12000);
     _progLoaded = false;
     _progReload = false;
     teacherTab('progress');
