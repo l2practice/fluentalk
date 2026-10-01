@@ -3390,13 +3390,11 @@ function tickGateMsg() {
 // spaces, non-breaking spaces) that trim() leaves in place; the key then looks
 // right but every request is refused. Keep printable ASCII only, and check the
 // key with the provider before saving so a bad key is caught here, not at the
-// first recording.
+// first recording. Key formats change, so the key's prefix is never checked.
 async function saveKey(type) {
   const inp = document.getElementById(type + '-key-inp');
   const val = String(inp?.value || '').replace(/[^\x21-\x7E]/g, '');
   if (!val) return;
-  if (type === 'groq' && !/^gsk_/.test(val)) { toast('Groq key phải bắt đầu bằng "gsk_". Hãy copy lại key từ console.groq.com.', 'error', 7000); return; }
-  if (type === 'gemini' && !/^AIza/.test(val)) { toast('Gemini key phải bắt đầu bằng "AIza". Hãy copy lại key từ aistudio.google.com.', 'error', 7000); return; }
   let check = 'ok';
   try {
     const r = type === 'groq'
@@ -3405,7 +3403,9 @@ async function saveKey(type) {
     if (r.status === 401 || r.status === 403 || r.status === 400) check = 'bad';
   } catch (e) { check = 'offline'; }       // no network: save anyway, it is checked again on use
   if (check === 'bad') {
-    toast((type === 'groq' ? 'Groq' : 'Gemini') + ' key không hợp lệ hoặc đã hết hạn. Hãy tạo key mới rồi dán lại.', 'error', 8000);
+    toast(type === 'groq'
+      ? 'Groq không chấp nhận key này. Kiểm tra key được tạo tại console.groq.com (không phải key Gemini/Google), hoặc tạo key mới rồi dán lại.'
+      : 'Gemini không chấp nhận key này. Kiểm tra key được tạo tại aistudio.google.com, hoặc tạo key mới rồi dán lại.', 'error', 9000);
     return;
   }
   localStorage.setItem('speak_' + type + '_key', val);
@@ -4347,7 +4347,7 @@ function classifyTranscribeError(e) {
   // Missing or wrong Groq key — student configuration.
   if (/invalid.*key|api key|not set groq|401|unauthor/i.test(msg)) {
     return { kind: 'key', isApp: false,
-      text: '🔑 Groq key của bạn bị Groq từ chối (sai, hết hạn hoặc bị xoá). Vào console.groq.com → API Keys → Create API Key, copy key mới (bắt đầu bằng gsk_) rồi dán vào ô Groq key trong mục Practice. Bạn KHÔNG cần báo giáo viên.' };
+      text: '🔑 Groq key của bạn bị Groq từ chối (sai, hết hạn hoặc bị xoá). Vào console.groq.com → API Keys → Create API Key, copy key mới rồi dán vào ô Groq key trong mục Practice (lưu ý: không dán nhầm key Gemini). Bạn KHÔNG cần báo giáo viên.' };
   }
   // Groq could not decode the recording. This is almost always a device
   // compatibility issue (the device's codec profile doesn't match what Groq
