@@ -372,6 +372,8 @@ textarea.form-input{resize:vertical;min-height:72px;line-height:1.6}
 .key-ok{background:#D1FAE5;color:var(--green-d)}.key-bad{background:var(--red-l);color:var(--red-d)}
 
 /* ── TOPIC INPUT ── */
+.typing-caret{display:inline-block;width:2px;height:1em;background:currentColor;margin-left:2px;vertical-align:-2px;animation:caretBlink 1s steps(1) infinite}
+@keyframes caretBlink{50%{opacity:0}}
 .topic-inp{padding:11px 14px;border:2px solid var(--g200);border-radius:var(--r);font-family:var(--f);font-size:14px;width:100%;outline:none;background:#fff;transition:var(--tr)}
 .topic-inp:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(79,110,247,.12)}
 .topic-inp.ok{border-color:var(--green);background:var(--green-l)}
@@ -3317,7 +3319,7 @@ function renderPracticeHome(c) {
     <div class="key-wrap">
       <div style="font-weight:700;margin-bottom:10px">🔑 Gemini API Key <small style="font-weight:400;color:var(--g600)">(for grading)</small></div>
       <div class="key-row">
-        <input class="form-input" id="gemini-key-inp" type="password" value="${gemKey}" placeholder="AIzaSy..." style="flex:1">
+        <input class="form-input" id="gemini-key-inp" type="password" value="${gemKey}" placeholder="Gemini API key (aistudio.google.com)" style="flex:1">
         <button class="btn btn-gold btn-sm" onclick="saveKey('gemini')">Save</button>
         ${gemKey ? '<span class="key-st key-ok">✓ Key OK</span>' : '<span class="key-st key-bad">Not set</span>'}
       </div>
@@ -3326,7 +3328,7 @@ function renderPracticeHome(c) {
     <div class="key-wrap">
       <div style="font-weight:700;margin-bottom:10px">🔑 Groq API Key <small style="font-weight:400;color:var(--g600)">(for transcription)</small></div>
       <div class="key-row">
-        <input class="form-input" id="groq-key-inp" type="password" value="${groqKey}" placeholder="gsk_..." style="flex:1">
+        <input class="form-input" id="groq-key-inp" type="password" value="${groqKey}" placeholder="Groq API key (console.groq.com)" style="flex:1">
         <button class="btn btn-gold btn-sm" onclick="saveKey('groq')">Save</button>
         ${groqKey ? '<span class="key-st key-ok">✓ Key OK</span>' : '<span class="key-st key-bad">Not set</span>'}
       </div>
@@ -3390,13 +3392,11 @@ function tickGateMsg() {
 // spaces, non-breaking spaces) that trim() leaves in place; the key then looks
 // right but every request is refused. Keep printable ASCII only, and check the
 // key with the provider before saving so a bad key is caught here, not at the
-// first recording.
+// first recording. Key formats change, so the key's prefix is never checked.
 async function saveKey(type) {
   const inp = document.getElementById(type + '-key-inp');
   const val = String(inp?.value || '').replace(/[^\x21-\x7E]/g, '');
   if (!val) return;
-  if (type === 'groq' && !/^gsk_/.test(val)) { toast('Groq key phải bắt đầu bằng "gsk_". Hãy copy lại key từ console.groq.com.', 'error', 7000); return; }
-  if (type === 'gemini' && !/^AIza/.test(val)) { toast('Gemini key phải bắt đầu bằng "AIza". Hãy copy lại key từ aistudio.google.com.', 'error', 7000); return; }
   let check = 'ok';
   try {
     const r = type === 'groq'
@@ -3405,7 +3405,9 @@ async function saveKey(type) {
     if (r.status === 401 || r.status === 403 || r.status === 400) check = 'bad';
   } catch (e) { check = 'offline'; }       // no network: save anyway, it is checked again on use
   if (check === 'bad') {
-    toast((type === 'groq' ? 'Groq' : 'Gemini') + ' key không hợp lệ hoặc đã hết hạn. Hãy tạo key mới rồi dán lại.', 'error', 8000);
+    toast(type === 'groq'
+      ? 'Groq không chấp nhận key này. Kiểm tra key được tạo tại console.groq.com (không phải key Gemini/Google), hoặc tạo key mới rồi dán lại.'
+      : 'Gemini không chấp nhận key này. Kiểm tra key được tạo tại aistudio.google.com, hoặc tạo key mới rồi dán lại.', 'error', 9000);
     return;
   }
   localStorage.setItem('speak_' + type + '_key', val);
@@ -4014,7 +4016,7 @@ function loadQ(idx) {
   const prev = A.recs[idx];
   if (prev?.studentAnswer) {
     A.curAnswer = prev.studentAnswer;
-    document.getElementById('ptt-interim').textContent = A.curAnswer;
+    setInterim(A.curAnswer);
     if (prev._audioBlob) {
       const rb = document.getElementById('rec-btn');
       rb.textContent = '✓'; rb.className = 'rec-btn done';
@@ -4227,6 +4229,37 @@ async function stopTalk() {
   }
   A.talkBusy = false;
 }
+// ── Transcript display with a typing effect ──
+// The answer text itself (A.curAnswer) is set at once; only its display types
+// out, word by word, so nothing waits on the animation. Long answers type
+// faster, so the whole effect stays under about two seconds.
+let _typeTimer = null;
+function setInterim(text) {
+  if (_typeTimer) { clearTimeout(_typeTimer); _typeTimer = null; }
+  const el = document.getElementById('ptt-interim');
+  if (el) el.textContent = text || '';
+}
+function typeInterim(full, already) {
+  setInterim(already || '');
+  const el = document.getElementById('ptt-interim');
+  if (!el) return;
+  const words = String(full).slice(String(already || '').length).trim().split(/\s+/).filter(Boolean);
+  if (!words.length) { setInterim(full); return; }
+  const delay = Math.max(35, Math.min(110, 1800 / words.length));
+  const caret = document.createElement('span');
+  caret.className = 'typing-caret';
+  const textNode = document.createTextNode(already ? already + ' ' : '');
+  el.textContent = '';
+  el.appendChild(textNode); el.appendChild(caret);
+  let i = 0;
+  const step = () => {
+    textNode.data += (i ? ' ' : '') + words[i++];
+    if (i < words.length) _typeTimer = setTimeout(step, delay);
+    else { _typeTimer = null; setTimeout(() => { if (!_typeTimer && caret.parentNode) caret.remove(); }, 600); }
+  };
+  _typeTimer = setTimeout(step, delay);
+}
+
 function resetTalkUI() {
   const rb = document.getElementById('rec-btn');
   rb.textContent = '🎤'; rb.className = 'rec-btn'; rb.disabled = false;
@@ -4234,7 +4267,7 @@ function resetTalkUI() {
   document.getElementById('rec-st').innerHTML = 'Press <b>SPACE</b> (or 🎤) to start';
   document.getElementById('rec-hint').textContent = 'Press SPACE again to stop';
   document.getElementById('rec-time').style.display = 'none';
-  document.getElementById('ptt-interim').textContent = '';
+  setInterim('');
   document.getElementById('rec-play-wrap').style.display = 'none';
 }
 let _playbackAudio = null;
@@ -4257,7 +4290,7 @@ function retryRec() {
   const rec = A.recs[A.idx];
   if (rec) { rec.studentAnswer = ''; rec._audioBlob = null; rec._audioMime = null; }
   A.curAnswer = '';
-  document.getElementById('ptt-interim').textContent = '';
+  setInterim('');
   document.getElementById('rec-play-wrap').style.display = 'none';
   resetTalkUI();
   toast('Recording cleared — record again', 'info');
@@ -4313,8 +4346,9 @@ async function stopCaptureAndTranscribe() {
       A.recs[A.idx]._dur   = (A.recs[A.idx]._dur || 0) + (tr.duration || 0);
     }
     const txt = tr.text;
+    const shownBefore = A.curAnswer;
     A.curAnswer = (A.curAnswer + ' ' + txt).trim();
-    document.getElementById('ptt-interim').textContent = A.curAnswer;
+    typeInterim(A.curAnswer, shownBefore);
     const warn = document.getElementById('short-answer-warn');
     if (warn && warn.style.display === 'block' && wordCount(A.curAnswer) >= MIN_ANSWER_WORDS) warn.style.display = 'none';
     return true;
@@ -4347,7 +4381,7 @@ function classifyTranscribeError(e) {
   // Missing or wrong Groq key — student configuration.
   if (/invalid.*key|api key|not set groq|401|unauthor/i.test(msg)) {
     return { kind: 'key', isApp: false,
-      text: '🔑 Groq key của bạn bị Groq từ chối (sai, hết hạn hoặc bị xoá). Vào console.groq.com → API Keys → Create API Key, copy key mới (bắt đầu bằng gsk_) rồi dán vào ô Groq key trong mục Practice. Bạn KHÔNG cần báo giáo viên.' };
+      text: '🔑 Groq key của bạn bị Groq từ chối (sai, hết hạn hoặc bị xoá). Vào console.groq.com → API Keys → Create API Key, copy key mới rồi dán vào ô Groq key trong mục Practice (lưu ý: không dán nhầm key Gemini). Bạn KHÔNG cần báo giáo viên.' };
   }
   // Groq could not decode the recording. This is almost always a device
   // compatibility issue (the device's codec profile doesn't match what Groq

@@ -1,0 +1,57 @@
+rules_version = '2';
+// Speaking App — paste into Firebase console → Firestore Database → Rules → Publish.
+// Accounts are created only by Apps Script (admin), so the teacher account is
+// identified by its fixed sign-in email. Keep TEACHER_EMAIL in sync with
+// fbdata.js and Code.gs.
+service cloud.firestore {
+  match /databases/{db}/documents {
+    function signedIn()  { return request.auth != null; }
+    function isTeacher() { return signedIn() && request.auth.token.email == 'teacher@fluentalk.app'; }
+    function isMe(uid)   { return signedIn() && request.auth.uid == uid; }
+    function myClass()   { return get(/databases/$(db)/documents/users/$(request.auth.uid)).data.classId; }
+
+    // Profiles: a student reads only their own; only the teacher changes them.
+    match /users/{uid} {
+      allow read: if isTeacher() || isMe(uid);
+      allow write: if isTeacher();
+    }
+    // sha256(email) → Student ID, so students can sign in with their email.
+    // Readable one at a time by anyone (you must already know the email);
+    // never listable, never writable from the browser.
+    match /loginIndex/{h} {
+      allow get: if true;
+      allow list, write: if false;
+    }
+    match /classes/{id}     { allow read: if signedIn(); allow write: if isTeacher(); }
+    match /assignments/{id} { allow read: if signedIn(); allow write: if isTeacher(); }
+    match /library/{id}     { allow read: if signedIn(); allow write: if isTeacher(); }
+
+    match /settings/{id} {
+      allow read: if isTeacher() || (signedIn() && id == 'public');
+      allow write: if isTeacher();
+    }
+
+    // A student's attempt list. Written by the student's own save, and only
+    // inside their own class.
+    match /progress/{uid} {
+      allow read: if isTeacher() || isMe(uid);
+      allow write: if isTeacher() || (isMe(uid) && request.resource.data.ClassID == myClass());
+    }
+    // Full attempt (answers, feedback). Created by its owner; never edited by them.
+    match /sessions/{sid} {
+      allow read: if isTeacher() || (signedIn() && resource.data.uid == request.auth.uid);
+      allow create: if signedIn() && request.resource.data.uid == request.auth.uid;
+      allow update, delete: if isTeacher();
+    }
+    // Per-class topic counters for the "Class" tab.
+    match /classStats/{cid} {
+      allow read, write: if isTeacher() || (signedIn() && myClass() == cid);
+    }
+    match /extensionRequests/{id} {
+      allow read: if isTeacher() || (signedIn() && resource.data.uid == request.auth.uid);
+      allow create: if signedIn() && request.resource.data.uid == request.auth.uid
+                    && request.resource.data.status == 'pending';
+      allow update, delete: if isTeacher();
+    }
+  }
+}
