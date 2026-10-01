@@ -4414,7 +4414,12 @@ async function transcribeGroq(blob, mime, model) {
   if (!r.ok) {
     const e = await r.json().catch(() => ({}));
     const msg = e.error?.message || 'Groq error ' + r.status;
-    if (/could not process file|valid media file|failed to decode|invalid/i.test(msg)) {
+    // Key and rate-limit problems first: their messages also contain words
+    // like "invalid", and used to be reported as "could not read the recording".
+    if (r.status === 401 || /invalid[_ ]api[_ ]key/i.test(msg)) throw new Error('Invalid Groq API key');
+    if (r.status === 429) throw new Error('Groq rate limit — please wait a moment and try again');
+    // Only a genuine decode failure is treated as a recording problem.
+    if (/could not process file|valid media file|failed to decode|could not decode|unsupported (file|format|media)|invalid (file|media|audio)/i.test(msg)) {
       // First remedy: re-encode on the device as WAV and send that instead.
       if (!/wav/i.test(String(mime))) {
         let wav = null;
@@ -4433,13 +4438,12 @@ async function transcribeGroq(blob, mime, model) {
         try { return await transcribeGroq(blob, mime, 'whisper-large-v3-turbo'); }
         finally { A._transcribeRetried = false; }
       }
-      const err = new Error('Could not read the recording. Xin hãy thu âm lại — nói ngay sau khi nhấn, và giữ ít nhất 2 giây. · format ' + (mime||'?') + ', ' + Math.round((blob?.size||0)/1024) + 'KB · ' + navigator.userAgent.replace(/^.*?(Chrome|Safari|Edg|Firefox|OPR)[/ ]([\d.]+).*$/, '$1 $2'));
+      const err = new Error('Could not read the recording. Xin hãy thu âm lại — nói ngay sau khi nhấn, và giữ ít nhất 2 giây. · format ' + (mime||'?') + ', ' + Math.round((blob?.size||0)/1024) + 'KB · ' + navigator.userAgent.replace(/^.*?(Chrome|Safari|Edg|Firefox|OPR)[/ ]([\d.]+).*$/, '$1 $2') + ' · Groq ' + r.status + ': ' + msg);
       err.audioRead = true;
       throw err;
     }
-    if (r.status === 429) throw new Error('Groq rate limit — please wait a moment and try again');
-    if (r.status === 401) throw new Error('Invalid Groq API key');
-    throw new Error(msg);
+    // Anything else: show Groq's own words so it can be diagnosed.
+    throw new Error('Groq ' + r.status + ': ' + msg);
   }
   const j = await r.json();
   return { text: (j.text || '').trim(), words: j.words || [], duration: j.duration || 0 };
