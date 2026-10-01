@@ -3386,13 +3386,32 @@ function tickGateMsg() {
   setTimeout(tickGateMsg, 1000);
 }
 
-function saveKey(type) {
-  const val = document.getElementById(type + '-key-inp')?.value.trim();
+// Keys copied on a phone often carry invisible characters (zero-width
+// spaces, non-breaking spaces) that trim() leaves in place; the key then looks
+// right but every request is refused. Keep printable ASCII only, and check the
+// key with the provider before saving so a bad key is caught here, not at the
+// first recording.
+async function saveKey(type) {
+  const inp = document.getElementById(type + '-key-inp');
+  const val = String(inp?.value || '').replace(/[^\x21-\x7E]/g, '');
   if (!val) return;
+  if (type === 'groq' && !/^gsk_/.test(val)) { toast('Groq key phải bắt đầu bằng "gsk_". Hãy copy lại key từ console.groq.com.', 'error', 7000); return; }
+  if (type === 'gemini' && !/^AIza/.test(val)) { toast('Gemini key phải bắt đầu bằng "AIza". Hãy copy lại key từ aistudio.google.com.', 'error', 7000); return; }
+  let check = 'ok';
+  try {
+    const r = type === 'groq'
+      ? await fetch('https://api.groq.com/openai/v1/models', { headers: { Authorization: 'Bearer ' + val } })
+      : await fetch('https://generativelanguage.googleapis.com/v1beta/models?key=' + encodeURIComponent(val));
+    if (r.status === 401 || r.status === 403 || r.status === 400) check = 'bad';
+  } catch (e) { check = 'offline'; }       // no network: save anyway, it is checked again on use
+  if (check === 'bad') {
+    toast((type === 'groq' ? 'Groq' : 'Gemini') + ' key không hợp lệ hoặc đã hết hạn. Hãy tạo key mới rồi dán lại.', 'error', 8000);
+    return;
+  }
   localStorage.setItem('speak_' + type + '_key', val);
   if (type === 'gemini') A.gkey = val;
   else A.groqKey = val;
-  toast('' + type[0].toUpperCase()+type.slice(1) + ' key saved', 'success');
+  toast((type === 'groq' ? 'Groq' : 'Gemini') + ' key saved' + (check === 'ok' ? ' ✓ đã kiểm tra, key hoạt động' : ' (chưa kiểm tra được — không có mạng)'), 'success', 5000);
   renderPracticeHome(document.getElementById('student-content'));
 }
 
@@ -4328,7 +4347,7 @@ function classifyTranscribeError(e) {
   // Missing or wrong Groq key — student configuration.
   if (/invalid.*key|api key|not set groq|401|unauthor/i.test(msg)) {
     return { kind: 'key', isApp: false,
-      text: '🔑 Khóa API (Groq key) của bạn chưa đúng hoặc chưa nhập. Vào phần Cài đặt để nhập lại. Bạn KHÔNG cần báo giáo viên.' };
+      text: '🔑 Groq key của bạn bị Groq từ chối (sai, hết hạn hoặc bị xoá). Vào console.groq.com → API Keys → Create API Key, copy key mới (bắt đầu bằng gsk_) rồi dán vào ô Groq key trong mục Practice. Bạn KHÔNG cần báo giáo viên.' };
   }
   // Groq could not decode the recording. This is almost always a device
   // compatibility issue (the device's codec profile doesn't match what Groq
