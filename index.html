@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#121212">
 <title>Speaking App</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%23FF6A1A'/%3E%3Ctext x='50' y='68' font-size='56' text-anchor='middle'%3E%F0%9F%8E%A4%3C/text%3E%3C/svg%3E">
-<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Literata:opsz,wght@7..72,400;7..72,500;7..72,600&display=swap" rel="stylesheet">
 <style>
 /* ── TOKENS ── */
 :root{
@@ -28,7 +28,7 @@
   --shm:0 8px 24px rgba(0,0,0,.45);
   --shl:0 24px 60px rgba(0,0,0,.6);
   --r:12px;--rl:16px;--rx:22px;--tr:.16s cubic-bezier(.4,0,.2,1);
-  --f:'Be Vietnam Pro',system-ui,-apple-system,sans-serif;--fm:'JetBrains Mono',monospace;
+  --f:'Be Vietnam Pro',system-ui,-apple-system,sans-serif;--fm:'Be Vietnam Pro',system-ui,sans-serif;--fs:'Literata',Georgia,serif;
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%}
@@ -199,7 +199,7 @@ textarea.form-input{resize:vertical;min-height:72px;line-height:1.6}
 /* RIGHT panel */
 .auth-right{flex:1;display:flex;align-items:center;justify-content:center;padding:48px 40px;overflow-y:auto;background:var(--bg)}
 .auth-box{width:100%;max-width:400px}
-.auth-title{font-size:1.9rem;font-weight:700;color:var(--black);letter-spacing:-.01em;margin-bottom:4px;font-family:Georgia,'Times New Roman',serif}
+.auth-title{font-size:1.9rem;font-weight:700;color:var(--black);letter-spacing:-.01em;margin-bottom:4px;font-family:var(--fs),'Times New Roman',serif}
 .auth-sub{font-size:14px;color:var(--g600);margin-bottom:28px}
 /* Segmented control */
 .auth-tabs{display:flex;background:var(--g100);border-radius:var(--rl);padding:4px;margin-bottom:26px}
@@ -532,7 +532,55 @@ input[type=checkbox],input[type=radio]{accent-color:var(--blue)}
 .peer-count{color:var(--blue)}
 .tb-btn,.tb-user{white-space:nowrap}
 @media(max-width:600px){.tb-btn{padding:6px 12px;font-size:12px}.auth-title{font-size:1.8rem}.topbar{padding:0 12px;gap:8px}.tb-user{max-width:96px}}
-@media(max-width:380px){.tb-user{display:none}}
+@media(max-width:480px){.tb-user{display:none}}
+.tbl-wrap{overflow-x:auto;max-width:100%}.dash-content{min-width:0}.dash-wrap{max-width:100vw;overflow-x:hidden}
+
+/* fonts (as ArticuWrite): Be Vietnam Pro for UI, Literata for what students say/read */
+body{font-variant-numeric:tabular-nums}
+.q-box-txt,#ptt-interim,.qs-student{font-family:var(--fs)}
+.q-box-txt{font-size:1.25rem;line-height:1.5;font-weight:500}
+/* icons */
+svg{flex-shrink:0}
+.sidenav-icon{width:20px;height:20px;display:inline-grid;place-items:center}
+.sidenav-icon svg{width:18px;height:18px}
+.sidenav-logo-icon svg,.auth-brand-icon svg{width:20px;height:20px}
+.load-icon svg{width:28px;height:28px}
+.h-ic{display:inline-grid;place-items:center;width:36px;height:36px;border-radius:12px;background:var(--blue-l);color:var(--blue);vertical-align:-8px;margin-right:10px}
+.h-ic svg{width:19px;height:19px}
+.mode-icon{width:52px;height:52px;margin:0 auto 12px;border-radius:16px;display:grid;place-items:center;background:var(--g100);color:var(--blue);font-size:1.4rem;font-weight:800;transition:var(--tr)}
+.mode-icon svg{width:24px;height:24px}
+.mode-tile:hover .mode-icon,.mode-tile.sel .mode-icon{background:var(--blue);color:var(--ink-on-accent)}
+/* API key cards + JAM tile: neutral surface, orange only on the accents */
+.key-wrap{background:var(--white);border:1px solid #2A2A2A;border-radius:var(--rx);padding:18px 20px;margin-bottom:12px}
+.key-title{display:flex;align-items:center;gap:10px;font-weight:700;margin-bottom:12px}
+.key-ic{width:30px;height:30px;border-radius:10px;display:grid;place-items:center;background:var(--blue-l);color:var(--blue)}
+.key-ic svg{width:16px;height:16px}
+.key-st{border-radius:999px}
+.rec-btn{color:var(--blue)}.rec-btn svg{width:30px;height:30px}.rec-btn.act,.rec-btn.done{color:#fff}
+.class-select{width:auto;min-width:160px;max-width:260px;font-weight:700;padding:8px 14px;border-radius:999px}
+.mode-tile-jam{background:radial-gradient(ellipse 80% 90% at 100% 0%,rgba(255,106,26,.12),transparent 60%),var(--white)}
+
+/* Sidebar as ArticuWrite's icon rail: floating rounded column, icon over a short label */
+.sidenav{width:88px;top:72px;left:12px;bottom:12px;padding:14px 8px;border:1px solid #262626;border-radius:24px;background:#1A1A1A;
+  display:flex;flex-direction:column;align-items:center;gap:4px;scrollbar-width:none}
+.sidenav::-webkit-scrollbar{display:none}
+.sidenav-logo{padding:0 0 12px;justify-content:center}
+.sidenav-logo-icon{width:44px;height:44px;border-radius:14px}
+.sidenav-logo-name,.sidenav-section{display:none}
+.sidenav-item{flex-direction:column;justify-content:center;gap:5px;width:72px;min-height:60px;margin:0;padding:8px 2px;border-radius:16px;
+  font-size:.7rem;font-weight:500;text-align:center;line-height:1.2;color:var(--g600);box-shadow:none}
+.sidenav-item:hover{background:var(--g100);color:var(--black)}
+.sidenav-item.active{background:var(--blue);color:var(--ink-on-accent);font-weight:700;box-shadow:0 8px 20px rgba(255,106,26,.25)}
+.sidenav-icon{width:22px;height:22px}.sidenav-icon svg{width:22px;height:22px}
+.sn-out{margin-top:auto;color:var(--red-d)}
+.sn-out:hover{background:var(--red-l);color:var(--red-d)}
+.dash-content{margin-left:112px;padding:28px 28px 28px 0}
+@media(max-width:768px){
+  .sidenav{width:96px;left:10px;top:66px;bottom:10px;transform:translateX(-120%)}
+  .sidenav.open{transform:translateX(0)}
+  .sidenav-item{padding:8px 2px;font-size:.7rem}
+  .dash-content{margin-left:0;padding:16px}
+}
 </style>
 </head>
 <body>
@@ -541,7 +589,7 @@ input[type=checkbox],input[type=radio]{accent-color:var(--blue)}
 <div id="S-loading">
   <div style="text-align:center">
     <div class="load-logo">
-      <div class="load-icon">🎤</div>
+      <div class="load-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></div>
       <div class="load-title">Speaking <em>App</em></div>
     </div>
     <div class="load-sub">IELTS Practice Platform</div>
@@ -556,15 +604,15 @@ input[type=checkbox],input[type=radio]{accent-color:var(--blue)}
   <div class="auth-left">
     <div class="auth-left-top">
       <div style="display:flex;align-items:center;gap:12px;position:relative;z-index:1">
-        <div class="auth-brand-icon" style="width:44px;height:44px;border-radius:14px;display:grid;place-items:center;font-size:20px">🎤</div>
+        <div class="auth-brand-icon" style="width:44px;height:44px;border-radius:14px;display:grid;place-items:center"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></div>
         <div class="auth-brand-name">Speaking <em>App</em></div>
       </div>
     </div>
     <div class="auth-left-bottom">
       <div style="position:relative;z-index:1">
-        <div class="auth-kicker">● IELTS Speaking · AI feedback</div>
+        <div class="auth-kicker"><span style="color:var(--blue)">●</span> IELTS Speaking · AI feedback</div>
         <div class="auth-headline">Speak.<br>Record.<br><em>Improve.</em></div>
-        <p class="auth-lede">Luyện nói theo từng câu hỏi, xem lại transcript ngay sau mỗi lượt, và nhận điểm band từ AI ở các mốc 3 · 5 · 8 · 10.</p>
+        <p class="auth-lede">Answer one question at a time, review your transcript after every attempt, and get an AI band score at attempts 3 · 5 · 8 · 10.</p>
         <div class="auth-stats-row">
           <div><div class="auth-stat-val">4</div><div class="auth-stat-lbl">Parts</div></div>
           <div><div class="auth-stat-val">AI</div><div class="auth-stat-lbl">Powered</div></div>
@@ -606,7 +654,7 @@ input[type=checkbox],input[type=radio]{accent-color:var(--blue)}
         </div>
         <div class="teacher-btn" onclick="showTeacherLogin()">
           <div style="display:flex;align-items:center;gap:12px">
-            <div class="teacher-btn-icon">👩‍🏫</div>
+            <div class="teacher-btn-icon" style="color:var(--blue)"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10l9-6 9 6-9 6z"/><path d="M7 12.5V17c0 1.5 2.2 3 5 3s5-1.5 5-3v-4.5"/></svg></div>
             <div>
               <div style="font-weight:700;font-size:13px;color:#fff">Teacher Portal</div>
               <div style="font-size:11px;color:rgba(255,255,255,.5);margin-top:1px">Access with teacher password</div>
@@ -667,7 +715,6 @@ input[type=checkbox],input[type=radio]{accent-color:var(--blue)}
     <span class="tb-brand">Speaking <em>App</em></span>
     <span class="tb-sub">/ Teacher Portal</span>
     <div class="tb-right">
-      <button class="tb-btn" id="teacher-class-btn" style="display:none;background:var(--blue);color:#fff;border:none" onclick="showTeacherClassPicker()">🏫 Change Class</button>
       <button class="tb-btn" style="background:var(--red);color:#fff;border:none;font-weight:600" onclick="openClearDataModal()">🗑 Clear Data</button>
       <span class="tb-user">👩‍🏫 Teacher</span>
       <button class="tb-btn" onclick="logout()">Sign Out</button>
@@ -676,21 +723,21 @@ input[type=checkbox],input[type=radio]{accent-color:var(--blue)}
   <div class="dash-wrap">
     <nav class="sidenav">
       <div class="sidenav-logo">
-        <div class="sidenav-logo-icon">🎤</div>
+        <div class="sidenav-logo-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></div>
         <div class="sidenav-logo-name">Speaking <em style="color:var(--blue);font-style:normal">App</em></div>
       </div>
       <div class="sidenav-section">Management</div>
-      <div class="sidenav-item active" onclick="teacherTab('overview')"><span class="sidenav-icon">📊</span> Class Overview</div>
-      <div class="sidenav-item" onclick="teacherTab('classroom')"><span class="sidenav-icon">🏫</span> Classroom</div>
-      <div class="sidenav-item" onclick="_hwLoaded=false;teacherTab('homework')"><span class="sidenav-icon">📚</span> Homework Book</div>
-      <div class="sidenav-item" onclick="teacherTab('library')"><span class="sidenav-icon">📖</span> Question Library</div>
-      <div class="sidenav-item" onclick="teacherTab('progress')"><span class="sidenav-icon">📈</span> Study Progress</div>
+      <div class="sidenav-item active" onclick="teacherTab('overview')"><span class="sidenav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg></span><span class="sn-lbl">Overview</span></div>
+      <div class="sidenav-item" onclick="teacherTab('classroom')"><span class="sidenav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10l9-6 9 6-9 6z"/><path d="M7 12.5V17c0 1.5 2.2 3 5 3s5-1.5 5-3v-4.5"/></svg></span><span class="sn-lbl">Classes</span></div>
+      <div class="sidenav-item" onclick="_hwLoaded=false;teacherTab('homework')"><span class="sidenav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4h6v3H9zM9 12h6M9 16h4"/></svg></span><span class="sn-lbl">Homework</span></div>
+      <div class="sidenav-item" onclick="teacherTab('library')"><span class="sidenav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5a1 1 0 0 1 1-1h5v16H5a1 1 0 0 1-1-1V5z"/><path d="M14 4h5a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-5V4z"/></svg></span><span class="sn-lbl">Library</span></div>
+      <div class="sidenav-item" onclick="teacherTab('progress')"><span class="sidenav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></span><span class="sn-lbl">Progress</span></div>
       <div class="sidenav-section">Archive</div>
-      <div class="sidenav-item" onclick="teacherTab('studentArchive')"><span class="sidenav-icon">🗄️</span> Student Archive</div>
-      <div class="sidenav-item" onclick="teacherTab('classArchive')"><span class="sidenav-icon">📦</span> Class Archive</div>
+      <div class="sidenav-item" onclick="teacherTab('studentArchive')"><span class="sidenav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9M10 13h4"/></svg></span><span class="sn-lbl">Archive</span></div>
+      <div class="sidenav-item" onclick="teacherTab('classArchive')"><span class="sidenav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8M12 13v8"/></svg></span><span class="sn-lbl">Closed</span></div>
       <div class="sidenav-section">Account</div>
-      <div class="sidenav-item" onclick="teacherTab('settings')"><span class="sidenav-icon">⚙️</span> Settings</div>
-      <div class="sidenav-item" onclick="logout()" style="color:var(--red);margin-top:auto"><span class="sidenav-icon">🚪</span> Sign Out</div>
+      <div class="sidenav-item" onclick="teacherTab('settings')"><span class="sidenav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.2.62.79 1.05 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span><span class="sn-lbl">Settings</span></div>
+      <div class="sidenav-item sn-out" onclick="logout()"><span class="sidenav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg></span><span class="sn-lbl">Sign out</span></div>
     </nav>
     <div class="dash-content" id="teacher-content"></div>
   </div>
@@ -710,16 +757,16 @@ input[type=checkbox],input[type=radio]{accent-color:var(--blue)}
   <div class="dash-wrap">
     <nav class="sidenav">
       <div class="sidenav-logo">
-        <div class="sidenav-logo-icon">🎤</div>
+        <div class="sidenav-logo-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></div>
         <div class="sidenav-logo-name">Speaking <em style="color:var(--blue);font-style:normal">App</em></div>
       </div>
       <div class="sidenav-section">Dashboard</div>
-      <div class="sidenav-item active" onclick="studentTab('overview')"><span class="sidenav-icon">📊</span> Overview</div>
-      <div class="sidenav-item" onclick="studentTab('peer')"><span class="sidenav-icon">👥</span> Peer Comparison</div>
-      <div class="sidenav-item" onclick="studentTab('practice')"><span class="sidenav-icon">🎤</span> Practice</div>
-      <div class="sidenav-item" onclick="studentTab('history')"><span class="sidenav-icon">📋</span> My History</div>
+      <div class="sidenav-item active" onclick="studentTab('overview')"><span class="sidenav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg></span><span class="sn-lbl">Overview</span></div>
+      <div class="sidenav-item" onclick="studentTab('peer')"><span class="sidenav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6.5 6.5 0 0 1 3.5 6"/></svg></span><span class="sn-lbl">Peers</span></div>
+      <div class="sidenav-item" onclick="studentTab('practice')"><span class="sidenav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></span><span class="sn-lbl">Practice</span></div>
+      <div class="sidenav-item" onclick="studentTab('history')"><span class="sidenav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6M9 16h4"/></svg></span><span class="sn-lbl">History</span></div>
       <div class="sidenav-section">Account</div>
-      <div class="sidenav-item" onclick="logout()" style="color:var(--red)"><span class="sidenav-icon">🚪</span> Sign Out</div>
+      <div class="sidenav-item sn-out" onclick="logout()"><span class="sidenav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg></span><span class="sn-lbl">Sign out</span></div>
     </nav>
     <div class="dash-content" id="student-content"></div>
   </div>
@@ -777,7 +824,7 @@ input[type=checkbox],input[type=radio]{accent-color:var(--blue)}
     </div>
     <div id="kw-disp" class="kw-display" style="display:none"></div>
     <div class="rec-area" id="rec-area">
-      <div class="rec-btn" id="rec-btn" onclick="toggleTalk()">🎤</div>
+      <div class="rec-btn" id="rec-btn" onclick="toggleTalk()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></div>
       <div class="wvf" id="wvf">
         <div class="wb"></div><div class="wb"></div><div class="wb"></div>
         <div class="wb"></div><div class="wb"></div><div class="wb"></div><div class="wb"></div>
@@ -1253,6 +1300,29 @@ input[type=checkbox],input[type=radio]{accent-color:var(--blue)}
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="fbdata.js"></script>
 <script>
+// Line icons (same drawing style as ArticuWrite's aw-common.js)
+const ICONS = {
+  stop: '<rect x="6" y="6" width="12" height="12" rx="2.5" fill="currentColor"/>',
+  check: '<path d="M5 12.5l4.5 4.5L19 7"/>',
+  hourglass: '<path d="M6 3h12M6 21h12M7 3c0 5 10 5 10 9s-10 4-10 9M17 3c0 5-10 5-10 9"/>',
+  mic: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>',
+  overview: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>',
+  users: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6.5 6.5 0 0 1 3.5 6"/>',
+  results: '<path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6M9 16h4"/>',
+  logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
+  school: '<path d="M3 10l9-6 9 6-9 6z"/><path d="M7 12.5V17c0 1.5 2.2 3 5 3s5-1.5 5-3v-4.5"/>',
+  tasks: '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4h6v3H9zM9 12h6M9 16h4"/>',
+  library: '<path d="M4 5a1 1 0 0 1 1-1h5v16H5a1 1 0 0 1-1-1V5z"/><path d="M14 4h5a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-5V4z"/>',
+  progress: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
+  archive: '<rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9M10 13h4"/>',
+  box: '<path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8M12 13v8"/>',
+  settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.2.62.79 1.05 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
+  pen: '<path d="M4 20l4-1 11-11-3-3L5 16z"/><path d="M14 6l3 3"/>',
+  clock: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 2h6"/>',
+  chat: '<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/>',
+  key: '<circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M17 6l3 3M15 8l2 2"/>',
+};
+function ic(n) { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + (ICONS[n] || '') + '</svg>'; }
 // ════════════════════════════════════════════
 // CONFIG
 // ════════════════════════════════════════════
@@ -1645,7 +1715,7 @@ async function doTeacherLogin() {
     hideOverlay();
     toast('Teacher portal loaded', 'success');
     SS('S-teacher');
-    showTeacherClassPicker();
+    teacherTab('overview');
     resetIdleTimer();
   } catch(e) { hideOverlay(); toast('Error: ' + e.message, 'error'); }
 }
@@ -1685,8 +1755,6 @@ function logout() {
 // TEACHER DASHBOARD
 // ════════════════════════════════════════════
 let _teacherClasses = [], _teacherStudents = [], _teacherAssignments = [], _teacherSessions = [];
-let _activeClass = null;
-let _classroomVisited = false;
 let _sortCol = '', _sortDir = 1;
 
 async function teacherTab(tab) {
@@ -1709,51 +1777,68 @@ async function teacherTab(tab) {
 }
 
 async function renderTeacherOverview(c) {
-  if (!_teacherClassId) {
-    c.innerHTML = `
-      <div style="max-width:500px;margin:60px auto;text-align:center">
-        <div style="font-size:3rem;margin-bottom:16px">🏫</div>
-        <h2 style="margin-bottom:8px">Chọn lớp trước</h2>
-        <p style="font-size:14px;color:var(--g600);margin-bottom:20px">Vui lòng chọn lớp ở thanh trên cùng để xem thông tin.</p>
-        <button class="btn btn-primary" onclick="showTeacherClassPicker()">🏫 Chọn lớp</button>
-      </div>`;
-    return;
-  }
+  // Every class at once: Firestore reads are cheap, so no class has to be picked first.
   const res = await gasCall('teacher.getClassStats');
   if (!res.success) { c.innerHTML = '<div class="empty">' + res.error + '</div>'; return; }
-  const stats = res.data;
-  const cl = stats.find(s => String(s.classId).toUpperCase() === _teacherClassId.toUpperCase()) || {};
-  const cls = _teacherClasses.find(x => x.ClassID === _teacherClassId) || {};
-  const totalAllTime = parseInt(cls.TotalSessionsAllTime) || cl.totalSessions || 0;
+  const stats = res.data || [];
+  const sum = k => stats.reduce((t, cl) => t + (cl[k] || 0), 0);
+  const pct = cl => cl.totalStudents ? Math.round(cl.practiced / cl.totalStudents * 100) : 0;
   c.innerHTML = `
-    <h2 style="margin-bottom:20px;font-size:1.3rem">📊 Overview — ${cl.className || _teacherClassId}</h2>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px">
+      <h2 style="font-size:1.3rem"><span class="h-ic">${ic('overview')}</span>Overview — all classes</h2>
+      <button class="btn btn-outline btn-sm" onclick="openModal('create-class-modal')">+ New Class</button>
+    </div>
     <div class="stat-grid">
-      <div class="stat-box"><div class="stat-val">${cl.totalStudents||0}</div><div class="stat-lbl">Students</div></div>
-      <div class="stat-box"><div class="stat-val">${cl.practiced||0}</div><div class="stat-lbl">Have Practiced</div></div>
-      <div class="stat-box"><div class="stat-val">${cl.notYet||0}</div><div class="stat-lbl">Not Yet</div></div>
-      <div class="stat-box"><div class="stat-val">${totalAllTime}</div><div class="stat-lbl">Total Sessions (all time)</div></div>
+      <div class="stat-box"><div class="stat-val">${stats.length}</div><div class="stat-lbl">Classes</div></div>
+      <div class="stat-box"><div class="stat-val">${sum('totalStudents')}</div><div class="stat-lbl">Students</div></div>
+      <div class="stat-box"><div class="stat-val">${sum('practiced')}</div><div class="stat-lbl">Have Practiced</div></div>
+      <div class="stat-box"><div class="stat-val">${sum('totalSessions')}</div><div class="stat-lbl">Sessions (current data)</div></div>
     </div>
     <div class="class-card-grid" style="margin-top:20px">
-      <div class="class-card">
+      ${stats.map(cl => `
+      <div class="class-card" onclick="openClassTab('${cl.classId}','progress')" style="cursor:pointer">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px">
           <div>
-            <div style="font-weight:700;font-size:1.15rem">${cl.className||_teacherClassId}</div>
-            <div style="font-size:12px;color:var(--g400)">${cls.AcademicYear||''} ${cls.Semester||''}</div>
+            <div style="font-weight:700;font-size:1.15rem">${cl.className || cl.classId}</div>
+            <div style="font-size:12px;color:var(--g400)">${[cl.academicYear, cl.semester].filter(Boolean).join(' · ')}</div>
           </div>
-          <span class="badge badge-grey" style="font-family:var(--fm)">${cl.classId||_teacherClassId}</span>
+          <span class="badge badge-grey">${cl.classId}</span>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px">
-          <div style="text-align:center"><div style="font-family:var(--fm);font-size:1.5rem;font-weight:800">${cl.totalStudents||0}</div><div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:600">Total</div></div>
-          <div style="text-align:center;background:var(--green-l);border-radius:8px;padding:6px"><div style="font-family:var(--fm);font-size:1.5rem;font-weight:800;color:var(--green-d)">${cl.practiced||0}</div><div style="font-size:10px;color:var(--green-d);text-transform:uppercase;font-weight:600">Practiced</div></div>
-          <div style="text-align:center;background:var(--red-l);border-radius:8px;padding:6px"><div style="font-family:var(--fm);font-size:1.5rem;font-weight:800;color:var(--red-d)">${cl.notYet||0}</div><div style="font-size:10px;color:var(--red-d);text-transform:uppercase;font-weight:600">Not Yet</div></div>
+          <div style="text-align:center;padding:6px"><div style="font-size:1.5rem;font-weight:800">${cl.totalStudents||0}</div><div style="font-size:10px;color:var(--g400);text-transform:uppercase;font-weight:600">Total</div></div>
+          <div style="text-align:center;background:var(--green-l);border-radius:10px;padding:6px"><div style="font-size:1.5rem;font-weight:800;color:var(--green-d)">${cl.practiced||0}</div><div style="font-size:10px;color:var(--green-d);text-transform:uppercase;font-weight:600">Practiced</div></div>
+          <div style="text-align:center;background:var(--red-l);border-radius:10px;padding:6px"><div style="font-size:1.5rem;font-weight:800;color:var(--red-d)">${cl.notPracticed||0}</div><div style="font-size:10px;color:var(--red-d);text-transform:uppercase;font-weight:600">Not Yet</div></div>
         </div>
+        <div class="prog-bar" style="margin-bottom:8px"><div class="prog-fill" style="width:${pct(cl)}%"></div></div>
         <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--g500)">
-          <span>${cl.totalSessions||0} sessions (current data)</span>
-          <span style="font-weight:700">avg ${cl.avgOverall || '—'}</span>
+          <span style="white-space:nowrap">${cl.totalSessions||0} sessions · avg ${cl.avgScore || '—'}</span>
+          <span style="font-weight:700;color:var(--blue);white-space:nowrap">Progress →</span>
         </div>
-      </div>
+      </div>`).join('') || '<div class="empty">No classes yet. Create one with “+ New Class”.</div>'}
     </div>`;
 }
+
+// ── Class choice for the class-scoped tabs (Classroom, Study Progress).
+// One shared selection, so switching tab keeps the same class.
+async function ensureTeacherClasses() {
+  if (_teacherClasses.length) return;
+  const r = await gasCall('teacher.getClasses');
+  _teacherClasses = (r.data || []).filter(cl => cl.Status !== 'Archived');
+}
+function pickDefaultClass() {
+  if (!_teacherClasses.some(cl => cl.ClassID === _teacherClassId)) _teacherClassId = _teacherClasses[0]?.ClassID || '';
+  return _teacherClassId;
+}
+function classSelect(tab) {
+  return `<select class="search-inp class-select" onchange="openClassTab(this.value,'${tab}')">
+    ${_teacherClasses.map(cl => `<option value="${cl.ClassID}" ${cl.ClassID === _teacherClassId ? 'selected' : ''}>${cl.ClassName || cl.ClassID}</option>`).join('')}
+  </select>`;
+}
+function openClassTab(classId, tab) {
+  _teacherClassId = classId;
+  teacherTab(tab);
+}
+
 async function renderTeacherClassroom(c) {
   const [clRes, stuRes] = await Promise.all([
     gasCall('teacher.getClasses'),
@@ -1761,14 +1846,10 @@ async function renderTeacherClassroom(c) {
   ]);
   _teacherClasses   = (clRes.data || []).filter(c => c.Status !== 'Archived');
   _teacherStudents  = stuRes.data || [];
-  // Preselect a class the first time only — otherwise the "All" filter would be
-  // reset back to the first class on every re-render.
-  if (!_classroomVisited) {
-    _classroomVisited = true;
-    _activeClass = _teacherClasses[0]?.ClassID || '';
+  if (!pickDefaultClass()) {
+    c.innerHTML = `<div class="empty" style="padding:40px">No classes yet.<br><br><button class="btn btn-primary" onclick="openModal('create-class-modal')">+ New Class</button></div>`;
+    return;
   }
-  // Selected class may have just been archived
-  if (_activeClass && !_teacherClasses.some(cl => cl.ClassID === _activeClass)) _activeClass = '';
   renderClassroomUI(c);
 }
 
@@ -1780,7 +1861,7 @@ function sortClassById() {
 
 function renderClassroomUI(c) {
   let students = _teacherStudents.filter(s =>
-    !_activeClass || String(s.ClassID||'').toUpperCase() === _activeClass.toUpperCase()
+    String(s.ClassID||'').toUpperCase() === _teacherClassId.toUpperCase()
   );
   // Sort a shallow copy by Student ID. Keep a link back to each student's index
   // in _teacherStudents, because editStudent() indexes into that array — sorting
@@ -1794,20 +1875,17 @@ function renderClassroomUI(c) {
   const arrow = _classSortDir === 'asc' ? '↑' : '↓';
   c.innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px">
-      <h2 style="font-size:1.3rem">🏫 Classroom</h2>
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <h2 style="font-size:1.3rem"><span class="h-ic">${ic('school')}</span>Classroom</h2>
+        ${classSelect('classroom')}
+      </div>
       <div style="display:flex;gap:8px">
         <button class="btn btn-outline btn-sm" onclick="openModal('create-class-modal')">+ New Class</button>
         <button class="btn btn-primary btn-sm" onclick="openAddStudent()">+ Add Student</button>
       </div>
     </div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
-      <button class="btn ${!_activeClass?'btn-primary':'btn-outline'} btn-sm" onclick="_activeClass='';teacherTab('classroom')">All</button>
-      ${_teacherClasses.map(cl => `
-        <button class="btn ${_activeClass===cl.ClassID?'btn-primary':'btn-outline'} btn-sm" onclick="_activeClass='${cl.ClassID}';teacherTab('classroom')">${cl.ClassName||cl.ClassID} <span class="badge badge-grey" style="margin-left:4px">${cl.StudentCount||0}</span></button>
-      `).join('')}
-    </div>
     ${(() => {
-      const cur = _teacherClasses.find(cl => cl.ClassID === _activeClass);
+      const cur = _teacherClasses.find(cl => cl.ClassID === _teacherClassId);
       if (!cur) return '';
       return `<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;background:var(--blue-l);border:1px solid var(--blue-m);border-radius:var(--rl);padding:12px 16px;margin-bottom:16px">
         <div>
@@ -1854,7 +1932,7 @@ function classOptions(selected, includeBlank) {
 function openAddStudent() {
   const sel = document.getElementById('as-class');
   if (!_teacherClasses.length) { toast('Create a class first', 'error'); return; }
-  sel.innerHTML = classOptions(_activeClass, false);
+  sel.innerHTML = classOptions(_teacherClassId, false);
   ['as-id','as-name','as-email','as-phone'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   openModal('add-student-modal');
 }
@@ -1920,7 +1998,7 @@ async function archiveClass(classId, className) {
     const res = await gasCall('teacher.archiveClass', { classId });
     if (!res.success) { toast(res.error, 'error'); return; }
     toast('Class archived', 'success');
-    _activeClass = '';
+    _teacherClassId = '';
     teacherTab('classroom');
   } catch(e) { toast(e.message, 'error'); }
 }
@@ -1939,6 +2017,8 @@ async function doCreateClass() {
     document.getElementById('ccm-name').textContent = res.className || className;
     document.getElementById('ccm-code').textContent = res.classId;
     openModal('class-code-modal');
+    _teacherClasses = [];            // reload so the new class is in the list
+    _teacherClassId = res.classId || _teacherClassId;
     teacherTab('classroom');
   } catch(e) { toast(e.message, 'error'); }
 }
@@ -2043,7 +2123,7 @@ async function renderLibrary(c) {
 
   c.innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:10px">
-      <h2 style="font-size:1.3rem">📖 Question Library</h2>
+      <h2 style="font-size:1.3rem"><span class="h-ic">${ic('library')}</span>Question Library</h2>
       <button class="btn btn-primary btn-sm" onclick="openLibraryEditor()">+ New ${partLabel[_libPart].split(' — ')[0]} topic</button>
     </div>
     <p style="font-size:13px;color:var(--g600);margin-bottom:16px">
@@ -2322,7 +2402,7 @@ async function renderTeacherHomework(c) {
   if (!_hwLoaded) {
     c.innerHTML = `
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px">
-        <h2 style="font-size:1.3rem">📚 Homework Book</h2>
+        <h2 style="font-size:1.3rem"><span class="h-ic">${ic('tasks')}</span>Homework Book</h2>
         <button class="btn btn-primary btn-sm" onclick="openCreateAsn()">+ Create Assignment</button>
       </div>
       <div style="background:var(--g50);border-radius:8px;padding:20px;max-width:500px">
@@ -2368,7 +2448,7 @@ async function renderTeacherHomework(c) {
   const partLabel = _hwFilters.part === 'all' ? 'All parts' : _hwFilters.part;
   c.innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px">
-      <h2 style="font-size:1.3rem">📚 Homework Book</h2>
+      <h2 style="font-size:1.3rem"><span class="h-ic">${ic('tasks')}</span>Homework Book</h2>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn-outline btn-sm" id="ext-req-btn" onclick="openExtRequests()">⏰ Yêu cầu gia hạn</button>
         <button class="btn btn-outline btn-sm" onclick="_hwLoaded=false;teacherTab('homework')">← Change filters</button>
@@ -2536,7 +2616,7 @@ function openCreateAsn() {
     </label>
     ${_teacherClasses.map(cl => `
       <label style="display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer;font-size:13px">
-        <input type="checkbox" class="asn-cls" value="${cl.ClassID}" ${cl.ClassID === _activeClass ? 'checked' : ''}>
+        <input type="checkbox" class="asn-cls" value="${cl.ClassID}" ${cl.ClassID === _teacherClassId ? 'checked' : ''}>
         ${cl.ClassName || cl.ClassID} <span style="font-family:var(--fm);color:var(--g400);font-size:11px">${cl.ClassID}</span>
       </label>`).join('')}`;
   document.getElementById('asn-title').value = '';
@@ -2830,7 +2910,7 @@ async function renderStudentArchive(c) {
   });
 
   c.innerHTML = `
-    <h2 class="dash-title">🗄️ Student Archive</h2>
+    <h2 class="dash-title"><span class="h-ic">${ic('archive')}</span>Student Archive</h2>
     <p style="font-size:13px;color:var(--g600);margin-bottom:18px">
       Archived students cannot sign in, but everything they practised is kept. Restore anyone to give their account back.
     </p>
@@ -2916,7 +2996,7 @@ async function renderClassArchive(c) {
   const archived = all.filter(cl => cl.Status === 'Archived');
 
   c.innerHTML = `
-    <h2 class="dash-title">📦 Class Archive</h2>
+    <h2 class="dash-title"><span class="h-ic">${ic('box')}</span>Class Archive</h2>
     <p style="font-size:13px;color:var(--g600);margin-bottom:18px">
       An archived class stops accepting new registrations. Its students keep their accounts and all practice history stays readable here.
     </p>
@@ -2967,7 +3047,6 @@ async function restoreClass(classId, className) {
     const res = await gasCall('teacher.setClassStatus', { classId, status: 'Active' });
     if (!res.success) { toast(res.error, 'error'); return; }
     toast('Class reopened', 'success');
-    _classroomVisited = false;
     teacherTab('classArchive');
   } catch(e) { toast(e.message, 'error'); }
 }
@@ -2976,7 +3055,7 @@ async function renderTeacherSettings(c) {
   const res = await gasCall('teacher.getSettings');
   const s   = res.data || {};
   c.innerHTML = `
-    <h2 style="margin-bottom:20px">⚙️ Settings</h2>
+    <h2 style="margin-bottom:20px"><span class="h-ic">${ic('settings')}</span>Settings</h2>
     <div class="card">
       <div class="card-title" style="margin-bottom:14px">Teacher Account</div>
       <div class="form-group"><label class="form-label">Teacher Email (receives registration notifications)</label>
@@ -3033,45 +3112,6 @@ async function saveSettings() {
 
 // ════════════════════════════════════════════
 let _teacherClassId = '';  // Currently selected class for teacher portal
-
-async function showTeacherClassPicker() {
-  _teacherClassId = '';
-  const btn = document.getElementById('teacher-class-btn');
-  if (btn) btn.style.display = 'none';
-  const c = document.getElementById('teacher-content');
-  c.innerHTML = '<div class="spinner" style="margin-top:60px"></div>';
-  try {
-    const res = await gasCall('teacher.getClasses');
-    _teacherClasses = (res.data || []).filter(cl => cl.Status !== 'Archived');
-  } catch(e) { c.innerHTML = '<div class="empty">Could not load classes: ' + e.message + '</div>'; return; }
-
-  c.innerHTML = `
-    <div style="max-width:600px;margin:40px auto;text-align:center">
-      <h2 style="margin-bottom:8px">🏫 Chọn lớp</h2>
-      <p style="font-size:13px;color:var(--g600);margin-bottom:24px">Chọn lớp để xem dữ liệu luyện tập. Dữ liệu chỉ load cho lớp được chọn.</p>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px;text-align:left">
-        ${_teacherClasses.map(cl => `
-          <div class="card" style="margin:0;cursor:pointer;transition:transform .15s,box-shadow .15s"
-               onclick="selectTeacherClass('${cl.ClassID}')"
-               onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='var(--shl)'"
-               onmouseout="this.style.transform='';this.style.boxShadow=''">
-            <div style="font-weight:700;font-size:1.1rem">${cl.ClassName || cl.ClassID}</div>
-            <div style="font-size:12px;color:var(--g400);margin-top:4px">${cl.ClassID} · ${cl.AcademicYear || ''} ${cl.Semester || ''}</div>
-          </div>`).join('')}
-      </div>
-    </div>`;
-}
-
-function selectTeacherClass(classId) {
-  _teacherClassId = classId;
-  const cls = _teacherClasses.find(c => c.ClassID === classId);
-  const btn = document.getElementById('teacher-class-btn');
-  if (btn) {
-    btn.style.display = '';
-    btn.textContent = '🏫 ' + (cls?.ClassName || classId);
-  }
-  teacherTab('overview');
-}
 
 // Clear Data modal
 async function deleteClassData() {
@@ -3140,7 +3180,7 @@ async function renderStudentOverview(c) {
   if (!res.success) { c.innerHTML = '<div class="empty">' + res.error + '</div>'; return; }
   const { topics, totalSessions } = res.data;
   c.innerHTML = `
-    <h2 style="margin-bottom:16px">📊 My Overview</h2>
+    <h2 style="margin-bottom:16px"><span class="h-ic">${ic('overview')}</span>My Overview</h2>
     <div class="stat-grid">
       <div class="stat-box"><div class="stat-val">${topics.length}</div><div class="stat-lbl">Topics</div></div>
       <div class="stat-box"><div class="stat-val">${totalSessions}</div><div class="stat-lbl">Sessions</div></div>
@@ -3418,7 +3458,7 @@ async function renderStudentHomework(c) {
   const now  = new Date();
   c.innerHTML = `
     <button class="btn btn-outline btn-sm" onclick="studentTab('practice')" style="margin-bottom:16px">← Back to practice</button>
-    <h2 style="margin-bottom:16px">📚 Homework</h2>
+    <h2 style="margin-bottom:16px"><span class="h-ic">${ic('tasks')}</span>Homework</h2>
     ${_studentHW.length ? _studentHW.map(hw => {
       const deadline = hw.Deadline ? FB.parseDeadline(hw.Deadline) : null;
       const overdue  = deadline && deadline < now;
@@ -3454,44 +3494,44 @@ function renderPracticeHome(c) {
   A.groqKey = groqKey;
   const gate = practiceGate();
   c.innerHTML = `
-    <h2 style="margin-bottom:16px">🎤 Practice</h2>
+    <h2 style="margin-bottom:16px"><span class="h-ic">${ic('mic')}</span>Practice</h2>
     ${!gate.ok ? `<div class="card" style="border-color:var(--gold);background:var(--gold-l)">
       <div style="font-weight:700;color:var(--gold-d)">⏳ Short pause between attempts</div>
       <p style="margin-top:5px;font-size:13px;color:var(--g700)" id="gate-msg">${gate.reason}</p>
     </div>` : ''}
     <div class="key-wrap">
-      <div style="font-weight:700;margin-bottom:10px">🔑 Gemini API Key <small style="font-weight:400;color:var(--g600)">(for grading)</small></div>
+      <div class="key-title"><span class="key-ic">${ic('key')}</span>Gemini API Key <small style="font-weight:400;color:var(--g600)">(for grading)</small></div>
       <div class="key-row">
         <input class="form-input" id="gemini-key-inp" type="password" value="${gemKey}" placeholder="Gemini API key (aistudio.google.com)" style="flex:1">
-        <button class="btn btn-gold btn-sm" onclick="saveKey('gemini')">Save</button>
+        <button class="btn btn-primary btn-sm" onclick="saveKey('gemini')">Save</button>
         ${gemKey ? '<span class="key-st key-ok">✓ Key OK</span>' : '<span class="key-st key-bad">Not set</span>'}
       </div>
       <div style="font-size:11px;color:var(--g600);margin-top:6px">Free at <a href="https://aistudio.google.com" target="_blank">aistudio.google.com</a></div>
     </div>
     <div class="key-wrap">
-      <div style="font-weight:700;margin-bottom:10px">🔑 Groq API Key <small style="font-weight:400;color:var(--g600)">(for transcription)</small></div>
+      <div class="key-title"><span class="key-ic">${ic('key')}</span>Groq API Key <small style="font-weight:400;color:var(--g600)">(for transcription)</small></div>
       <div class="key-row">
         <input class="form-input" id="groq-key-inp" type="password" value="${groqKey}" placeholder="Groq API key (console.groq.com)" style="flex:1">
-        <button class="btn btn-gold btn-sm" onclick="saveKey('groq')">Save</button>
+        <button class="btn btn-primary btn-sm" onclick="saveKey('groq')">Save</button>
         ${groqKey ? '<span class="key-st key-ok">✓ Key OK</span>' : '<span class="key-st key-bad">Not set</span>'}
       </div>
       <div style="font-size:11px;color:var(--g600);margin-top:6px">Free at <a href="https://console.groq.com/keys" target="_blank">console.groq.com/keys</a></div>
     </div>
     <div class="mode-grid" style="margin-bottom:14px">
       <div class="mode-tile" onclick="openFreeChoice()">
-        <div class="mode-icon">✏️</div>
+        <div class="mode-icon">${ic('pen')}</div>
         <div class="mode-title">Free Practice</div>
         <div class="mode-sub">Choose a part and enter your own questions</div>
       </div>
       <div class="mode-tile" onclick="openHomeworkChoice()">
-        <div class="mode-icon">📚</div>
+        <div class="mode-icon">${ic('tasks')}</div>
         <div class="mode-title">Homework</div>
         <div class="mode-sub">Practice your teacher's assignments</div>
       </div>
     </div>
     <div class="mode-grid">
-      <div class="mode-tile" onclick="openJAM()" style="border-color:var(--gold);background:var(--gold-l)">
-        <div class="mode-icon">⏱️</div>
+      <div class="mode-tile mode-tile-jam" onclick="openJAM()">
+        <div class="mode-icon">${ic('clock')}</div>
         <div class="mode-title">JAM — Just A Minute</div>
         <div class="mode-sub">Speak for 60 seconds without stopping</div>
       </div>
@@ -3504,19 +3544,19 @@ function openFreeChoice() {
   const c = document.getElementById('student-content');
   c.innerHTML = `
     <button class="btn btn-outline btn-sm" onclick="studentTab('practice')" style="margin-bottom:16px">← Back</button>
-    <h2 style="margin-bottom:6px">✏️ Free Practice</h2>
+    <h2 style="margin-bottom:6px"><span class="h-ic">${ic('pen')}</span>Free Practice</h2>
     <p style="font-size:13px;color:var(--g600);margin-bottom:20px">Which part do you want to practise? You'll enter your own questions on the next screen.</p>
     <div class="mode-grid">
       <div class="mode-tile" onclick="openFreeSetup('part1')">
-        <div class="mode-icon">1️⃣</div><div class="mode-title">Part 1</div>
+        <div class="mode-icon mode-num">1</div><div class="mode-title">Part 1</div>
         <div class="mode-sub">Short Q&A on familiar topics</div>
       </div>
       <div class="mode-tile" onclick="openFreeSetup('part2')">
-        <div class="mode-icon">2️⃣</div><div class="mode-title">Part 2</div>
+        <div class="mode-icon mode-num">2</div><div class="mode-title">Part 2</div>
         <div class="mode-sub">Long turn from a cue card</div>
       </div>
       <div class="mode-tile" onclick="openFreeSetup('part3')">
-        <div class="mode-icon">3️⃣</div><div class="mode-title">Part 3</div>
+        <div class="mode-icon mode-num">3</div><div class="mode-title">Part 3</div>
         <div class="mode-sub">Discussion on abstract ideas</div>
       </div>
     </div>`;
@@ -3622,7 +3662,7 @@ async function openJAM() {
   if (!A.gkey || !A.groqKey) { toast('Please set both API keys in Practice first', 'error'); return; }
   const c = document.getElementById('student-content');
   c.innerHTML = `<button class="btn btn-outline btn-sm" onclick="studentTab('practice')" style="margin-bottom:16px">← Back</button>
-    <h2 style="margin-bottom:6px">⏱️ JAM — Just A Minute</h2>
+    <h2 style="margin-bottom:6px"><span class="h-ic">${ic('clock')}</span>JAM — Just A Minute</h2>
     <p style="font-size:13px;color:var(--g600);margin-bottom:8px">Speak for a full minute without stopping. No hesitating over 3 seconds, no repeating yourself, no drifting off topic.</p>
     <div id="jam-topics"><div class="empty">Loading topics…</div></div>`;
   try {
@@ -3631,7 +3671,7 @@ async function openJAM() {
     document.getElementById('jam-topics').innerHTML = topics.length
       ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-top:16px">
           ${topics.map(t => `<div class="mode-tile" onclick="startJAM('${t.libId}','${String(t.title).replace(/'/g,'&#39;')}')">
-            <div class="mode-icon">💬</div>
+            <div class="mode-icon">${ic('chat')}</div>
             <div class="mode-title">${t.title}</div>
             <div class="mode-sub">${t.questionCount} question${t.questionCount===1?'':'s'} to spark ideas</div>
           </div>`).join('')}
@@ -3737,7 +3777,7 @@ function renderJAMResult(text, lex) {
   const maxPct = Math.max(1, ...bar);
   c.innerHTML = `
     <button class="btn btn-outline btn-sm" onclick="studentTab('practice')" style="margin-bottom:16px">← Back to practice</button>
-    <h2 style="margin-bottom:4px">⏱️ ${_jam.topic}</h2>
+    <h2 style="margin-bottom:4px"><span class="h-ic">${ic('clock')}</span>${_jam.topic}</h2>
     <div style="font-size:13px;color:var(--g600);margin-bottom:18px">Run ${_jam.runs} · one minute · fluency drill</div>
 
     <div class="card">
@@ -3846,7 +3886,7 @@ async function renderMyHistory(c) {
   };
 
   c.innerHTML = `
-    <h2 style="margin-bottom:16px">📋 My History</h2>
+    <h2 style="margin-bottom:16px"><span class="h-ic">${ic('results')}</span>My History</h2>
     ${groups.length ? `
     <div class="tbl-wrap">
       <table class="tbl" style="font-size:13px">
@@ -4162,7 +4202,7 @@ function loadQ(idx) {
     setInterim(A.curAnswer);
     if (prev._audioBlob) {
       const rb = document.getElementById('rec-btn');
-      rb.textContent = '✓'; rb.className = 'rec-btn done';
+      rb.innerHTML = ic('check'); rb.className = 'rec-btn done';
       document.getElementById('rec-area').className = 'rec-area done';
       document.getElementById('rec-st').textContent = 'Answer recorded ✓';
       document.getElementById('rec-play-wrap').style.display = 'flex';
@@ -4345,7 +4385,7 @@ async function startTalk() {
   }
   A.talkBusy = true; A.talking = true; A.recStartTs = Date.now();
   const rb = document.getElementById('rec-btn');
-  rb.textContent = '⏹'; rb.className = 'rec-btn act';
+  rb.innerHTML = ic('stop'); rb.className = 'rec-btn act';
   document.getElementById('rec-area').className = 'rec-area recording';
   document.getElementById('rec-st').innerHTML = '🔴 Recording… speak naturally';
   document.getElementById('rec-hint').textContent = 'Press SPACE to stop';
@@ -4357,16 +4397,16 @@ async function stopTalk() {
   if (!A.talking || A.talkBusy) return;
   A.talkBusy = true; A.talking = false;
   const rb = document.getElementById('rec-btn');
-  rb.textContent = '⏳'; rb.className = 'rec-btn'; rb.disabled = true;
+  rb.innerHTML = ic('hourglass'); rb.className = 'rec-btn'; rb.disabled = true;
   const ok = await stopCaptureAndTranscribe();
   if (ok) {
-    rb.textContent = '✓'; rb.className = 'rec-btn done'; rb.disabled = false;
+    rb.innerHTML = ic('check'); rb.className = 'rec-btn done'; rb.disabled = false;
     document.getElementById('rec-area').className = 'rec-area done';
     document.getElementById('rec-st').textContent = 'Answer recorded ✓';
     document.getElementById('rec-hint').textContent = 'Press Next, or SPACE to add more';
     if (A.recs[A.idx]?._audioBlob) document.getElementById('rec-play-wrap').style.display = 'flex';
   } else {
-    rb.textContent = '🎤'; rb.className = 'rec-btn'; rb.disabled = false;
+    rb.innerHTML = ic('mic'); rb.className = 'rec-btn'; rb.disabled = false;
     document.getElementById('rec-area').className = 'rec-area';
     document.getElementById('rec-st').innerHTML = 'Press <b>SPACE</b> (or 🎤) to try again';
   }
@@ -4405,7 +4445,7 @@ function typeInterim(full, already) {
 
 function resetTalkUI() {
   const rb = document.getElementById('rec-btn');
-  rb.textContent = '🎤'; rb.className = 'rec-btn'; rb.disabled = false;
+  rb.innerHTML = ic('mic'); rb.className = 'rec-btn'; rb.disabled = false;
   document.getElementById('rec-area').className = 'rec-area';
   document.getElementById('rec-st').innerHTML = 'Press <b>SPACE</b> (or 🎤) to start';
   document.getElementById('rec-hint').textContent = 'Press SPACE again to stop';
@@ -6373,7 +6413,7 @@ window.addEventListener('load', () => {
       // switched browser (which has no stale token). Verify once up front, and
       // fall back to the login screen cleanly if it is no longer valid.
       if (A.teacherToken) {
-        SS('S-teacher'); showTeacherClassPicker(); resetIdleTimer();
+        SS('S-teacher'); teacherTab('overview'); resetIdleTimer();
       } else if (A.user && A.sessionToken) {
         try {
           const chk = await cachedCall('student.getOverview');
@@ -6400,19 +6440,8 @@ window.addEventListener('load', () => {
 // Patch renderTeacherProgress to store rows
 const _origRenderProgress = renderTeacherProgress;
 async function renderTeacherProgress(c) {
-  // Use the class selected at login; block if none
-  if (!_teacherClassId) {
-    c.innerHTML = `
-      <div style="max-width:500px;margin:60px auto;text-align:center">
-        <div style="font-size:3rem;margin-bottom:16px">🏫</div>
-        <h2 style="margin-bottom:8px">Chọn lớp trước</h2>
-        <p style="font-size:14px;color:var(--g600);margin-bottom:20px">Vui lòng chọn lớp ở thanh trên cùng để xem Study Progress.</p>
-        <button class="btn btn-primary" onclick="showTeacherClassPicker()">🏫 Chọn lớp</button>
-      </div>`;
-    return;
-  }
-  if (!_progFilter) _progFilter = _teacherClassId;
-  if (_progFilter !== _teacherClassId) { _progFilter = _teacherClassId; _progLoaded = false; _progReload = false; }
+  await ensureTeacherClasses();
+  if (_progFilter !== pickDefaultClass()) { _progFilter = _teacherClassId; _progLoaded = false; _progReload = false; }
   if (!_progFilter) {
     // No class chosen yet: show class stat cards (like Class Overview) and load
     // no session data. Picking a class then loads only that class's results.
@@ -6421,7 +6450,7 @@ async function renderTeacherProgress(c) {
     const stats = res.success ? (res.data || []) : [];
     _teacherClasses = stats.map(s => ({ ClassID: s.classId, ClassName: s.className, Status: 'Active' }));
     c.innerHTML = `
-      <h2 style="margin-bottom:6px;font-size:1.3rem">📈 Study Progress</h2>
+      <h2 style="margin-bottom:6px;font-size:1.3rem"><span class="h-ic">${ic('progress')}</span>Study Progress</h2>
       <p style="font-size:13px;color:var(--g600);margin-bottom:20px">Choose a class to view its results.</p>
       <div class="class-card-grid">
         ${stats.map(cl => `
@@ -6474,9 +6503,8 @@ async function renderTeacherProgress(c) {
 
   const toolbar = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
-      <h2 style="font-size:1.3rem">📈 ${clsName}${_progLoaded && _progTopic && _progTopic!=='__ALL__' ? ` · <span style="color:var(--blue)">${_progTopic}</span>` : ''}</h2>
+      <h2 style="font-size:1.3rem;display:flex;align-items:center;gap:12px;flex-wrap:wrap"><span class="h-ic" style="margin:0">${ic('progress')}</span>Study Progress ${classSelect('progress')}${_progLoaded && _progTopic && _progTopic!=='__ALL__' ? ` · <span style="color:var(--blue)">${_progTopic}</span>` : ''}</h2>
       <div style="display:flex;gap:8px">
-        <button class="btn btn-outline btn-sm" onclick="_progFilter='';_progTopic='';_progTaskType='';_progTopicsFor='';_progLoaded=false;renderTeacherProgress(document.getElementById('teacher-content'))">🏫 Change class</button>
         ${_progLoaded ? '<button class="btn btn-outline btn-sm" onclick="exportSessions()">⬇ Export to Sheet</button>' : ''}
         <button class="btn btn-sm" style="background:var(--red);color:#fff" onclick="deleteClassData()">🗑 Xóa Data Lớp</button>
       </div>
