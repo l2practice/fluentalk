@@ -6609,7 +6609,7 @@ async function renderTeacherProgress(c) {
         <label style="font-size:11px;font-weight:700;color:var(--g500);text-transform:uppercase;display:block;margin-bottom:4px">Topic ${i + 1}</label>
         <select id="prog-topic-sel-${i + 1}" class="search-inp" style="max-width:220px" onchange="${i===0?"_progTopic=this.value":i===1?"_progTopic2=this.value":"_progTopic3=this.value"}">
           <option value="__ALL__" ${!selected||selected==='__ALL__'?'selected':''}>All topics</option>
-          ${_progTopics.map(t => `<option value="${String(t.topic).replace(/"/g,'&quot;')}" ${selected===t.topic?'selected':''}>${t.topic}${t.students!=null ? ` (${t.students}/${t.sessions})` : ''}</option>`).join('')}
+          ${_progTopics.map(t => `<option value="${String(t.topic).replace(/"/g,'&quot;')}" ${selected===t.topic?'selected':''}>${t.topic}</option>`).join('')}
         </select>
       </div>`).join('')}
       <div>
