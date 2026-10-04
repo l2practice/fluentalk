@@ -2752,7 +2752,10 @@ function filterProgressByClass(classId) {
 
 function renderProgressUI(c, classes) {
   // Group sessions by StudentID+Topic → rows
-  const rows = buildProgressRows(_progSessions, _progFilter);
+  const selectedTopics = selectedProgressTopics();
+  const rows = buildProgressRows(_progSessions, _progFilter).filter(r =>
+    !selectedTopics.length || selectedTopics.includes(String(r.Topic || '').toLowerCase())
+  );
   const MILESTONES = [3,5,8,10];
   c.innerHTML = `
     <div class="search-row">
@@ -2875,7 +2878,7 @@ function sortProg(col) {
 function filterProgressTable() {
   const q = (document.getElementById('prog-search')?.value || '').toLowerCase();
   const modeOf = r => (String(r.Type)==='jam'||String(r.Part)==='jam') ? 'jam' : (r.Type==='free' ? 'free' : 'homework');
-  const selectedTopics = [_progTopic, _progTopic2, _progTopic3].filter(t => t && t !== '__NONE__').map(t => t.toLowerCase());
+  const selectedTopics = selectedProgressTopics();
   const filtered = _progRows.filter(r =>
     (!_progMode || modeOf(r) === _progMode) &&
     (!selectedTopics.length || selectedTopics.includes(String(r.Topic||'').toLowerCase())) &&
@@ -2885,6 +2888,12 @@ function filterProgressTable() {
   );
   const tb = document.getElementById('prog-tbody');
   if (tb) tb.innerHTML = renderProgressRows(filtered);
+}
+
+function selectedProgressTopics() {
+  return [_progTopic, _progTopic2, _progTopic3]
+    .filter(t => t && t !== '__NONE__' && t !== '__ALL__')
+    .map(t => t.toLowerCase());
 }
 
 function showProgressDetail(rowIdx) {
