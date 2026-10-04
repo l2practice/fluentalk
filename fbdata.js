@@ -620,12 +620,20 @@ async function getClassTopics(p) {
   let rows = [];
   (await progressDocs(p.classId)).forEach(d => { rows = rows.concat(itemsOf(d)); });
   const by = {};
+  if (taskType === 'all') {
+    (await allLibrary()).forEach(x => {
+      const topic = String(x.Title || '').trim();
+      if (topic && !by[topic.toLowerCase()]) by[topic.toLowerCase()] = { topic, sessions: null, students: null };
+    });
+  }
   rows.filter(typeFilter(taskType)).forEach(s => {
     const t = String(s.Topic || 'Untitled').trim() || 'Untitled';
-    if (!by[t]) by[t] = { topic: t, sessions: 0, students: {} };
-    by[t].sessions++; by[t].students[s.StudentID] = true;
+    const key = t.toLowerCase();
+    if (!by[key]) by[key] = { topic: t, sessions: 0, students: {} };
+    if (by[key].sessions == null) { by[key].sessions = 0; by[key].students = {}; }
+    by[key].sessions++; by[key].students[s.StudentID] = true;
   });
-  return ok({ data: Object.keys(by).map(k => ({ topic: k, sessions: by[k].sessions, students: Object.keys(by[k].students).length }))
+  return ok({ data: Object.keys(by).map(k => ({ topic: by[k].topic, sessions: by[k].sessions, students: by[k].students ? Object.keys(by[k].students).length : null }))
     .sort((a, b) => a.topic.toLowerCase().localeCompare(b.topic.toLowerCase())) });
 }
 async function getClassStats() {
