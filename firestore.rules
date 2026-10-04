@@ -1,12 +1,12 @@
 rules_version = '2';
 // Speaking App — paste into Firebase console → Firestore Database → Rules → Publish.
-// Accounts are created only by Apps Script (admin), so the teacher account is
-// identified by its fixed sign-in email. Keep TEACHER_EMAIL in sync with
-// fbdata.js and Code.gs.
+// Accounts are created only by Apps Script (admin). The teacher signs in with
+// their own email; the account is recognised by its fixed uid 'teacher' or
+// the custom claim role == 'teacher' (set by setupTeacherLogin in Code.gs).
 service cloud.firestore {
   match /databases/{db}/documents {
     function signedIn()  { return request.auth != null; }
-    function isTeacher() { return signedIn() && request.auth.token.email == 'teacher@fluentalk.app'; }
+    function isTeacher() { return signedIn() && (request.auth.uid == 'teacher' || request.auth.token.role == 'teacher'); }
     function isMe(uid)   { return signedIn() && request.auth.uid == uid; }
     function myClass()   { return get(/databases/$(db)/documents/users/$(request.auth.uid)).data.classId; }
 
