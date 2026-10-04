@@ -635,6 +635,17 @@ svg{flex-shrink:0}
 :root[data-theme="light"] .sidenav{box-shadow:0 4px 18px rgba(30,25,20,.06)}
 :root[data-theme="light"] .auth-left::after{opacity:.6}
 :root[data-theme="light"] .rec-btn.act,:root[data-theme="light"] .rec-btn.done{color:#fff}
+
+/* Phone sign-in: like ArticuWrite, keep a short hero band (logo + headline) above the form */
+@media(max-width:768px){
+  #S-auth{flex-direction:column;position:relative}
+  .auth-left{display:flex;width:100%;flex-shrink:0;justify-content:flex-start;gap:18px;padding:22px 20px 26px}
+  .auth-left-top{flex:none}
+  .auth-kicker,.auth-lede,.auth-stats-row{display:none}
+  .auth-headline{font-size:2.6rem;line-height:1;margin:0}
+  .auth-right{position:static;align-items:flex-start;padding:26px 16px 40px}
+  .auth-theme{top:24px;right:16px;z-index:2}
+}
 </style>
 </head>
 <body>
@@ -754,7 +765,7 @@ svg{flex-shrink:0}
           <label class="form-label">Password *</label>
           <input class="form-input" id="reg-pass" type="password" placeholder="At least 6 characters">
         </div>
-        <button class="btn-signin" onclick="doRegister()">Create Account →</button>
+        <button class="btn-signin" onclick="doRegister()">Create Account</button>
         <p style="font-size:11px;color:var(--g400);margin-top:12px;text-align:center;line-height:1.6">
           Enter a valid Class ID and you can sign in straight away.
         </p>
