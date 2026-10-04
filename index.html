@@ -1846,7 +1846,7 @@ async function teacherTab(tab) {
     if (tab === 'classroom') await renderTeacherClassroom(c);
     if (tab === 'homework')  await renderTeacherHomework(c);
     if (tab === 'library')   await renderLibrary(c);
-    if (tab === 'progress')  { _progFilter=''; _progTopic=''; _progMode=''; _progTaskType='homework'; _progTopicsFor=''; _progLoaded=false; _progReload=false; await renderTeacherProgress(c); }
+    if (tab === 'progress')  { _progFilter=''; _progTopic=''; _progTopic2=''; _progTopic3=''; _progMode=''; _progTaskType='homework'; _progTopicsFor=''; _progLoaded=false; _progReload=false; await renderTeacherProgress(c); }
     if (tab === 'studentArchive') await renderStudentArchive(c);
     if (tab === 'classArchive')   await renderClassArchive(c);
     if (tab === 'settings')  await renderTeacherSettings(c);
@@ -2743,7 +2743,7 @@ async function deleteAsn(assignId, title) {
 }
 
 // ── STUDY PROGRESS ───────────────────────────
-let _progSessions = [], _progFilter = '', _progMode = '', _progDays = 6, _progTopic = '', _progLoaded = false, _progTopics = [], _progTaskType = 'homework', _progTopicsFor = '', _progReload = false;
+let _progSessions = [], _progFilter = '', _progMode = '', _progDays = 6, _progTopic = '', _progTopic2 = '', _progTopic3 = '', _progLoaded = false, _progTopics = [], _progTaskType = 'homework', _progTopicsFor = '', _progReload = false;
 
 function filterProgressByClass(classId) {
   _progFilter = classId;
@@ -2875,8 +2875,10 @@ function sortProg(col) {
 function filterProgressTable() {
   const q = (document.getElementById('prog-search')?.value || '').toLowerCase();
   const modeOf = r => (String(r.Type)==='jam'||String(r.Part)==='jam') ? 'jam' : (r.Type==='free' ? 'free' : 'homework');
+  const selectedTopics = [_progTopic, _progTopic2, _progTopic3].filter(t => t && t !== '__ALL__').map(t => t.toLowerCase());
   const filtered = _progRows.filter(r =>
     (!_progMode || modeOf(r) === _progMode) &&
+    (!selectedTopics.length || selectedTopics.includes(String(r.Topic||'').toLowerCase())) &&
     (!q || String(r.StudentName||'').toLowerCase().includes(q) ||
      String(r.StudentID||'').toLowerCase().includes(q) ||
      String(r.Topic||'').toLowerCase().includes(q))
@@ -2946,7 +2948,13 @@ async function exportSessions() {
   if (_busyOverlay) return;
   showOverlay('Building your export sheet…');
   try {
-    const res = await gasCall('teacher.exportSessions', { classId: _progFilter || '', topic: _progTopic || '__ALL__', taskType: _progTaskType, sinceDays: _progDays });
+    const exportTopics = [_progTopic, _progTopic2, _progTopic3].filter(t => t && t !== '__ALL__');
+    if (exportTopics.length > 1) {
+      hideOverlay();
+      toast('Export currently supports one topic at a time. Select one topic before exporting.', 'info', 6000);
+      return;
+    }
+    const res = await gasCall('teacher.exportSessions', { classId: _progFilter || '', topic: exportTopics.length === 1 ? exportTopics[0] : '__ALL__', taskType: _progTaskType, sinceDays: _progDays });
     hideOverlay();
     if (!res.success) { toast('Export failed: ' + (res.error || 'unknown error'), 'error', 8000); return; }
     // window.open() after an await is treated as a non-user gesture and gets
@@ -6531,7 +6539,7 @@ async function renderTeacherProgress(c) {
       <p style="font-size:13px;color:var(--g600);margin-bottom:20px">Choose a class to view its results.</p>
       <div class="class-card-grid">
         ${stats.map(cl => `
-          <div class="class-card" onclick="_progFilter='${cl.classId}';_progTopic='';_progTaskType='homework';_progTopicsFor='';_progLoaded=false;_progReload=false;renderTeacherProgress(document.getElementById('teacher-content'))">
+          <div class="class-card" onclick="_progFilter='${cl.classId}';_progTopic='';_progTopic2='';_progTopic3='';_progTaskType='homework';_progTopicsFor='';_progLoaded=false;_progReload=false;renderTeacherProgress(document.getElementById('teacher-content'))">
             <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px">
               <div>
                 <div style="font-weight:800;font-size:1.05rem;color:var(--black);letter-spacing:-.02em">${cl.className || cl.classId}</div>
@@ -6580,7 +6588,7 @@ async function renderTeacherProgress(c) {
 
   const toolbar = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
-      <h2 style="font-size:1.3rem;display:flex;align-items:center;gap:12px;flex-wrap:wrap"><span class="h-ic" style="margin:0">${ic('progress')}</span>Study Progress ${classSelect('progress')}${_progLoaded && _progTopic && _progTopic!=='__ALL__' ? ` · <span style="color:var(--blue)">${_progTopic}</span>` : ''}</h2>
+      <h2 style="font-size:1.3rem;display:flex;align-items:center;gap:12px;flex-wrap:wrap"><span class="h-ic" style="margin:0">${ic('progress')}</span>Study Progress ${classSelect('progress')}</h2>
       <div style="display:flex;gap:8px">
         ${_progLoaded ? '<button class="btn btn-outline btn-sm" onclick="exportSessions()">⬇ Export to Sheet</button>' : ''}
         <button class="btn btn-sm" style="background:var(--red);color:#fff" onclick="deleteClassData()">🗑 Xóa Data Lớp</button>
@@ -6589,19 +6597,21 @@ async function renderTeacherProgress(c) {
     <div class="search-row" style="align-items:flex-end">
       <div>
         <label style="font-size:11px;font-weight:700;color:var(--g500);text-transform:uppercase;display:block;margin-bottom:4px">Task type</label>
-        <select class="search-inp" style="max-width:160px" onchange="_progTaskType=this.value;_progTopic='';_progTopicsFor='';_progLoaded=false;renderTeacherProgress(document.getElementById('teacher-content'))">
+        <select class="search-inp" style="max-width:160px" onchange="_progTaskType=this.value;_progTopic='';_progTopic2='';_progTopic3='';_progTopicsFor='';_progLoaded=false;renderTeacherProgress(document.getElementById('teacher-content'))">
+          <option value="all" ${_progTaskType==='all'?'selected':''}>All types</option>
           <option value="homework" ${_progTaskType==='homework'?'selected':''}>📚 Homework</option>
           <option value="jam" ${_progTaskType==='jam'?'selected':''}>⏱️ JAM</option>
           <option value="free" ${_progTaskType==='free'?'selected':''}>✏️ Free Speaking</option>
         </select>
       </div>
+      ${[_progTopic, _progTopic2, _progTopic3].map((selected, i) => `
       <div>
-        <label style="font-size:11px;font-weight:700;color:var(--g500);text-transform:uppercase;display:block;margin-bottom:4px">Topic</label>
-        <select id="prog-topic-sel" class="search-inp" style="max-width:220px" onchange="_progTopic=this.value">
-          <option value="__ALL__" ${!_progTopic||_progTopic==='__ALL__'?'selected':''}>All topics</option>
-          ${_progTopics.map(t => `<option value="${String(t.topic).replace(/"/g,'&quot;')}" ${_progTopic===t.topic?'selected':''}>${t.topic}${t.students!=null ? ` (${t.students}/${t.sessions})` : ''}</option>`).join('')}
+        <label style="font-size:11px;font-weight:700;color:var(--g500);text-transform:uppercase;display:block;margin-bottom:4px">Topic ${i + 1}</label>
+        <select id="prog-topic-sel-${i + 1}" class="search-inp" style="max-width:220px" onchange="${i===0?"_progTopic=this.value":i===1?"_progTopic2=this.value":"_progTopic3=this.value"}">
+          <option value="__ALL__" ${!selected||selected==='__ALL__'?'selected':''}>All topics</option>
+          ${_progTopics.map(t => `<option value="${String(t.topic).replace(/"/g,'&quot;')}" ${selected===t.topic?'selected':''}>${t.topic}${t.students!=null ? ` (${t.students}/${t.sessions})` : ''}</option>`).join('')}
         </select>
-      </div>
+      </div>`).join('')}
       <div>
         <label style="font-size:11px;font-weight:700;color:var(--g500);text-transform:uppercase;display:block;margin-bottom:4px">Date range</label>
         <select id="prog-days-sel" class="search-inp" style="max-width:150px" onchange="_progDays=parseInt(this.value)">
@@ -6610,11 +6620,11 @@ async function renderTeacherProgress(c) {
           <option value="0" ${_progDays===0?'selected':''}>All results</option>
         </select>
       </div>
-      <button class="btn btn-primary" onclick="_progTopic=document.getElementById('prog-topic-sel').value;_progDays=parseInt(document.getElementById('prog-days-sel').value);_progMode='';_progLoaded=true;_progReload=true;renderTeacherProgress(document.getElementById('teacher-content'))">📊 Load results</button>
+      <button class="btn btn-primary" onclick="_progTopic=document.getElementById('prog-topic-sel-1').value;_progTopic2=document.getElementById('prog-topic-sel-2').value;_progTopic3=document.getElementById('prog-topic-sel-3').value;_progDays=parseInt(document.getElementById('prog-days-sel').value);_progMode='';_progLoaded=true;_progReload=true;renderTeacherProgress(document.getElementById('teacher-content'))">📊 Load results</button>
     </div>`;
 
   if (!_progLoaded) {
-    c.innerHTML = toolbar + '<div class="empty" style="padding:50px">Choose a task type, topic and date range, then press <strong>Load results</strong>.</div>';
+    c.innerHTML = toolbar + '<div class="empty" style="padding:50px">Choose a task type, up to three topics and a date range, then press <strong>Load results</strong>.</div>';
     return;
   }
 
@@ -6624,7 +6634,7 @@ async function renderTeacherProgress(c) {
     _progReload = false;
     c.innerHTML = toolbar + '<div class="empty" style="padding:50px">Loading results…</div>';
     try {
-      const sessRes = await gasCall('teacher.getAllSessions', { classId: _progFilter, topic: _progTopic || '__ALL__', taskType: _progTaskType, sinceDays: _progDays });
+      const sessRes = await gasCall('teacher.getAllSessions', { classId: _progFilter, taskType: _progTaskType, sinceDays: _progDays });
       _progSessions = sessRes.data || [];
     } catch(e) {
       c.innerHTML = toolbar + '<div class="empty" style="padding:50px;color:var(--red-d)">Could not load — the server may be busy. Press Load results again.</div>';
