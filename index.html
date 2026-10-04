@@ -723,7 +723,7 @@ svg{flex-shrink:0}
             <div class="teacher-btn-icon" style="color:var(--blue)"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10l9-6 9 6-9 6z"/><path d="M7 12.5V17c0 1.5 2.2 3 5 3s5-1.5 5-3v-4.5"/></svg></div>
             <div>
               <div style="font-weight:700;font-size:13px;color:var(--ink-strong)">Teacher Portal</div>
-              <div style="font-size:11px;color:rgba(var(--fg-rgb),.5);margin-top:1px">Access with teacher password</div>
+              <div style="font-size:11px;color:rgba(var(--fg-rgb),.5);margin-top:1px">Sign in with your teacher email</div>
             </div>
           </div>
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -975,9 +975,14 @@ svg{flex-shrink:0}
       <button class="btn btn-ghost btn-sm" onclick="closeModal('teacher-login-modal')">✕</button>
     </div>
     <div class="modal-body">
+      <p style="font-size:13px;color:var(--g600);margin:-4px 0 14px">Sign in with your teacher email.</p>
       <div class="form-group">
-        <label class="form-label">Teacher Password</label>
-        <input class="form-input" id="teacher-pass" type="password" placeholder="Enter teacher password" onkeydown="if(event.key==='Enter')doTeacherLogin()">
+        <label class="form-label">Email</label>
+        <input class="form-input" id="teacher-email" type="email" autocomplete="username" placeholder="you@dnpu.edu.vn" onkeydown="if(event.key==='Enter')document.getElementById('teacher-pass').focus()">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Password</label>
+        <input class="form-input" id="teacher-pass" type="password" autocomplete="current-password" placeholder="••••••••" onkeydown="if(event.key==='Enter')doTeacherLogin()">
       </div>
     </div>
     <div class="modal-footer">
@@ -1770,15 +1775,16 @@ async function doRegister() {
   } catch(e) { hideOverlay(); toast('Error: ' + e.message, 'error'); }
 }
 
-function showTeacherLogin() { openModal('teacher-login-modal'); document.getElementById('teacher-pass').focus(); }
+function showTeacherLogin() { openModal('teacher-login-modal'); document.getElementById('teacher-email').focus(); }
 
 async function doTeacherLogin() {
   if (_busyOverlay) return;
+  const email = document.getElementById('teacher-email').value.trim();
   const pass = document.getElementById('teacher-pass').value;
-  if (!pass) return;
+  if (!email || !pass) { toast('Enter your email and password.', 'error'); return; }
   showOverlay('Accessing teacher portal…');
   try {
-    const res = await gasCall('auth.teacherLogin', { password: pass });
+    const res = await gasCall('auth.teacherLogin', { email, password: pass });
     if (!res.success) { hideOverlay(); toast(res.error, 'error'); return; }
     A.teacherToken = res.teacherToken;
     sessionStorage.setItem('speak_teacher', res.teacherToken);

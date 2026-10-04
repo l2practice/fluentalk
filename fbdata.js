@@ -35,9 +35,12 @@ const FIREBASE_CONFIG = {
 };
 // Sign-in names. Students sign in with their Student ID (or email, looked up
 // through loginIndex); Firebase Auth needs an email, so each account uses this
-// fixed form. Must match STUDENT_DOMAIN / TEACHER_EMAIL in Code.gs.
+// fixed form. Must match STUDENT_DOMAIN in Code.gs.
+// The teacher signs in with their own email (as in ArticuWrite). The account
+// is recognised by its fixed uid 'teacher' (created by migrate1_Accounts) or
+// the custom claim role == 'teacher' set by setupTeacherLogin() in Code.gs.
 const STUDENT_DOMAIN = 'students.fluentalk.app';
-const TEACHER_EMAIL  = 'teacher@fluentalk.app';
+const TEACHER_UID    = 'teacher';
 
 const MILESTONES = [3,5,8,10,13,15,18,20,23,25,28,30];
 
@@ -102,12 +105,16 @@ async function me() {
   const u = auth.currentUser;        // …then whoever is signed in now
   if (!u) throw new Error('SESSION_EXPIRED');
   if (_me && _me.uid === u.uid) return _me;
-  if (u.email === TEACHER_EMAIL) return (_me = { uid: u.uid, role: 'Teacher' });
+  if (await isTeacherUser(u)) return (_me = { uid: u.uid, role: 'Teacher' });
   const d = await fs.doc('users/' + u.uid).get();
   if (!d.exists) throw new Error('SESSION_EXPIRED');
   return (_me = Object.assign({ uid: u.uid }, d.data()));
 }
-function isTeacherUser(u) { return u && u.email === TEACHER_EMAIL; }
+async function isTeacherUser(u) {
+  if (!u) return false;
+  if (u.uid === TEACHER_UID) return true;
+  try { return (await u.getIdTokenResult()).claims.role === 'teacher'; } catch (e) { return false; }
+}
 
 // ── same rules as Code.gs: which rows belong to one task, how many attempts ──
 function isJamRow(s) { return String(s.Type) === 'jam' || String(s.Part) === 'jam'; }
@@ -190,16 +197,20 @@ async function login(p) {
 }
 async function teacherLogin(p) {
   init();
-  try { await auth.signInWithEmailAndPassword(TEACHER_EMAIL, authPw(p.password)); }
-  catch (e) { return fail(/too-many-requests/.test(e.code || '') ? 'Too many attempts. Please wait a few minutes.' : 'Incorrect password.'); }
+  const email = String(p.email || '').trim().toLowerCase();
+  if (!email || !p.password) return fail('Enter your email and password.');
+  try { await auth.signInWithEmailAndPassword(email, authPw(p.password)); }
+  catch (e) { return fail(/too-many-requests/.test(e.code || '') ? 'Too many attempts. Please wait a few minutes.' : 'Incorrect email or password.'); }
   _me = null; forget();
+  // A student account with the right password is still not a teacher.
+  if (!(await isTeacherUser(auth.currentUser))) { await signOut(); return fail('Incorrect email or password.'); }
   return ok({ teacherToken: 'fb-teacher' });
 }
 async function signOut() { init(); _me = null; forget(); try { await auth.signOut(); } catch (e) {} }
 async function teacherChangePassword(p) {
   const u = auth.currentUser;
   try {
-    await u.reauthenticateWithCredential(firebase.auth.EmailAuthProvider.credential(TEACHER_EMAIL, authPw(p.current)));
+    await u.reauthenticateWithCredential(firebase.auth.EmailAuthProvider.credential(u.email, authPw(p.current)));
   } catch (e) { return fail('Current password is incorrect.'); }
   if (String(p.newPassword || '').length < 6) return fail('The new password must be at least 6 characters.');
   await u.updatePassword(authPw(p.newPassword));
