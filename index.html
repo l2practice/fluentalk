@@ -1846,7 +1846,7 @@ async function teacherTab(tab) {
     if (tab === 'classroom') await renderTeacherClassroom(c);
     if (tab === 'homework')  await renderTeacherHomework(c);
     if (tab === 'library')   await renderLibrary(c);
-    if (tab === 'progress')  { _progFilter=''; _progTopic=''; _progTopic2=''; _progTopic3=''; _progMode=''; _progTaskType='homework'; _progTopicsFor=''; _progLoaded=false; _progReload=false; await renderTeacherProgress(c); }
+    if (tab === 'progress')  { _progFilter=''; _progTopic='__NONE__'; _progTopic2='__NONE__'; _progTopic3='__NONE__'; _progMode=''; _progTaskType='homework'; _progTopicsFor=''; _progLoaded=false; _progReload=false; await renderTeacherProgress(c); }
     if (tab === 'studentArchive') await renderStudentArchive(c);
     if (tab === 'classArchive')   await renderClassArchive(c);
     if (tab === 'settings')  await renderTeacherSettings(c);
@@ -2743,7 +2743,7 @@ async function deleteAsn(assignId, title) {
 }
 
 // ── STUDY PROGRESS ───────────────────────────
-let _progSessions = [], _progFilter = '', _progMode = '', _progDays = 6, _progTopic = '', _progTopic2 = '', _progTopic3 = '', _progLoaded = false, _progTopics = [], _progTaskType = 'homework', _progTopicsFor = '', _progReload = false;
+let _progSessions = [], _progFilter = '', _progMode = '', _progDays = 6, _progTopic = '__NONE__', _progTopic2 = '__NONE__', _progTopic3 = '__NONE__', _progLoaded = false, _progTopics = [], _progTaskType = 'homework', _progTopicsFor = '', _progReload = false;
 
 function filterProgressByClass(classId) {
   _progFilter = classId;
@@ -2875,7 +2875,7 @@ function sortProg(col) {
 function filterProgressTable() {
   const q = (document.getElementById('prog-search')?.value || '').toLowerCase();
   const modeOf = r => (String(r.Type)==='jam'||String(r.Part)==='jam') ? 'jam' : (r.Type==='free' ? 'free' : 'homework');
-  const selectedTopics = [_progTopic, _progTopic2, _progTopic3].filter(t => t && t !== '__ALL__').map(t => t.toLowerCase());
+  const selectedTopics = [_progTopic, _progTopic2, _progTopic3].filter(t => t && t !== '__NONE__').map(t => t.toLowerCase());
   const filtered = _progRows.filter(r =>
     (!_progMode || modeOf(r) === _progMode) &&
     (!selectedTopics.length || selectedTopics.includes(String(r.Topic||'').toLowerCase())) &&
@@ -2948,7 +2948,7 @@ async function exportSessions() {
   if (_busyOverlay) return;
   showOverlay('Building your export sheet…');
   try {
-    const exportTopics = [_progTopic, _progTopic2, _progTopic3].filter(t => t && t !== '__ALL__');
+    const exportTopics = [_progTopic, _progTopic2, _progTopic3].filter(t => t && t !== '__NONE__' && t !== '__ALL__');
     if (exportTopics.length > 1) {
       hideOverlay();
       toast('Export currently supports one topic at a time. Select one topic before exporting.', 'info', 6000);
@@ -6539,7 +6539,7 @@ async function renderTeacherProgress(c) {
       <p style="font-size:13px;color:var(--g600);margin-bottom:20px">Choose a class to view its results.</p>
       <div class="class-card-grid">
         ${stats.map(cl => `
-          <div class="class-card" onclick="_progFilter='${cl.classId}';_progTopic='';_progTopic2='';_progTopic3='';_progTaskType='homework';_progTopicsFor='';_progLoaded=false;_progReload=false;renderTeacherProgress(document.getElementById('teacher-content'))">
+          <div class="class-card" onclick="_progFilter='${cl.classId}';_progTopic='__NONE__';_progTopic2='__NONE__';_progTopic3='__NONE__';_progTaskType='homework';_progTopicsFor='';_progLoaded=false;_progReload=false;renderTeacherProgress(document.getElementById('teacher-content'))">
             <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px">
               <div>
                 <div style="font-weight:800;font-size:1.05rem;color:var(--black);letter-spacing:-.02em">${cl.className || cl.classId}</div>
@@ -6597,7 +6597,7 @@ async function renderTeacherProgress(c) {
     <div class="search-row" style="align-items:flex-end">
       <div>
         <label style="font-size:11px;font-weight:700;color:var(--g500);text-transform:uppercase;display:block;margin-bottom:4px">Task type</label>
-        <select class="search-inp" style="max-width:160px" onchange="_progTaskType=this.value;_progTopic='';_progTopic2='';_progTopic3='';_progTopicsFor='';_progLoaded=false;renderTeacherProgress(document.getElementById('teacher-content'))">
+        <select class="search-inp" style="max-width:160px" onchange="_progTaskType=this.value;_progTopic='__NONE__';_progTopic2='__NONE__';_progTopic3='__NONE__';_progTopicsFor='';_progLoaded=false;renderTeacherProgress(document.getElementById('teacher-content'))">
           <option value="all" ${_progTaskType==='all'?'selected':''}>All types</option>
           <option value="homework" ${_progTaskType==='homework'?'selected':''}>📚 Homework</option>
           <option value="jam" ${_progTaskType==='jam'?'selected':''}>⏱️ JAM</option>
@@ -6608,7 +6608,7 @@ async function renderTeacherProgress(c) {
       <div>
         <label style="font-size:11px;font-weight:700;color:var(--g500);text-transform:uppercase;display:block;margin-bottom:4px">Topic ${i + 1}</label>
         <select id="prog-topic-sel-${i + 1}" class="search-inp" style="max-width:220px" onchange="${i===0?"_progTopic=this.value":i===1?"_progTopic2=this.value":"_progTopic3=this.value"}">
-          <option value="__ALL__" ${!selected||selected==='__ALL__'?'selected':''}>All topics</option>
+          <option value="__NONE__" ${!selected||selected==='__NONE__'?'selected':''}>None</option>
           ${_progTopics.map(t => `<option value="${String(t.topic).replace(/"/g,'&quot;')}" ${selected===t.topic?'selected':''}>${t.topic}</option>`).join('')}
         </select>
       </div>`).join('')}
