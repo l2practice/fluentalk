@@ -656,6 +656,12 @@ svg{flex-shrink:0}
 .lib-actions .btn{padding:6px 12px;font-size:12px}
 .lib-actions .lib-del{margin-left:auto;color:var(--red)}
 .lib-actions .lib-del:hover:not(:disabled){background:var(--red-l);color:var(--red)}
+
+/* line icons inside buttons and titles (rocket on Launch / Start Session) */
+.btn svg,.btn-ic svg{width:15px;height:15px;flex-shrink:0}
+.btn-lg svg{width:18px;height:18px}
+.btn-ic{display:inline-flex;align-items:center;gap:8px}
+.modal-title.btn-ic svg{width:18px;height:18px;color:var(--blue)}
 </style>
 </head>
 <body>
@@ -1181,7 +1187,7 @@ svg{flex-shrink:0}
 <div class="modal-overlay" id="launch-modal" style="overflow-y:auto">
   <div class="modal" style="max-width:560px">
     <div class="modal-header">
-      <span class="modal-title">🚀 Launch: <span id="launch-title"></span></span>
+      <span class="modal-title btn-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg>Launch: <span id="launch-title"></span></span>
       <button class="btn btn-ghost btn-sm" onclick="closeModal('launch-modal')">✕</button>
     </div>
     <div class="modal-body">
@@ -1210,7 +1216,7 @@ svg{flex-shrink:0}
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal('launch-modal')">Cancel</button>
-      <button class="btn btn-primary" onclick="doLaunch()">🚀 Launch to Homework Book</button>
+      <button class="btn btn-primary" onclick="doLaunch()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg>Launch</button>
     </div>
   </div>
 </div>
@@ -1333,7 +1339,7 @@ svg{flex-shrink:0}
 <div class="modal-overlay" id="relaunch-modal">
   <div class="modal" style="max-width:440px">
     <div class="modal-header">
-      <span class="modal-title">🚀 Re-launch assignment</span>
+      <span class="modal-title btn-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg>Re-launch assignment</span>
       <button class="btn btn-ghost btn-sm" onclick="closeModal('relaunch-modal')">✕</button>
     </div>
     <div class="modal-body">
@@ -1406,6 +1412,7 @@ const ICONS = {
   pen: '<path d="M4 20l4-1 11-11-3-3L5 16z"/><path d="M14 6l3 3"/>',
   clock: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 2h6"/>',
   chat: '<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/>',
+  rocket: '<path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/>',
   key: '<circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M17 6l3 3M15 8l2 2"/>',
 };
 function ic(n) { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + (ICONS[n] || '') + '</svg>'; }
@@ -2243,7 +2250,7 @@ async function renderLibrary(c) {
             ${qs.length>4?`<li style="list-style:none;color:var(--g400)">+${qs.length-4} more…</li>`:''}
           </ol>
           <div class="lib-actions">
-            <button class="btn btn-primary btn-sm" onclick="openLaunch('${item.LibID}')" title="Launch to a class as homework">Launch</button>
+            <button class="btn btn-primary btn-sm" onclick="openLaunch('${item.LibID}')" title="Launch to a class as homework">${ic('rocket')}Launch</button>
             <button class="btn btn-outline btn-sm" onclick="openLibraryEditor('${item.LibID}')">Edit</button>
             <button class="btn btn-ghost btn-sm lib-del" onclick="deleteLibraryItem('${item.LibID}','${(item.Title||'').replace(/'/g,'&#39;')}')">Delete</button>
           </div>
@@ -4197,7 +4204,7 @@ function buildSetup(type, hwData) {
     </label>` : ''}
     <div style="display:flex;gap:10px;margin-top:8px">
       <button class="btn btn-outline" onclick="SS('S-student');studentTab('practice')">← Back</button>
-      <button class="btn btn-primary btn-lg" style="flex:1" onclick="startSetup(${nQ},'${type}')">🚀 Start Session</button>
+      <button class="btn btn-primary btn-lg" style="flex:1" onclick="startSetup(${nQ},'${type}')">${ic('rocket')}Start Session</button>
     </div>`;
   SS('S-setup');
 }
