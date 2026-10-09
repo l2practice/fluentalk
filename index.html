@@ -2355,12 +2355,12 @@ function renderLibEditQs() {
       <textarea class="form-input" rows="${isP2?3:2}" placeholder="${isP2?'Describe… You should say:':'Enter the question'}"
         oninput="_libEditQs[${i}].question=this.value">${String(q.question||'').replace(/</g,'&lt;')}</textarea>
       <div style="margin-top:8px">
-        <label class="form-label" style="font-size:11px">Keywords students will see <span style="font-weight:400;color:var(--g400)">— type one and press Enter</span></label>
+        <label class="form-label" style="font-size:11px">Keywords students will see <span style="font-weight:400;color:var(--g400)">— press Enter, or type / paste several separated by , or ;</span></label>
         <div id="kwbox-${i}" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;border:1.5px solid var(--g200);border-radius:var(--r);padding:8px;background:var(--white);min-height:42px">
           ${q.keywords.map((k, ki) => libKwChip(i, ki, k)).join('')}
           <input class="lib-kw-input" data-qi="${i}" placeholder="${q.keywords.length?'':'add a keyword…'}"
             style="border:none;outline:none;flex:1;min-width:90px;font-size:13px;padding:2px"
-            onkeydown="libKwKey(event, ${i})">
+            onkeydown="libKwKey(event, ${i})" oninput="libKwInput(event, ${i})" onpaste="libKwPaste(event, ${i})">
         </div>
       </div>
     </div>`).join('');
@@ -2373,21 +2373,56 @@ function libKwChip(qi, ki, text) {
   </span>`;
 }
 
+// "a, b; c" (or one per line) → ['a','b','c']: trimmed, no empties.
+function splitKeywords(text) {
+  return String(text || '').split(/[,;，；\n\t]+/).map(k => k.replace(/\s+/g, ' ').trim()).filter(Boolean);
+}
+// Add keywords to question qi, skipping ones it already has (any letter case).
+function libAddKws(qi, list) {
+  const kws = _libEditQs[qi].keywords, have = new Set(kws.map(k => k.toLowerCase()));
+  list.forEach(k => { if (!have.has(k.toLowerCase())) { kws.push(k); have.add(k.toLowerCase()); } });
+}
+// Re-draw the chips and put the cursor back at once (not on a timer), so
+// keys typed straight after a comma land in the new box and are not lost.
+function libKwRefocus(qi, rest) {
+  renderLibEditQs();
+  const inp = document.querySelector('.lib-kw-input[data-qi="' + qi + '"]');
+  if (inp) { inp.value = rest || ''; inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
+}
 function libKwKey(e, qi) {
   if (e.key === 'Enter') {
     e.preventDefault();
-    const v = e.target.value.trim();
-    if (!v) return;
-    if (!_libEditQs[qi].keywords.includes(v)) _libEditQs[qi].keywords.push(v);
-    e.target.value = '';
-    renderLibEditQs();
-    // keep focus in the same box for rapid entry
-    setTimeout(() => { const inp = document.querySelector('.lib-kw-input[data-qi="'+qi+'"]'); if (inp) inp.focus(); }, 0);
+    const list = splitKeywords(e.target.value);
+    if (!list.length) return;
+    libAddKws(qi, list);
+    libKwRefocus(qi, '');
   } else if (e.key === 'Backspace' && !e.target.value && _libEditQs[qi].keywords.length) {
     _libEditQs[qi].keywords.pop();
-    renderLibEditQs();
-    setTimeout(() => { const inp = document.querySelector('.lib-kw-input[data-qi="'+qi+'"]'); if (inp) inp.focus(); }, 0);
+    libKwRefocus(qi, '');
   }
+}
+// Typing "word," or "word;" turns what is before the separator into a keyword.
+function libKwInput(e, qi) {
+  const v = e.target.value;
+  if (!/[,;，；]/.test(v)) return;
+  const parts = v.split(/[,;，；]/), rest = parts.pop();
+  libAddKws(qi, splitKeywords(parts.join(',')));
+  libKwRefocus(qi, rest.trimStart());
+}
+// Pasting a list ("tradition, festival; lantern") adds every keyword at once.
+function libKwPaste(e, qi) {
+  const text = (e.clipboardData || window.clipboardData)?.getData('text') || '';
+  if (!/[,;，；\n\t]/.test(text)) return;          // a single word: normal paste
+  e.preventDefault();
+  libAddKws(qi, splitKeywords(e.target.value + ',' + text));
+  libKwRefocus(qi, '');
+}
+// Text still sitting in a keyword box when Save is pressed counts too.
+function libKwFlushInputs() {
+  document.querySelectorAll('.lib-kw-input').forEach(inp => {
+    const qi = +inp.dataset.qi;
+    if (_libEditQs[qi] && inp.value.trim()) { libAddKws(qi, splitKeywords(inp.value)); inp.value = ''; }
+  });
 }
 
 function libEditRemoveKw(qi, ki) { _libEditQs[qi].keywords.splice(ki, 1); renderLibEditQs(); }
@@ -2402,6 +2437,7 @@ async function saveLibraryEditor() {
   const modal = document.getElementById('lib-edit-modal');
   const part  = modal._part;
   const title = document.getElementById('lib-edit-title').value.trim();
+  libKwFlushInputs();
   const questions = _libEditQs
     .map(q => ({ question: (q.question||'').trim(), keywords: q.keywords || [] }))
     .filter(q => q.question);
