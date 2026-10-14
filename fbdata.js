@@ -262,9 +262,15 @@ async function getHomework() {
   const data = asn.filter(a => String(a.Status || 'Active') === 'Active').map(a => {
     const mine = rows.filter(s => String(s.AssignID) === String(a.AssignID));
     const req = reqs.filter(r => r.assignId === a.AssignID).sort((x, y) => String(y.createdAt).localeCompare(String(x.createdAt)))[0];
+    const eff = effectiveDeadline(a, u.classId, u.uid), eu = parseDeadline(a.ExtendUntil);
+    const mineExt = parseDeadline(((a.ext || {}).students || {})[u.uid]);
     return Object.assign({}, a, {
-      Deadline: iso(effectiveDeadline(a, u.classId, u.uid)),
+      Deadline: iso(eff),
       OriginalDeadline: iso(parseDeadline(a.Deadline)),
+      // Self-extension: open while the window lasts and it would actually add time.
+      ExtendUntil: iso(eu),
+      selfExtended: !!(mineExt && eu && mineExt.getTime() >= eu.getTime()),
+      canExtend: !!(eu && Date.now() < eu.getTime() && (!eff || eff.getTime() < eu.getTime())),
       myAttempts: mine.length,
       lastPractice: mine.length ? mine[mine.length - 1].StartTime : null,
       extRequest: req ? { status: req.status, until: req.until || '', decidedUntil: req.decidedUntil || '' } : null
@@ -396,28 +402,29 @@ async function saveResult(p) {
   return res;
 }
 
-async function requestExtension(p) {
+// The student extends themselves to the assignment's "allow extension until"
+// time. No reason, no teacher approval, no email: the teacher decided in
+// advance by setting that time. The rules check the value and the clock.
+async function selfExtend(p) {
   const u = await me();
   const a = (await myAssignments()).find(x => x.AssignID === p.assignId);
   if (!a) return fail('Assignment not found.');
-  const reason = String(p.reason || '').trim();
-  if (reason.length < 5) return fail('Please give a short reason.');
-  const until = parseDeadline(p.until);
-  if (!until) return fail('Please choose the date and time you need.');
-  const mine = docs(await fs.collection('extensionRequests').where('uid', '==', u.uid).get());
-  if (mine.some(r => r.assignId === a.AssignID && r.status === 'pending'))
-    return fail('Bạn đã có một yêu cầu gia hạn đang chờ duyệt cho bài này.');
-  const ref = fs.collection('extensionRequests').doc();
-  await ref.set({
-    uid: u.uid, studentId: u.studentId, name: u.fullName, classId: up(u.classId),
-    assignId: a.AssignID, title: a.Title || '', reason: reason.slice(0, 1000),
-    currentDeadline: iso(effectiveDeadline(a, u.classId, u.uid)), until: iso(until),
-    status: 'pending', createdAt: new Date().toISOString()
-  });
-  // Tell the teacher by email. A failed email does not undo the request:
-  // it is in the teacher's list either way.
-  try { await gas('notify.extensionRequest', { reqId: ref.id }); } catch (e) {}
-  return ok({ reqId: ref.id });
+  const eu = parseDeadline(a.ExtendUntil);
+  if (!eu) return fail('Bài này không cho phép gia hạn.');
+  if (Date.now() >= eu.getTime()) return fail('Đã hết thời gian được phép gia hạn (' + eu.toLocaleString('vi-VN') + ').');
+  const eff = effectiveDeadline(a, u.classId, u.uid);
+  if (eff && eff.getTime() >= eu.getTime()) return ok({ until: iso(eff), already: true });
+  await fs.doc('assignments/' + a.AssignID).update(new firebase.firestore.FieldPath('ext', 'students', u.uid), a.ExtendUntil);
+  // A line for the teacher's list of who extended (no email).
+  try {
+    await fs.collection('extensionRequests').add({
+      uid: u.uid, studentId: u.studentId, name: u.fullName, classId: up(u.classId),
+      assignId: a.AssignID, title: a.Title || '', reason: '', currentDeadline: iso(eff), until: a.ExtendUntil,
+      status: 'auto', createdAt: new Date().toISOString()
+    });
+  } catch (e) {}
+  forget('assignments');
+  return ok({ until: a.ExtendUntil });
 }
 
 // ════════════════════════════════════════════
@@ -482,6 +489,16 @@ function asnClasses(list) {
   return arr.indexOf('ALL') >= 0 ? ['ALL'] : arr;
 }
 function deadlineIso(v) { return iso(parseDeadline(v)); }
+// "Allow extension until": students may extend themselves up to this time,
+// with no request to approve. Empty = no extensions. The Timestamp copy is
+// what the security rules compare with the server clock.
+function extendFields(deadline, extendUntil) {
+  const dl = parseDeadline(deadline), eu = parseDeadline(extendUntil);
+  if (!eu) return { ExtendUntil: '', ExtendUntilTs: null };
+  if (!dl) throw new Error('Set a deadline before allowing extensions.');
+  if (eu <= dl) throw new Error('"Allow extension until" must be later than the deadline.');
+  return { ExtendUntil: iso(eu), ExtendUntilTs: firebase.firestore.Timestamp.fromDate(eu) };
+}
 async function getAssignments(p) {
   let rows = await allAssignments();
   if (p && p.status) rows = rows.filter(a => String(a.Status || 'Active') === p.status);
@@ -493,7 +510,9 @@ async function getAssignments(p) {
 async function writeAssignment(fields) {
   const id = fields.AssignID || ('ASN-' + genId());
   const classes = asnClasses(fields.classes);
+  const ext = extendFields(fields.Deadline, fields.ExtendUntil);
   await fs.doc('assignments/' + id).set({
+    ExtendUntil: ext.ExtendUntil, ExtendUntilTs: ext.ExtendUntilTs,
     AssignID: id, Title: fields.Title || '', Part: fields.Part || 'part1',
     Questions: typeof fields.Questions === 'string' ? fields.Questions : JSON.stringify(fields.Questions || []),
     Deadline: deadlineIso(fields.Deadline), AssignedClasses: classes.join(','), classes,
@@ -503,7 +522,9 @@ async function writeAssignment(fields) {
   return id;
 }
 async function createAssignment(p) {
-  const id = await writeAssignment({ Title: p.title, Part: p.part, Questions: p.questions, Deadline: p.deadline, classes: p.assignedClasses });
+  let id;
+  try { id = await writeAssignment({ Title: p.title, Part: p.part, Questions: p.questions, Deadline: p.deadline, ExtendUntil: p.extendUntil, classes: p.assignedClasses }); }
+  catch (e) { return fail(e.message); }
   if (p.fromLibrary) await bumpLibraryUse(p.fromLibrary);
   if (p.saveToLibrary) await saveToLibrary({ title: p.title, part: p.part, questions: p.questions });
   return ok({ assignId: id });
@@ -523,15 +544,20 @@ async function updateAssignment(p) {
   if (!classes.length) return fail('Select at least one class.');
   const ref = fs.doc('assignments/' + p.assignId);
   if (!(await ref.get()).exists) return fail('Assignment not found.');
-  await ref.update({ Deadline: deadlineIso(p.deadline), AssignedClasses: classes.join(','), classes });
+  let ext;
+  try { ext = extendFields(p.deadline, p.extendUntil); } catch (e) { return fail(e.message); }
+  await ref.update({ Deadline: deadlineIso(p.deadline), AssignedClasses: classes.join(','), classes,
+    ExtendUntil: ext.ExtendUntil, ExtendUntilTs: ext.ExtendUntilTs });
   forget('assignments');
   return ok();
 }
 async function relaunchAssignment(p) {
   const src = (await fs.doc('assignments/' + p.assignId).get()).data();
   if (!src) return fail('Assignment not found.');
-  const id = await writeAssignment({ Title: src.Title, Part: src.Part, Questions: src.Questions, Deadline: p.deadline,
-    classes: (p.classes && p.classes.length) ? p.classes : ['ALL'] });
+  let id;
+  try { id = await writeAssignment({ Title: src.Title, Part: src.Part, Questions: src.Questions, Deadline: p.deadline,
+    ExtendUntil: p.extendUntil, classes: (p.classes && p.classes.length) ? p.classes : ['ALL'] }); }
+  catch (e) { return fail(e.message); }
   return ok({ assignId: id });
 }
 
@@ -570,8 +596,10 @@ async function launchFromLibrary(p) {
   if (!item) return fail('Topic not found in the library.');
   const questions = Array.isArray(p.questions) ? p.questions : [];
   if (!questions.length) return fail('Select at least one question to launch.');
-  const id = await writeAssignment({ Title: p.title || item.Title, Part: item.Part || 'part1', Questions: questions,
-    Deadline: p.deadline, classes: (p.classes && p.classes.length) ? p.classes : ['ALL'] });
+  let id;
+  try { id = await writeAssignment({ Title: p.title || item.Title, Part: item.Part || 'part1', Questions: questions,
+    Deadline: p.deadline, ExtendUntil: p.extendUntil, classes: (p.classes && p.classes.length) ? p.classes : ['ALL'] }); }
+  catch (e) { return fail(e.message); }
   await bumpLibraryUse(p.libId);
   return ok({ assignId: id });
 }
@@ -604,10 +632,17 @@ async function getAllSessions(p) {
     const cutoff = Date.now() - Number(p.sinceDays) * 86400000;
     rows = rows.filter(r => new Date(r.StartTime).getTime() >= cutoff);
   }
-  const classes = await allClasses(), nameOf = {};
+  const [classes, asns] = await Promise.all([allClasses(), allAssignments()]), nameOf = {}, dlOf = {};
   classes.forEach(c => { nameOf[up(c.ClassID)] = c.ClassName || c.ClassID; });
+  asns.forEach(a => { const d = parseDeadline(a.Deadline); if (d) dlOf[a.AssignID] = d.getTime(); });
   rows.sort(byStart).reverse();
-  return ok({ data: rows.map(r => Object.assign({}, r, { ClassName: nameOf[up(r.ClassID)] || r.ClassID || '', QCount: '' })) });
+  // Late = practised after the assignment's own deadline (extensions do not
+  // change this, so the teacher sees who needed the extra time).
+  return ok({ data: rows.map(r => {
+    const dl = dlOf[r.AssignID], t = new Date(r.StartTime).getTime();
+    return Object.assign({}, r, { ClassName: nameOf[up(r.ClassID)] || r.ClassID || '', QCount: '',
+      Late: !!(dl && t > dl), AsnDeadline: dl ? new Date(dl).toISOString() : '' });
+  }) });
 }
 async function getClassTopics(p) {
   const taskType = String(p.taskType || 'homework');
@@ -719,7 +754,7 @@ const ACTIONS = {
   'auth.login': login, 'auth.teacherLogin': teacherLogin,
   'student.getOverview': getOverview, 'student.getHomework': getHomework, 'student.getMyHistory': getMyHistory,
   'student.getPeerComparison': getPeerComparison, 'student.getJamTopics': getJamTopics,
-  'student.requestExtension': requestExtension,
+  'student.requestExtension': selfExtend, 'student.selfExtend': selfExtend,
   'speak.findExisting': findExisting, 'speak.saveResult': saveResult,
   'teacher.getClasses': getClasses, 'teacher.createClass': createClass,
   'teacher.setClassStatus': setClassStatus, 'teacher.archiveClass': p => setClassStatus({ classId: p.classId, status: 'Archived' }),
