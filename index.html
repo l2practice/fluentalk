@@ -682,6 +682,13 @@ svg{flex-shrink:0}
 .lex-band{color:var(--gold-d);font-weight:700}
 .lex-ex{color:var(--g600);font-style:italic;font-family:var(--fs);margin-left:8px}
 .lex-none{color:var(--g500)}
+
+/* attempts after the deadline (Study Progress) */
+.tbl tr.row-late td{background:var(--gold-l)}
+.tbl tr.row-late td:first-child{box-shadow:inset 3px 0 0 var(--gold)}
+.badge-late{background:var(--gold);color:#fff;margin-top:3px;white-space:nowrap}
+.badge{display:inline-flex;align-items:center;gap:4px}.badge svg{width:12px;height:12px;flex-shrink:0}
+.form-hint{font-size:11px;color:var(--g500);margin-top:4px;line-height:1.5}
 </style>
 </head>
 <body>
@@ -1115,6 +1122,11 @@ svg{flex-shrink:0}
         <div class="form-group"><label class="form-label">Deadline</label><input class="form-input" id="asn-deadline" type="datetime-local"></div>
       </div>
       <div class="form-group">
+        <label class="form-label">Allow extension until <span style="font-weight:400;color:var(--g400)">(optional)</span></label>
+        <input class="form-input" id="asn-extend" type="datetime-local">
+        <div class="form-hint">Leave empty: students cannot extend. If set, a student can press <b>Gia hạn</b> and is extended to this time at once — no request for you to approve. Attempts after the deadline are marked late in Study Progress.</div>
+      </div>
+      <div class="form-group">
         <label class="form-label">Assign to *</label>
         <div id="asn-class-list" style="border:1.5px solid var(--g200);border-radius:var(--r);padding:10px 12px;max-height:150px;overflow-y:auto;background:var(--white)"></div>
       </div>
@@ -1233,6 +1245,11 @@ svg{flex-shrink:0}
         <label class="form-label">Deadline <span style="font-weight:400;color:var(--g400)">(optional)</span></label>
         <input class="form-input" id="launch-deadline" type="datetime-local">
       </div>
+      <div class="form-group">
+        <label class="form-label">Allow extension until <span style="font-weight:400;color:var(--g400)">(optional)</span></label>
+        <input class="form-input" id="launch-extend" type="datetime-local">
+        <div class="form-hint">Leave empty: students cannot extend. If set, a student can press <b>Gia hạn</b> and is extended to this time at once — no request for you to approve. Attempts after the deadline are marked late in Study Progress.</div>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal('launch-modal')">Cancel</button>
@@ -1260,38 +1277,11 @@ svg{flex-shrink:0}
   </div>
 </div>
 
-<!-- Student: request a deadline extension -->
-<div class="modal-overlay" id="extreq-modal">
-  <div class="modal" style="max-width:440px">
-    <div class="modal-header">
-      <span class="modal-title btn-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.5 16.4A8.5 8.5 0 1 1 18.8 7.9"/><path d="M19.3 3.6l-.4 4.4-4.3-.7"/><path d="M11 7.5V12l3 3"/></svg>Xin gia hạn / Request an extension</span>
-      <button class="btn btn-ghost btn-sm" onclick="closeModal('extreq-modal')">✕</button>
-    </div>
-    <div class="modal-body">
-      <p style="font-size:13px;color:var(--g600);margin-bottom:12px"><strong id="extreq-title"></strong><br>
-        Deadline hiện tại: <strong id="extreq-current"></strong></p>
-      <div class="form-group">
-        <label class="form-label">Gia hạn đến / New deadline you need</label>
-        <input class="form-input" id="extreq-until" type="datetime-local">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Lý do / Reason</label>
-        <textarea class="form-input" id="extreq-reason" rows="3" placeholder="VD: Em bị ốm từ ngày… / I was ill from…"></textarea>
-      </div>
-      <p style="font-size:12px;color:var(--g500)">Giảng viên sẽ nhận email và duyệt yêu cầu. Bạn sẽ nhận email khi có kết quả.</p>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-outline" onclick="closeModal('extreq-modal')">Cancel</button>
-      <button class="btn btn-primary" id="extreq-send" onclick="sendExtRequest()">Gửi yêu cầu</button>
-    </div>
-  </div>
-</div>
-
 <!-- Teacher: extension requests -->
 <div class="modal-overlay" id="extlist-modal">
   <div class="modal" style="max-width:640px">
     <div class="modal-header">
-      <span class="modal-title btn-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.5 16.4A8.5 8.5 0 1 1 18.8 7.9"/><path d="M19.3 3.6l-.4 4.4-4.3-.7"/><path d="M11 7.5V12l3 3"/></svg>Yêu cầu gia hạn</span>
+      <span class="modal-title btn-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.5 16.4A8.5 8.5 0 1 1 18.8 7.9"/><path d="M19.3 3.6l-.4 4.4-4.3-.7"/><path d="M11 7.5V12l3 3"/></svg>Gia hạn</span>
       <button class="btn btn-ghost btn-sm" onclick="closeModal('extlist-modal')">✕</button>
     </div>
     <div class="modal-body" id="extlist-body" style="max-height:70vh;overflow-y:auto"></div>
@@ -1347,6 +1337,11 @@ svg{flex-shrink:0}
         <label class="form-label">Deadline <span style="font-weight:400;color:var(--g400)">(leave empty for no deadline)</span></label>
         <input class="form-input" id="editasn-deadline" type="datetime-local">
       </div>
+      <div class="form-group">
+        <label class="form-label">Allow extension until <span style="font-weight:400;color:var(--g400)">(optional)</span></label>
+        <input class="form-input" id="editasn-extend" type="datetime-local">
+        <div class="form-hint">Leave empty: students cannot extend. If set, a student can press <b>Gia hạn</b> and is extended to this time at once — no request for you to approve. Attempts after the deadline are marked late in Study Progress.</div>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal('editasn-modal')">Cancel</button>
@@ -1371,6 +1366,11 @@ svg{flex-shrink:0}
       <div class="form-group">
         <label class="form-label">New deadline <span style="font-weight:400;color:var(--g400)">(optional)</span></label>
         <input class="form-input" id="relaunch-deadline" type="datetime-local">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Allow extension until <span style="font-weight:400;color:var(--g400)">(optional)</span></label>
+        <input class="form-input" id="relaunch-extend" type="datetime-local">
+        <div class="form-hint">Leave empty: students cannot extend. If set, a student can press <b>Gia hạn</b> and is extended to this time at once — no request for you to approve. Attempts after the deadline are marked late in Study Progress.</div>
       </div>
     </div>
     <div class="modal-footer">
@@ -2292,6 +2292,7 @@ function openLaunch(libId) {
   document.getElementById('launch-title').textContent = item.Title;
   document.getElementById('launch-asn-title').value = item.Title;
   document.getElementById('launch-deadline').value = '';
+  document.getElementById('launch-extend').value = '';
 
   // Questions: all ticked by default, teacher unticks what to leave out.
   document.getElementById('launch-questions').innerHTML = qs.map((q, i) => {
@@ -2340,10 +2341,11 @@ async function doLaunch() {
   const classes  = Array.from(document.querySelectorAll('.launch-cls:checked')).map(cb => cb.value);
   const title    = document.getElementById('launch-asn-title').value.trim();
   const deadline = document.getElementById('launch-deadline').value;
+  const extendUntil = document.getElementById('launch-extend').value;
   if (!questions.length) { toast('Select at least one question', 'error'); return; }
   if (!classes.length)   { toast('Select at least one class', 'error'); return; }
   try {
-    const res = await gasCall('teacher.launchFromLibrary', { libId: _launchLibId, questions, classes, title, deadline });
+    const res = await gasCall('teacher.launchFromLibrary', { libId: _launchLibId, questions, classes, title, deadline, extendUntil });
     if (!res.success) { toast(res.error, 'error'); return; }
     toast('Launched to ' + classes.length + ' class(es) — now in the Homework Book', 'success', 5000);
     closeModal('launch-modal');
@@ -2687,6 +2689,7 @@ function openEditAsn(assignId) {
   modal._orig = cur;
   document.getElementById('editasn-title').textContent = a.Title || '';
   document.getElementById('editasn-deadline').value = _dateInputValue(a.Deadline);
+  document.getElementById('editasn-extend').value = a.ExtendUntil ? _dateInputValue(a.ExtendUntil) : '';
   document.getElementById('editasn-classes').innerHTML = `
     <label style="display:flex;align-items:center;gap:8px;padding:5px 0;cursor:pointer;font-size:13px;font-weight:600;border-bottom:1px solid var(--g100);margin-bottom:4px">
       <input type="checkbox" id="editasn-all" ${isAll ? 'checked' : ''} onchange="document.querySelectorAll('.editasn-cls').forEach(cb=>{cb.checked=this.checked;});editAsnWarn()"> All classes
@@ -2717,10 +2720,11 @@ async function doEditAsn() {
     : Array.from(document.querySelectorAll('.editasn-cls:checked')).map(cb => cb.value);
   if (!classes.length) { toast('Select at least one class', 'error'); return; }
   const deadline = document.getElementById('editasn-deadline').value;
+  const extendUntil = document.getElementById('editasn-extend').value;
   const btn = document.getElementById('editasn-save');
   btn.disabled = true;
   try {
-    const res = await gasCall('teacher.updateAssignment', { assignId: modal._assignId, classes, deadline });
+    const res = await gasCall('teacher.updateAssignment', { assignId: modal._assignId, classes, deadline, extendUntil });
     if (!res.success) { toast(res.error, 'error'); return; }
     toast('Assignment updated', 'success');
     closeModal('editasn-modal');
@@ -2734,6 +2738,7 @@ function openRelaunch(assignId, title) {
   document.getElementById('relaunch-title').textContent = title;
   document.getElementById('relaunch-modal')._assignId = assignId;
   document.getElementById('relaunch-deadline').value = '';
+  document.getElementById('relaunch-extend').value = '';
   document.getElementById('relaunch-classes').innerHTML = _teacherClasses.map(cl => `
     <label style="display:flex;align-items:center;gap:8px;padding:5px 0;cursor:pointer;font-size:13px">
       <input type="checkbox" class="relaunch-cls" value="${cl.ClassID}">
@@ -2747,8 +2752,9 @@ async function doRelaunch() {
   const classes = Array.from(document.querySelectorAll('.relaunch-cls:checked')).map(cb => cb.value);
   if (!classes.length) { toast('Select at least one class', 'error'); return; }
   const deadline = document.getElementById('relaunch-deadline').value;
+  const extendUntil = document.getElementById('relaunch-extend').value;
   try {
-    const res = await gasCall('teacher.relaunchAssignment', { assignId: modal._assignId, classes, deadline });
+    const res = await gasCall('teacher.relaunchAssignment', { assignId: modal._assignId, classes, deadline, extendUntil });
     if (!res.success) { toast(res.error, 'error'); return; }
     toast('Assignment re-launched to ' + classes.length + ' class(es)', 'success');
     closeModal('relaunch-modal');
@@ -2773,6 +2779,7 @@ function openCreateAsn() {
       </label>`).join('')}`;
   document.getElementById('asn-title').value = '';
   document.getElementById('asn-deadline').value = '';
+  document.getElementById('asn-extend').value = '';
   openModal('create-asn-modal');
   setTimeout(renderAsnQuestions, 50);
 }
@@ -2785,6 +2792,7 @@ async function doCreateAssignment() {
   const title    = document.getElementById('asn-title').value.trim();
   const part     = document.getElementById('asn-part').value;
   const deadline = document.getElementById('asn-deadline').value;
+  const extendUntil = document.getElementById('asn-extend').value;
   const allChecked = document.getElementById('asn-cls-all')?.checked;
   const picked = Array.from(document.querySelectorAll('.asn-cls:checked')).map(cb => cb.value);
   if (!title) { toast('Please enter an assignment title', 'error'); return; }
@@ -2799,7 +2807,7 @@ async function doCreateAssignment() {
   try {
     const assignedClasses = allChecked ? ['ALL'] : picked;
     const saveToLibrary = document.getElementById('asn-save-lib')?.checked || false;
-    const res = await gasCall('teacher.createAssignment', { title, part, questions, deadline, assignedClasses, fromLibrary: _asnFromLibrary, saveToLibrary });
+    const res = await gasCall('teacher.createAssignment', { title, part, questions, deadline, extendUntil, assignedClasses, fromLibrary: _asnFromLibrary, saveToLibrary });
     if (!res.success) { toast(res.error, 'error'); return; }
     toast('Assignment created successfully!', 'success');
     closeModal('create-asn-modal');
@@ -2912,7 +2920,8 @@ function renderProgressRows(rows) {
       return [3,5,8,10,13,15,18,20].includes(an) && !s.Overall;
     });
     const sessionKey = ri;
-    return `<tr>
+    const late = r.sessions.filter(x => x.Late).length;
+    return `<tr${late ? ' class="row-late" title="' + late + ' attempt(s) after the deadline"' : ''}>
       <td style="font-family:var(--fm);font-size:12px">${r.StudentID}</td>
       <td style="font-weight:600">${r.StudentName||'—'}</td>
       <td>${r.ClassID ? `<div style="font-weight:600;font-size:12px">${r.ClassName || classNameOf(r.ClassID)}</div><div style="font-size:10px;color:var(--g400);font-family:var(--fm)">${r.ClassID}</div>` : '—'}</td>
@@ -2928,6 +2937,7 @@ function renderProgressRows(rows) {
       <td style="text-align:center">${qCount}</td>
       <td style="text-align:center">
         <span class="badge ${count>=10?'badge-green':count>=5?'badge-gold':'badge-grey'}">${count}x</span>
+        ${late ? `<div><span class="badge badge-late">${late} trễ hạn</span></div>` : ''}
       </td>
       <td>${scoreStr}${backupGraded ? ' <span class="badge badge-gold" title="At least one attempt was marked by the backup model, so its band may not be directly comparable">backup</span>' : ''}</td>
       <td style="text-align:center">
@@ -3015,7 +3025,7 @@ function showProgressDetail(rowIdx) {
           <div class="qacc">
             <div class="qacc-hdr">
               <div class="qa-n">${s.AttemptNo||si+1}</div>
-              <div class="qa-q" style="flex:1">${fmtDT(s.StartTime)} · ${s.DurationMin||0} min</div>
+              <div class="qa-q" style="flex:1">${fmtDT(s.StartTime)} · ${s.DurationMin||0} min${s.Late ? ' <span class="badge badge-late">Trễ hạn</span>' : ''}</div>
               ${s.Overall ? `<div class="qa-band">${s.Overall}</div>
                 <button class="btn btn-outline btn-sm doc-export-btn" style="color:var(--green-d)" onclick="exportToDoc('${s.SessionID}',true)">📄 Export to Google Doc</button>`
                 : `<span style="font-size:11px;color:var(--g400)">not graded</span>`}
@@ -3489,60 +3499,69 @@ let _studentHW = [];
 
 // ── Deadline extensions ──────────────────────
 function extRequestControl(hw) {
-  const r = hw.extRequest;
-  if (r && r.status === 'pending')
-    return `<span class="badge badge-gold">⏳ Đang chờ duyệt gia hạn đến ${fmtDeadline(r.until)}</span>`;
-  const note = r && r.status === 'rejected' ? '<span class="badge badge-red">Yêu cầu gia hạn bị từ chối</span>' : '';
-  return note + `<button class="btn btn-outline btn-sm" onclick="openExtRequest('${hw.AssignID}')">${ic('extend')}Xin gia hạn</button>`;
+  if (hw.selfExtended)
+    return `<span class="badge badge-green">${ic('extend')} Đã gia hạn đến ${fmtDeadline(hw.Deadline)}</span>`;
+  if (hw.canExtend)
+    return `<button class="btn btn-outline btn-sm" onclick="selfExtendHW('${hw.AssignID}')">${ic('extend')}Gia hạn đến ${fmtDeadline(hw.ExtendUntil)}</button>`;
+  const dl = FB.parseDeadline(hw.Deadline);
+  if (dl && dl < new Date()) return `<span class="badge badge-grey">Bài này không cho gia hạn</span>`;
+  return '';
 }
-function openExtRequest(assignId) {
+// No request and no waiting: the teacher allowed extensions up to a set time.
+async function selfExtendHW(assignId) {
   const hw = _studentHW.find(h => h.AssignID === assignId);
   if (!hw) return;
-  const m = document.getElementById('extreq-modal');
-  m._assignId = assignId;
-  document.getElementById('extreq-title').textContent = hw.Title || '';
-  document.getElementById('extreq-current').textContent = hw.Deadline ? fmtDeadline(hw.Deadline) : '—';
-  const base = Math.max(Date.now(), (FB.parseDeadline(hw.Deadline) || new Date()).getTime());
-  document.getElementById('extreq-until').value = _dateInputValue(new Date(base + 2 * 86400000).toISOString());
-  document.getElementById('extreq-reason').value = '';
-  openModal('extreq-modal');
-}
-async function sendExtRequest() {
-  const m = document.getElementById('extreq-modal');
-  const btn = document.getElementById('extreq-send');
-  btn.disabled = true;
+  if (!confirm('Gia hạn bài "' + (hw.Title || '') + '" đến ' + fmtDeadline(hw.ExtendUntil) + '?\n\nCác lượt làm sau deadline gốc (' +
+      fmtDeadline(hw.OriginalDeadline || hw.Deadline) + ') sẽ được đánh dấu là nộp trễ cho giảng viên.')) return;
   try {
-    const res = await gasCall('student.requestExtension', { assignId: m._assignId,
-      reason: document.getElementById('extreq-reason').value, until: document.getElementById('extreq-until').value });
-    if (!res.success) { toast(res.error, 'error'); return; }
-    toast('Đã gửi yêu cầu gia hạn. Giảng viên sẽ nhận email.', 'success', 6000);
-    closeModal('extreq-modal');
+    const res = await gasCall('student.selfExtend', { assignId });
+    if (!res.success) { toast(res.error, 'error', 6000); return; }
+    toast('Đã gia hạn đến ' + fmtDeadline(res.until), 'success', 5000);
     clearTabCache();
     openHomeworkChoice();
   } catch (e) { toast(e.message, 'error'); }
-  finally { btn.disabled = false; }
 }
 
 // Teacher side
 function extSummary(a) {
   const ext = a.ext || {};
   const cls = Object.keys(ext.classes || {}), stu = Object.keys(ext.students || {});
-  if (!cls.length && !stu.length) return '';
+  const win = a.Deadline ? `<div style="font-size:11px;color:${a.ExtendUntil ? 'var(--blue-d)' : 'var(--g400)'};margin-top:2px">${
+    a.ExtendUntil ? 'Tự gia hạn đến ' + fmtDeadline(a.ExtendUntil) : 'Không cho gia hạn'}</div>` : '';
+  if (!cls.length && !stu.length) return win;
+  return win + extSummaryList(cls, stu, ext);
+}
+function extSummaryList(cls, stu, ext) {
   const parts = cls.map(c => c + ' → ' + fmtDeadline(ext.classes[c]));
-  if (stu.length) parts.push(stu.length + ' SV được gia hạn riêng');
+  if (stu.length) parts.push(stu.length + ' SV đã gia hạn');
   return `<div style="font-size:11px;color:var(--green-d);margin-top:2px">+ ${parts.join(' · ')}</div>`;
 }
 let _extReqs = [];
+let _extAuto = [];
+// Students now extend themselves inside the window the teacher set, so there
+// is nothing to approve. The button shows who extended; requests sent under
+// the old system (status pending) can still be decided here.
 async function refreshExtBadge() {
-  const res = await gasCall('teacher.getExtensionRequests', { status: 'pending' });
-  _extReqs = res.success ? res.data : [];
+  const res = await gasCall('teacher.getExtensionRequests', { status: 'all' });
+  const all = res.success ? res.data : [];
+  _extReqs = all.filter(r => r.status === 'pending');
+  const since = new Date(Date.now() - 30 * 864e5).toISOString();
+  _extAuto = all.filter(r => r.status === 'auto' && String(r.createdAt) >= since);
   const b = document.getElementById('ext-req-btn');
-  if (b) { b.innerHTML = ic('extend') + 'Yêu cầu gia hạn (' + _extReqs.length + ')'; b.classList.toggle('btn-primary', _extReqs.length > 0); }
+  if (b) {
+    b.innerHTML = ic('extend') + (_extReqs.length ? 'Yêu cầu gia hạn (' + _extReqs.length + ')' : 'Đã gia hạn (' + _extAuto.length + ')');
+    b.classList.toggle('btn-primary', _extReqs.length > 0);
+  }
 }
 async function openExtRequests() {
   await refreshExtBadge();
   const body = document.getElementById('extlist-body');
-  body.innerHTML = _extReqs.length ? _extReqs.map((r, i) => `
+  const auto = _extAuto.length ? `<div class="qs-lbl" style="margin:${_extReqs.length ? '18px' : '0'} 0 8px">Sinh viên đã tự gia hạn (30 ngày gần đây)</div>
+    <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Sinh viên</th><th>Lớp</th><th>Bài</th><th>Gia hạn đến</th><th>Lúc</th></tr></thead><tbody>
+    ${_extAuto.map(r => `<tr><td><strong>${_h(r.name)}</strong> <span style="color:var(--g500);font-size:11px">${_h(r.studentId)}</span></td>
+      <td>${_h(r.classId)}</td><td>${_h(r.title)}</td><td>${fmtDeadline(r.until)}</td><td style="font-size:11px">${fmtDeadline(r.createdAt)}</td></tr>`).join('')}
+    </tbody></table></div>` : '';
+  body.innerHTML = (_extReqs.length ? '<div class="qs-lbl" style="margin:0 0 8px">Yêu cầu cũ đang chờ duyệt</div>' : '') + _extReqs.map((r, i) => `
     <div class="card" style="margin-bottom:10px">
       <div style="font-weight:700">${r.name} <span style="font-family:var(--fm);color:var(--g500);font-size:12px">${r.studentId} · ${r.classId}</span></div>
       <div style="font-size:13px;margin-top:4px">📌 ${r.title}</div>
@@ -3557,7 +3576,7 @@ async function openExtRequests() {
         <button class="btn btn-green btn-sm" onclick="decideExt(${i}, true)">✓ Duyệt</button>
         <button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="decideExt(${i}, false)">✕ Từ chối</button>
       </div>
-    </div>`).join('') : '<div class="empty">Không có yêu cầu nào đang chờ.</div>';
+    </div>`).join('') + (auto || (_extReqs.length ? '' : '<div class="empty">Chưa có sinh viên nào tự gia hạn trong 30 ngày qua.<br><span style="font-size:12px">Muốn cho phép gia hạn, đặt "Allow extension until" khi giao hoặc sửa bài.</span></div>'));
   openModal('extlist-modal');
 }
 async function decideExt(i, approve) {
@@ -3803,7 +3822,8 @@ async function startHWPractice(assignId, title, part) {
           <h2 style="margin-bottom:8px;color:var(--red-d)">Bài tập đã hết hạn</h2>
           <p style="font-size:14px;color:var(--g600);line-height:1.6;margin-bottom:24px">
             Deadline: <strong>${fmtDeadline(hw.Deadline)}</strong><br>
-            Bài đã khoá. Nếu bạn có lý do chính đáng, hãy xin gia hạn — giảng viên duyệt thì bài sẽ mở lại.
+            ${hw.canExtend ? 'Bài đã khoá, nhưng giảng viên cho phép gia hạn đến <strong>' + fmtDeadline(hw.ExtendUntil) + '</strong>. Bấm Gia hạn để mở lại ngay — các lượt làm sẽ được đánh dấu trễ hạn.'
+              : 'Bài đã khoá. Bài này không cho phép gia hạn.'}
           </p>
           <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
             <button class="btn btn-outline" onclick="openHomeworkChoice()">← Quay lại</button>
