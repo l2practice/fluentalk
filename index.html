@@ -1156,7 +1156,7 @@ svg{flex-shrink:0}
       <div class="form-group">
         <label class="form-label">Allow extension until <span style="font-weight:400;color:var(--g400)">(optional)</span></label>
         <input class="form-input" id="asn-extend" type="datetime-local">
-        <div class="form-hint">Leave empty: students cannot extend. If set, a student can press <b>Gia hạn</b> and is extended to this time at once — no request for you to approve. Attempts after the deadline are marked late in Study Progress.</div>
+        <div class="form-hint">Leave empty: students cannot extend. If set, a student can press <b>Extend to …</b> and is extended to this time at once — no request for you to approve. Attempts after the deadline are marked late in Study Progress.</div>
       </div>
       <div class="form-group">
         <label class="form-label">Assign to *</label>
@@ -1280,7 +1280,7 @@ svg{flex-shrink:0}
       <div class="form-group">
         <label class="form-label">Allow extension until <span style="font-weight:400;color:var(--g400)">(optional)</span></label>
         <input class="form-input" id="launch-extend" type="datetime-local">
-        <div class="form-hint">Leave empty: students cannot extend. If set, a student can press <b>Gia hạn</b> and is extended to this time at once — no request for you to approve. Attempts after the deadline are marked late in Study Progress.</div>
+        <div class="form-hint">Leave empty: students cannot extend. If set, a student can press <b>Extend to …</b> and is extended to this time at once — no request for you to approve. Attempts after the deadline are marked late in Study Progress.</div>
       </div>
     </div>
     <div class="modal-footer">
@@ -1372,7 +1372,7 @@ svg{flex-shrink:0}
       <div class="form-group">
         <label class="form-label">Allow extension until <span style="font-weight:400;color:var(--g400)">(optional)</span></label>
         <input class="form-input" id="editasn-extend" type="datetime-local">
-        <div class="form-hint">Leave empty: students cannot extend. If set, a student can press <b>Gia hạn</b> and is extended to this time at once — no request for you to approve. Attempts after the deadline are marked late in Study Progress.</div>
+        <div class="form-hint">Leave empty: students cannot extend. If set, a student can press <b>Extend to …</b> and is extended to this time at once — no request for you to approve. Attempts after the deadline are marked late in Study Progress.</div>
       </div>
     </div>
     <div class="modal-footer">
@@ -1402,7 +1402,7 @@ svg{flex-shrink:0}
       <div class="form-group">
         <label class="form-label">Allow extension until <span style="font-weight:400;color:var(--g400)">(optional)</span></label>
         <input class="form-input" id="relaunch-extend" type="datetime-local">
-        <div class="form-hint">Leave empty: students cannot extend. If set, a student can press <b>Gia hạn</b> and is extended to this time at once — no request for you to approve. Attempts after the deadline are marked late in Study Progress.</div>
+        <div class="form-hint">Leave empty: students cannot extend. If set, a student can press <b>Extend to …</b> and is extended to this time at once — no request for you to approve. Attempts after the deadline are marked late in Study Progress.</div>
       </div>
     </div>
     <div class="modal-footer">
@@ -3532,23 +3532,23 @@ let _studentHW = [];
 // ── Deadline extensions ──────────────────────
 function extRequestControl(hw) {
   if (hw.selfExtended)
-    return `<span class="badge badge-green">${ic('extend')} Đã gia hạn đến ${fmtDeadline(hw.Deadline)}</span>`;
+    return `<span class="badge badge-green">${ic('extend')} Extended to ${fmtDeadline(hw.Deadline)}</span>`;
   if (hw.canExtend)
-    return `<button class="btn btn-outline btn-sm" onclick="selfExtendHW('${hw.AssignID}')">${ic('extend')}Gia hạn đến ${fmtDeadline(hw.ExtendUntil)}</button>`;
+    return `<button class="btn btn-outline btn-sm" onclick="selfExtendHW('${hw.AssignID}')">${ic('extend')}Extend to ${fmtDeadline(hw.ExtendUntil)}</button>`;
   const dl = FB.parseDeadline(hw.Deadline);
-  if (dl && dl < new Date()) return `<span class="badge badge-grey">Bài này không cho gia hạn</span>`;
+  if (dl && dl < new Date()) return `<span class="badge badge-grey">No extension allowed</span>`;
   return '';
 }
 // No request and no waiting: the teacher allowed extensions up to a set time.
 async function selfExtendHW(assignId) {
   const hw = _studentHW.find(h => h.AssignID === assignId);
   if (!hw) return;
-  if (!confirm('Gia hạn bài "' + (hw.Title || '') + '" đến ' + fmtDeadline(hw.ExtendUntil) + '?\n\nCác lượt làm sau deadline gốc (' +
-      fmtDeadline(hw.OriginalDeadline || hw.Deadline) + ') sẽ được đánh dấu là nộp trễ cho giảng viên.')) return;
+  if (!confirm('Extend "' + (hw.Title || '') + '" to ' + fmtDeadline(hw.ExtendUntil) + '?\n\nAttempts after the original deadline (' +
+      fmtDeadline(hw.OriginalDeadline || hw.Deadline) + ') will be marked as late for your teacher.')) return;
   try {
     const res = await gasCall('student.selfExtend', { assignId });
     if (!res.success) { toast(res.error, 'error', 6000); return; }
-    toast('Đã gia hạn đến ' + fmtDeadline(res.until), 'success', 5000);
+    toast('Extended to ' + fmtDeadline(res.until), 'success', 5000);
     clearTabCache();
     openHomeworkChoice();
   } catch (e) { toast(e.message, 'error'); }
@@ -3892,14 +3892,14 @@ async function startHWPractice(assignId, title, part) {
       if (cont) cont.innerHTML = `
         <div style="max-width:500px;margin:60px auto;text-align:center">
           <div class="big-ic">${ic('extend')}</div>
-          <h2 style="margin-bottom:8px;color:var(--red-d)">Bài tập đã hết hạn</h2>
+          <h2 style="margin-bottom:8px;color:var(--red-d)">This homework has closed</h2>
           <p style="font-size:14px;color:var(--g600);line-height:1.6;margin-bottom:24px">
             Deadline: <strong>${fmtDeadline(hw.Deadline)}</strong><br>
-            ${hw.canExtend ? 'Bài đã khoá, nhưng giảng viên cho phép gia hạn đến <strong>' + fmtDeadline(hw.ExtendUntil) + '</strong>. Bấm Gia hạn để mở lại ngay — các lượt làm sẽ được đánh dấu trễ hạn.'
-              : 'Bài đã khoá. Bài này không cho phép gia hạn.'}
+            ${hw.canExtend ? 'It is locked, but your teacher allows extensions until <strong>' + fmtDeadline(hw.ExtendUntil) + '</strong>. Press Extend to reopen it now — attempts will be marked as late.'
+              : 'It is locked. No extension is allowed for this homework.'}
           </p>
           <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
-            <button class="btn btn-outline" onclick="openHomeworkChoice()">← Quay lại</button>
+            <button class="btn btn-outline" onclick="openHomeworkChoice()">← Back</button>
             ${extRequestControl(hw)}
             <button class="btn btn-primary" onclick="studentTab('practice')">${ic('mic')}Free Speaking</button>
           </div>

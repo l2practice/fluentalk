@@ -410,8 +410,8 @@ async function selfExtend(p) {
   const a = (await myAssignments()).find(x => x.AssignID === p.assignId);
   if (!a) return fail('Assignment not found.');
   const eu = parseDeadline(a.ExtendUntil);
-  if (!eu) return fail('Bài này không cho phép gia hạn.');
-  if (Date.now() >= eu.getTime()) return fail('Đã hết thời gian được phép gia hạn (' + eu.toLocaleString('vi-VN') + ').');
+  if (!eu) return fail('No extension is allowed for this homework.');
+  if (Date.now() >= eu.getTime()) return fail('The extension period ended on ' + eu.toLocaleString('en-GB') + '.');
   const eff = effectiveDeadline(a, u.classId, u.uid);
   if (eff && eff.getTime() >= eu.getTime()) return ok({ until: iso(eff), already: true });
   await fs.doc('assignments/' + a.AssignID).update(new firebase.firestore.FieldPath('ext', 'students', u.uid), a.ExtendUntil);
