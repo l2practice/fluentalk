@@ -689,6 +689,38 @@ svg{flex-shrink:0}
 .badge-late{background:var(--gold);color:#fff;margin-top:3px;white-space:nowrap}
 .badge{display:inline-flex;align-items:center;gap:4px}.badge svg{width:12px;height:12px;flex-shrink:0}
 .form-hint{font-size:11px;color:var(--g500);margin-top:4px;line-height:1.5}
+
+/* student Homework: Pending / Old topics, card grid like class-hub */
+.hw-sec{font-weight:800;font-size:1.05rem;margin:4px 0 12px}
+.hw-sec span{color:var(--g500);font-weight:600}
+.hw-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;margin-bottom:8px}
+.hw-card{background:var(--white);border:1px solid var(--line);border-left:4px solid var(--blue);border-radius:18px;padding:14px 16px;display:flex;flex-direction:column;gap:8px}
+.hw-card.hw-part1{border-left-color:#7C9CD6}.hw-card.hw-part2{border-left-color:var(--blue)}.hw-card.hw-part3{border-left-color:#9C86D9}
+.hw-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px}
+.hw-part{font-weight:700;font-size:11px;padding:3px 9px;border-radius:999px;background:var(--blue-l);color:var(--blue-d)}
+.hw-date{color:var(--g500)}
+.hw-due{font-weight:700;font-size:12px}.hw-due-red{color:var(--red-d)}.hw-due-green{color:var(--green-d)}
+.hw-title{font-weight:700;font-size:1rem;line-height:1.35}
+.hw-dl{font-size:12px;color:var(--g600)}
+.hw-ext{display:block;color:var(--green-d);font-size:11px}
+.hw-bar{height:5px;border-radius:5px;background:var(--g100);overflow:hidden}
+.hw-bar div{height:100%;background:var(--blue);border-radius:5px}
+.hw-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:auto;padding-top:2px}
+.hw-old{background:var(--surf2)}
+.hw-old .hw-title{color:var(--g700)}
+.hw-old .hw-bar div{background:var(--g400)}
+.hw-old-note{font-size:11px;color:var(--g500)}
+.hw-divider{display:flex;align-items:center;gap:12px;margin:26px 0 12px;color:var(--g500)}
+.hw-divider::before,.hw-divider::after{content:'';flex:1;height:1px;background:var(--line2)}
+.hw-divider span{font-size:12px;font-weight:700;padding:5px 14px;border-radius:999px;background:var(--black);color:var(--bg)}
+.hw-sub{display:flex;align-items:center;gap:8px;font-weight:700;font-size:.95rem;margin:14px 0 10px}
+.hw-sub span{font-size:12px;font-weight:800;padding:2px 10px;border-radius:999px}
+.hw-sub-red span{background:var(--red-l);color:var(--red-d)}
+.hw-sub-green span{background:var(--green-l);color:var(--green-d)}
+.hw-none{font-size:12px;color:var(--g500);margin:-4px 0 8px}
+.hw-chips{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12px;color:var(--g500);margin-bottom:12px}
+.hw-chip{border:1px solid var(--line2);background:var(--white);color:var(--g700);border-radius:999px;padding:5px 12px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--f)}
+.hw-chip.on{background:var(--blue);border-color:var(--blue);color:var(--ink-on-accent)}
 </style>
 </head>
 <body>
@@ -3637,42 +3669,83 @@ async function openHomeworkChoice() {
   await renderStudentHomework(c);
 }
 
+// Homework is split like the class-hub Homework Book: what can still be
+// practised (Pending) on top, locked topics (Old topics) below with a range filter.
+const HW_TARGET = 10;   // attempts that count as done (MIN_ATTEMPTS in Code.gs)
+let _hwOldAll = false;  // Old topics: last 4 weeks unless the student expands
+function hwCard(hw, now, old) {
+  const deadline = hw.Deadline ? FB.parseDeadline(hw.Deadline) : null;
+  const overdue  = deadline && deadline < now;
+  const daysLeft = deadline ? Math.ceil((deadline - now) / 86400000) : null;
+  const n = hw.myAttempts || 0, done = n >= HW_TARGET;
+  const part = String(hw.Part || 'part1');
+  const assigned = hw.CreatedAt ? new Date(hw.CreatedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }).replace(' ', '-') : '';
+  let due = '';
+  if (!old) due = overdue ? '<span class="hw-due hw-due-red">Overdue</span>'
+    : daysLeft === null ? '' : daysLeft <= 1 ? '<span class="hw-due hw-due-red">Due today</span>'
+    : `<span class="hw-due ${daysLeft <= 3 ? 'hw-due-red' : 'hw-due-green'}">${daysLeft} days left</span>`;
+  const count = `<span class="badge ${done ? 'badge-green' : n ? 'badge-gold' : 'badge-grey'}">${n}/${HW_TARGET} attempts</span>`;
+  const extended = hw.OriginalDeadline && hw.OriginalDeadline !== hw.Deadline;
+  return `
+    <div class="hw-card hw-${part}${old ? ' hw-old' : ''}">
+      <div class="hw-top">
+        <span class="hw-part">${part.replace('part', 'Part ')}</span>
+        ${assigned ? `<span class="hw-date">${assigned}</span>` : ''}
+        <span style="flex:1"></span>${due}${count}
+      </div>
+      <div class="hw-title">${_h(hw.Title || 'Assignment')}</div>
+      <div class="hw-dl">Deadline: <strong>${deadline ? fmtDeadline(hw.Deadline) : '—'}</strong>
+        ${extended ? `<span class="hw-ext">đã gia hạn · gốc ${fmtDeadline(hw.OriginalDeadline)}</span>` : ''}</div>
+      <div class="hw-bar"><div style="width:${Math.min(100, Math.round(n / HW_TARGET * 100))}%"></div></div>
+      ${old ? `<div class="hw-old-note">${done ? 'Hoàn thành' : n ? 'Chưa đủ ' + HW_TARGET + ' lượt' : 'Chưa luyện'} · bài đã khoá</div>` : `
+      <div class="hw-actions">
+        ${overdue ? '' : `<button class="btn btn-primary btn-sm" onclick="startHWPractice('${hw.AssignID}','${(hw.Title||'').replace(/'/g,'`')}','${hw.Part||'part1'}')">
+          ${ic('mic')}${n ? 'Continue' : 'Start'}</button>`}
+        ${extRequestControl(hw)}
+      </div>`}
+    </div>`;
+}
+function toggleHwOld() { _hwOldAll = !_hwOldAll; renderStudentHomework(document.getElementById('student-content')); }
 async function renderStudentHomework(c) {
   const res = await cachedCall('student.getHomework');
   if (!res.success) { c.innerHTML = '<div class="empty">' + res.error + '</div>'; return; }
   // Only overwrite the cache with a real result. A transient empty response
   // must not wipe a list the student is mid-way through, which forced sign-outs.
   if (Array.isArray(res.data)) _studentHW = res.data;
-  const now  = new Date();
+  const now = new Date();
+  const dlOf = hw => hw.Deadline ? FB.parseDeadline(hw.Deadline) : null;
+  // Pending = can still be practised: deadline ahead (or none), or passed but
+  // the teacher's extension window is still open.
+  const pending = _studentHW.filter(hw => { const d = dlOf(hw); return !d || d >= now || hw.canExtend; })
+    .sort((a, b) => ((dlOf(a) || 8.64e15) - (dlOf(b) || 8.64e15)));
+  const oldAll = _studentHW.filter(hw => pending.indexOf(hw) < 0)
+    .sort((a, b) => dlOf(b) - dlOf(a));
+  const cutoff = now.getTime() - 28 * 864e5;
+  const recent = oldAll.filter(hw => (dlOf(hw) || now).getTime() >= cutoff);
+  const old = _hwOldAll ? oldAll : recent;
+  const hidden = oldAll.length - recent.length;
   c.innerHTML = `
     <button class="btn btn-outline btn-sm" onclick="studentTab('practice')" style="margin-bottom:16px">← Back to practice</button>
     <h2 style="margin-bottom:16px"><span class="h-ic">${ic('tasks')}</span>Homework</h2>
-    ${_studentHW.length ? _studentHW.map(hw => {
-      const deadline = hw.Deadline ? FB.parseDeadline(hw.Deadline) : null;
-      const overdue  = deadline && deadline < now;
-      const daysLeft = deadline ? Math.ceil((deadline - now) / 86400000) : null;
-      return `
-        <div class="card" style="${overdue ? 'border-color:var(--red)' : ''}">
-          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap">
-            <div>
-              <div style="font-weight:700;font-size:1rem">${hw.Title||'Assignment'}</div>
-              <div style="margin-top:4px;display:flex;gap:6px;flex-wrap:wrap">
-                <span class="badge badge-blue">${hw.Part||'—'}</span>
-                ${overdue ? '<span class="badge badge-red">Overdue</span>' : (daysLeft !== null ? `<span class="badge ${daysLeft<=3?'badge-red':'badge-gold'}">${daysLeft} days left</span>` : '')}
-                ${hw.myAttempts ? `<span class="badge badge-green">${hw.myAttempts}  attempts</span>` : '<span class="badge badge-grey">Not started</span>'}
-              </div>
-            </div>
-            ${deadline ? `<div style="font-size:12px;color:var(--g600);text-align:right">Deadline: <strong>${fmtDeadline(hw.Deadline)}</strong>
-              ${hw.OriginalDeadline && hw.OriginalDeadline !== hw.Deadline ? `<br><span style="color:var(--green-d)">Đã gia hạn (gốc: ${fmtDeadline(hw.OriginalDeadline)})</span>` : ''}</div>` : ''}
-          </div>
-          <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-            ${overdue ? '' : `<button class="btn btn-primary btn-sm" onclick="startHWPractice('${hw.AssignID}','${(hw.Title||'').replace(/'/g,'`')}','${hw.Part||'part1'}')">
-              ${ic('mic')}${hw.myAttempts ? 'Continue Practice' : 'Start Practice'}
-            </button>`}
-            ${extRequestControl(hw)}
-          </div>
-        </div>`;
-    }).join('') : '<div class="empty">No assignments yet</div>'}`;
+    ${!_studentHW.length ? '<div class="empty">No assignments yet</div>' : `
+    <div class="hw-sec">Pending <span>(${pending.length})</span></div>
+    ${pending.length ? `<div class="hw-grid">${pending.map(hw => hwCard(hw, now, false)).join('')}</div>`
+      : '<div class="empty" style="padding:18px">Không có bài nào đang mở. 🎉</div>'}
+    ${oldAll.length ? `
+    <div class="hw-divider"><span>Old topics (${oldAll.length})</span></div>
+    ${(() => {
+      // Unfinished first, so the student sees at once how many they missed.
+      const isDone = hw => (hw.myAttempts || 0) >= HW_TARGET;
+      const undoneAll = oldAll.filter(hw => !isDone(hw)), doneAll = oldAll.filter(isDone);
+      const group = (title, cls, all, shown) => !all.length ? '' : `
+        <div class="hw-sub ${cls}">${title} <span>${all.length}</span></div>
+        ${shown.length ? `<div class="hw-grid">${shown.map(hw => hwCard(hw, now, true)).join('')}</div>`
+          : '<div class="hw-none">Không có bài nào trong 4 tuần qua.</div>'}`;
+      return group('Chưa hoàn thành', 'hw-sub-red', undoneAll, old.filter(hw => !isDone(hw)))
+           + group('Đã hoàn thành', 'hw-sub-green', doneAll, old.filter(isDone));
+    })()}
+    ${hidden ? `<div style="text-align:center;margin-top:8px"><button class="hw-chip" onclick="toggleHwOld()">${
+      _hwOldAll ? '▲ Thu gọn — chỉ 4 tuần gần nhất' : '▼ Xem thêm ' + hidden + ' bài cũ hơn'}</button></div>` : ''}` : ''}`}`;
 }
 
 function renderPracticeHome(c) {
