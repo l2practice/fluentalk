@@ -3100,6 +3100,8 @@ async function exportSessions() {
       title: [classNameOf(_progFilter) || _progFilter || 'All classes', topics.length ? topics.join(', ') : ({ homework: 'Homework', jam: 'JAM', free: 'Free', all: 'All types' }[_progTaskType] || '')].filter(Boolean).join(' · ') });
     hideOverlay();
     if (!res.success) { toast('Export failed: ' + (res.error || 'unknown error'), 'error', 8000); return; }
+    // An older Code.gs ignores the table and lists every attempt instead.
+    if (!res.table) toast('Code.gs on Apps Script is still the old version, so this Sheet lists every attempt. Paste the new Code.gs and Deploy → Manage deployments → Edit → New version.', 'error', 15000);
     // window.open() after an await is treated as a non-user gesture and gets
     // blocked by most pop-up blockers, which looked like "export does nothing".
     // Try to open, but always also show a clickable link that can't be blocked.
