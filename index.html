@@ -3695,9 +3695,9 @@ function hwCard(hw, now, old) {
       </div>
       <div class="hw-title">${_h(hw.Title || 'Assignment')}</div>
       <div class="hw-dl">Deadline: <strong>${deadline ? fmtDeadline(hw.Deadline) : '—'}</strong>
-        ${extended ? `<span class="hw-ext">đã gia hạn · gốc ${fmtDeadline(hw.OriginalDeadline)}</span>` : ''}</div>
+        ${extended ? `<span class="hw-ext">extended · original ${fmtDeadline(hw.OriginalDeadline)}</span>` : ''}</div>
       <div class="hw-bar"><div style="width:${Math.min(100, Math.round(n / HW_TARGET * 100))}%"></div></div>
-      ${old ? `<div class="hw-old-note">${done ? 'Hoàn thành' : n ? 'Chưa đủ ' + HW_TARGET + ' lượt' : 'Chưa luyện'} · bài đã khoá</div>` : `
+      ${old ? `<div class="hw-old-note">${done ? 'Completed' : n ? 'Fewer than ' + HW_TARGET + ' attempts' : 'Not practised'} · locked</div>` : `
       <div class="hw-actions">
         ${overdue ? '' : `<button class="btn btn-primary btn-sm" onclick="startHWPractice('${hw.AssignID}','${(hw.Title||'').replace(/'/g,'`')}','${hw.Part||'part1'}')">
           ${ic('mic')}${n ? 'Continue' : 'Start'}</button>`}
@@ -3730,7 +3730,7 @@ async function renderStudentHomework(c) {
     ${!_studentHW.length ? '<div class="empty">No assignments yet</div>' : `
     <div class="hw-sec">Pending <span>(${pending.length})</span></div>
     ${pending.length ? `<div class="hw-grid">${pending.map(hw => hwCard(hw, now, false)).join('')}</div>`
-      : '<div class="empty" style="padding:18px">Không có bài nào đang mở. 🎉</div>'}
+      : '<div class="empty" style="padding:18px">Nothing pending right now.</div>'}
     ${oldAll.length ? `
     <div class="hw-divider"><span>Old topics (${oldAll.length})</span></div>
     ${(() => {
@@ -3740,12 +3740,12 @@ async function renderStudentHomework(c) {
       const group = (title, cls, all, shown) => !all.length ? '' : `
         <div class="hw-sub ${cls}">${title} <span>${all.length}</span></div>
         ${shown.length ? `<div class="hw-grid">${shown.map(hw => hwCard(hw, now, true)).join('')}</div>`
-          : '<div class="hw-none">Không có bài nào trong 4 tuần qua.</div>'}`;
-      return group('Chưa hoàn thành', 'hw-sub-red', undoneAll, old.filter(hw => !isDone(hw)))
-           + group('Đã hoàn thành', 'hw-sub-green', doneAll, old.filter(isDone));
+          : '<div class="hw-none">None in the last 4 weeks.</div>'}`;
+      return group('Incomplete', 'hw-sub-red', undoneAll, old.filter(hw => !isDone(hw)))
+           + group('Completed', 'hw-sub-green', doneAll, old.filter(isDone));
     })()}
     ${hidden ? `<div style="text-align:center;margin-top:8px"><button class="hw-chip" onclick="toggleHwOld()">${
-      _hwOldAll ? '▲ Thu gọn — chỉ 4 tuần gần nhất' : '▼ Xem thêm ' + hidden + ' bài cũ hơn'}</button></div>` : ''}` : ''}`}`;
+      _hwOldAll ? '▲ Show less (last 4 weeks only)' : '▼ Show ' + hidden + ' older topic' + (hidden === 1 ? '' : 's')}</button></div>` : ''}` : ''}`}`;
 }
 
 function renderPracticeHome(c) {
