@@ -569,6 +569,7 @@ input[type=checkbox],input[type=radio]{accent-color:var(--blue)}
 .peer-me .peer-rank{background:var(--blue);color:var(--ink-on-accent)}
 .peer-count{color:var(--blue)}
 .tb-btn,.tb-user{white-space:nowrap}
+.tb-btn{display:inline-flex;align-items:center;gap:6px}.tb-btn svg,.tb-user svg{width:14px;height:14px}
 @media(max-width:600px){.tb-btn{padding:6px 12px;font-size:12px}.auth-title{font-size:1.8rem}.topbar{padding:0 12px;gap:8px}.tb-user{max-width:96px}}
 @media(max-width:480px){.tb-user{display:none}.tb-right{gap:6px}.tb-btn{padding:6px 10px;font-size:11.5px}.theme-btn{width:32px;height:32px}}
 @media(max-width:420px){#S-teacher .tb-brand{display:none}}
@@ -857,8 +858,8 @@ svg{flex-shrink:0}
     <span class="tb-sub">/ Teacher Portal</span>
     <div class="tb-right">
       <button class="theme-btn" onclick="toggleTheme()" title="Light / dark mode" aria-label="Light / dark mode"><svg class="ic-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg><svg class="ic-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button>
-      <button class="tb-btn" style="background:var(--red);color:#fff;border:none;font-weight:600" onclick="openClearDataModal()">🗑 Clear Data</button>
-      <span class="tb-user">👩‍🏫 Teacher</span>
+      <button class="tb-btn" style="background:var(--red);color:#fff;border:none;font-weight:600" onclick="openClearDataModal()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>Clear Data</button>
+      <span class="tb-user btn-ic" style="gap:6px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10l9-6 9 6-9 6z"/><path d="M7 12.5V17c0 1.5 2.2 3 5 3s5-1.5 5-3v-4.5"/></svg>Teacher</span>
       <button class="tb-btn" onclick="logout()">Sign Out</button>
     </div>
   </div>
@@ -1046,7 +1047,7 @@ svg{flex-shrink:0}
 <div class="modal-overlay" id="teacher-login-modal">
   <div class="modal">
     <div class="modal-header">
-      <span class="modal-title">👩‍🏫 Teacher Portal</span>
+      <span class="modal-title btn-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10l9-6 9 6-9 6z"/><path d="M7 12.5V17c0 1.5 2.2 3 5 3s5-1.5 5-3v-4.5"/></svg>Teacher Portal</span>
       <button class="btn btn-ghost btn-sm" onclick="closeModal('teacher-login-modal')">✕</button>
     </div>
     <div class="modal-body">
@@ -1466,6 +1467,8 @@ const ICONS = {
   clock: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 2h6"/>',
   chat: '<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/>',
   extend: '<path d="M18.5 16.4A8.5 8.5 0 1 1 18.8 7.9"/><path d="M19.3 3.6l-.4 4.4-4.3-.7"/><path d="M11 7.5V12l3 3"/>',
+  download: '<path d="M12 3v12M7 10l5 5 5-5M5 21h14"/>',
+  trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
   rocket: '<path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/>',
   key: '<circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M17 6l3 3M15 8l2 2"/>',
 };
@@ -2959,7 +2962,7 @@ function renderProgressRows(rows) {
       <td>${r.ClassID ? `<div style="font-weight:600;font-size:12px">${r.ClassName || classNameOf(r.ClassID)}</div><div style="font-size:10px;color:var(--g400);font-family:var(--fm)">${r.ClassID}</div>` : '—'}</td>
       <td><span class="badge badge-blue">${r.Part||'—'}</span>${
         (String(r.Type)==='jam'||String(r.Part)==='jam')
-          ? ' <span class="badge" title="JAM — one-minute fluency drill" style="background:var(--gold-l);color:var(--gold-d)">⏱️ JAM</span>'
+          ? ' <span class="badge" title="JAM — one-minute fluency drill" style="background:var(--gold-l);color:var(--gold-d)">' + ic('clock') + 'JAM</span>'
           : (r.Type==='free' ? ' <span class="badge" title="Student practised this on their own, not assigned homework" style="background:var(--purple-l);color:var(--purple)">Free</span>' : '')
       }</td>
       <td style="font-weight:600;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.Topic||''}">${r.Topic||'—'}</td>
@@ -3070,17 +3073,31 @@ function showProgressDetail(rowIdx) {
   openModal('detail-modal');
 }
 
+// The Sheet is the Results table as shown: one row per student and topic,
+// with the filters, search and sort that are on screen.
+function progressExportTable() {
+  const head = ['Student ID', 'Full name', 'Class', 'Mode', 'Topic', 'First attempt', 'Latest attempt', 'Duration', 'Attempts', 'Milestone scores', 'Late attempts'];
+  const rows = (_progView || []).map(r => {
+    const ord = r.sessions.slice().sort((x, y) => String(x.StartTime || '').localeCompare(String(y.StartTime || '')));
+    const last = ord[ord.length - 1];
+    // Same as the on-screen column: the latest four graded milestones.
+    const ms = ord.filter(x => String(x.IsMilestone) === 'true' && x.Overall).slice(-4);
+    const mode = (String(r.Type) === 'jam' || String(r.Part) === 'jam') ? 'JAM' : (r.Type === 'free' ? (r.Part || '') + ' (Free)' : (r.Part || ''));
+    return [String(r.StudentID || ''), r.StudentName || '', r.ClassName || classNameOf(r.ClassID) || r.ClassID || '', mode, r.Topic || '',
+      fmtDT(ord[0]?.StartTime), fmtDT(last?.StartTime), last?.DurationMin ? last.DurationMin + 'm' : '', ord.length,
+      ms.map(x => x.Overall).join(' · '), ord.filter(x => x.Late).length];
+  });
+  return { head, rows };
+}
 async function exportSessions() {
   if (_busyOverlay) return;
+  const table = progressExportTable();
+  if (!table.rows.length) { toast('Nothing to export — load results first.', 'info'); return; }
   showOverlay('Building your export sheet…');
   try {
-    const exportTopics = [_progTopic, _progTopic2, _progTopic3].filter(t => t && t !== '__NONE__' && t !== '__ALL__');
-    if (exportTopics.length > 1) {
-      hideOverlay();
-      toast('Export currently supports one topic at a time. Select one topic before exporting.', 'info', 6000);
-      return;
-    }
-    const res = await gasCall('teacher.exportSessions', { classId: _progFilter || '', topic: exportTopics.length === 1 ? exportTopics[0] : '__ALL__', taskType: _progTaskType, sinceDays: _progDays });
+    const topics = [_progTopic, _progTopic2, _progTopic3].filter(t => t && t !== '__NONE__' && t !== '__ALL__');
+    const res = await gasCall('teacher.exportSessions', { classId: _progFilter || '', table,
+      title: [classNameOf(_progFilter) || _progFilter || 'All classes', topics.length ? topics.join(', ') : ({ homework: 'Homework', jam: 'JAM', free: 'Free', all: 'All types' }[_progTaskType] || '')].filter(Boolean).join(' · ') });
     hideOverlay();
     if (!res.success) { toast('Export failed: ' + (res.error || 'unknown error'), 'error', 8000); return; }
     // window.open() after an await is treated as a non-user gesture and gets
@@ -3681,7 +3698,7 @@ function hwCard(hw, now, old) {
   const part = String(hw.Part || 'part1');
   const assigned = hw.CreatedAt ? new Date(hw.CreatedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }).replace(' ', '-') : '';
   let due = '';
-  if (!old) due = overdue ? '<span class="hw-due hw-due-red">Overdue</span>'
+  if (!old) due = overdue ? (hw.canExtend ? '<span class="hw-due hw-due-red">Extension open</span>' : '<span class="hw-due hw-due-red">Overdue</span>')
     : daysLeft === null ? '' : daysLeft <= 1 ? '<span class="hw-due hw-due-red">Due today</span>'
     : `<span class="hw-due ${daysLeft <= 3 ? 'hw-due-red' : 'hw-due-green'}">${daysLeft} days left</span>`;
   const count = `<span class="badge ${done ? 'badge-green' : n ? 'badge-gold' : 'badge-grey'}">${n}/${HW_TARGET} attempts</span>`;
@@ -3714,8 +3731,9 @@ async function renderStudentHomework(c) {
   if (Array.isArray(res.data)) _studentHW = res.data;
   const now = new Date();
   const dlOf = hw => hw.Deadline ? FB.parseDeadline(hw.Deadline) : null;
-  // Pending = can still be practised: deadline ahead (or none), or passed but
-  // the teacher's extension window is still open.
+  // Pending = the deadline has not passed, counting extensions: the student's
+  // own extended deadline, or the teacher's "allow extension until" window if
+  // they have not pressed Extend yet. No deadline = pending. Old = passed.
   const pending = _studentHW.filter(hw => { const d = dlOf(hw); return !d || d >= now || hw.canExtend; })
     .sort((a, b) => ((dlOf(a) || 8.64e15) - (dlOf(b) || 8.64e15)));
   const oldAll = _studentHW.filter(hw => pending.indexOf(hw) < 0)
@@ -6826,8 +6844,8 @@ async function renderTeacherProgress(c) {
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
       <h2 style="font-size:1.3rem;display:flex;align-items:center;gap:12px;flex-wrap:wrap"><span class="h-ic" style="margin:0">${ic('progress')}</span>Study Progress ${classSelect('progress')}</h2>
       <div style="display:flex;gap:8px">
-        ${_progLoaded ? '<button class="btn btn-outline btn-sm" onclick="exportSessions()">⬇ Export to Sheet</button>' : ''}
-        <button class="btn btn-sm" style="background:var(--red);color:#fff" onclick="deleteClassData()">🗑 Xóa Data Lớp</button>
+        ${_progLoaded ? '<button class="btn btn-outline btn-sm" onclick="exportSessions()">' + ic('download') + 'Export to Sheet</button>' : ''}
+        <button class="btn btn-sm" style="background:var(--red);color:#fff" onclick="deleteClassData()">${ic('trash')}Xóa Data Lớp</button>
       </div>
     </div>
     <div class="search-row" style="align-items:flex-end">
@@ -6835,9 +6853,9 @@ async function renderTeacherProgress(c) {
         <label style="font-size:11px;font-weight:700;color:var(--g500);text-transform:uppercase;display:block;margin-bottom:4px">Task type</label>
         <select class="search-inp" style="max-width:160px" onchange="_progTaskType=this.value;_progTopic='__NONE__';_progTopic2='__NONE__';_progTopic3='__NONE__';_progTopicsFor='';_progLoaded=false;renderTeacherProgress(document.getElementById('teacher-content'))">
           <option value="all" ${_progTaskType==='all'?'selected':''}>All types</option>
-          <option value="homework" ${_progTaskType==='homework'?'selected':''}>📚 Homework</option>
-          <option value="jam" ${_progTaskType==='jam'?'selected':''}>⏱️ JAM</option>
-          <option value="free" ${_progTaskType==='free'?'selected':''}>✏️ Free Speaking</option>
+          <option value="homework" ${_progTaskType==='homework'?'selected':''}>Homework</option>
+          <option value="jam" ${_progTaskType==='jam'?'selected':''}>JAM</option>
+          <option value="free" ${_progTaskType==='free'?'selected':''}>Free Speaking</option>
         </select>
       </div>
       ${[_progTopic, _progTopic2, _progTopic3].map((selected, i) => `
@@ -6856,7 +6874,7 @@ async function renderTeacherProgress(c) {
           <option value="0" ${_progDays===0?'selected':''}>All results</option>
         </select>
       </div>
-      <button class="btn btn-primary" onclick="_progTopic=document.getElementById('prog-topic-sel-1').value;_progTopic2=document.getElementById('prog-topic-sel-2').value;_progTopic3=document.getElementById('prog-topic-sel-3').value;_progDays=parseInt(document.getElementById('prog-days-sel').value);_progMode='';_progLoaded=true;_progReload=true;renderTeacherProgress(document.getElementById('teacher-content'))">📊 Load results</button>
+      <button class="btn btn-primary" onclick="_progTopic=document.getElementById('prog-topic-sel-1').value;_progTopic2=document.getElementById('prog-topic-sel-2').value;_progTopic3=document.getElementById('prog-topic-sel-3').value;_progDays=parseInt(document.getElementById('prog-days-sel').value);_progMode='';_progLoaded=true;_progReload=true;renderTeacherProgress(document.getElementById('teacher-content'))">${ic('progress')}Load results</button>
     </div>`;
 
   if (!_progLoaded) {
