@@ -655,8 +655,10 @@ async function getClassTopics(p) {
   let rows = [];
   (await progressDocs(p.classId)).forEach(d => { rows = rows.concat(itemsOf(d)); });
   const by = {};
-  if (taskType === 'all') {
-    (await allLibrary()).forEach(x => {
+  // JAM topics are Part 1 library sets, so list them even before anyone in
+  // the class has practised one (otherwise the picker only offers None).
+  if (taskType === 'all' || taskType === 'jam') {
+    (await allLibrary()).filter(x => taskType === 'all' || (x.Part || 'part1') === 'part1').forEach(x => {
       const topic = String(x.Title || '').trim();
       if (topic && !by[topic.toLowerCase()]) by[topic.toLowerCase()] = { topic, sessions: null, students: null };
     });
@@ -681,7 +683,7 @@ async function getClassStats() {
     const practiced = {}; rows.forEach(s => { practiced[s.StudentID] = true; });
     const ms = rows.filter(s => String(s.IsMilestone) === 'true' && s.Overall);
     const avg = ms.length ? Math.round(ms.reduce((t, s) => t + (parseFloat(s.Overall) || 0), 0) / ms.length * 10) / 10 : 0;
-    return { classId: cid, className: c.ClassName, academicYear: c.AcademicYear, semester: c.Semester,
+    return { classId: cid, className: c.ClassName, academicYear: c.AcademicYear, semester: c.Semester, createdAt: c.CreatedAt || '',
       totalStudents: students.length, practiced: Object.keys(practiced).length,
       notPracticed: students.length - Object.keys(practiced).length, avgScore: avg, totalSessions: rows.length };
   });

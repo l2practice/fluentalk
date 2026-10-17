@@ -1927,17 +1927,41 @@ async function teacherTab(tab) {
   } catch(e) { c.innerHTML = '<div class="empty">Error: ' + e.message + '</div>'; }
 }
 
+// Overview class order: A → Z by default (numeric-aware, so IELTS9 comes
+// before IELTS41), or by creation date. Remembered per browser.
+let _ovSort = (() => { try { return localStorage.getItem('speak_ov_sort') || 'alpha'; } catch (e) { return 'alpha'; } })();
+function setOverviewSort(v) {
+  _ovSort = v;
+  try { localStorage.setItem('speak_ov_sort', v); } catch (e) {}
+  renderTeacherOverview(document.getElementById('teacher-content'));
+}
+function sortOverviewClasses(list) {
+  const name = cl => String(cl.className || cl.classId || '');
+  const byName = (a, b) => name(a).localeCompare(name(b), undefined, { numeric: true, sensitivity: 'base' });
+  if (_ovSort === 'alpha') return list.slice().sort(byName);
+  const dir = _ovSort === 'oldest' ? 1 : -1;
+  // Classes without a CreatedAt (older data) sort as oldest.
+  return list.slice().sort((a, b) => dir * String(a.createdAt || '').localeCompare(String(b.createdAt || '')) || byName(a, b));
+}
+
 async function renderTeacherOverview(c) {
   // Every class at once: Firestore reads are cheap, so no class has to be picked first.
   const res = await gasCall('teacher.getClassStats');
   if (!res.success) { c.innerHTML = '<div class="empty">' + res.error + '</div>'; return; }
-  const stats = res.data || [];
+  const stats = sortOverviewClasses(res.data || []);
   const sum = k => stats.reduce((t, cl) => t + (cl[k] || 0), 0);
   const pct = cl => cl.totalStudents ? Math.round(cl.practiced / cl.totalStudents * 100) : 0;
   c.innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px">
       <h2 style="font-size:1.3rem"><span class="h-ic">${ic('overview')}</span>Overview — all classes</h2>
-      <button class="btn btn-outline btn-sm" onclick="openModal('create-class-modal')">+ New Class</button>
+      <div style="display:flex;gap:8px;align-items:center">
+        <select class="search-inp" style="max-width:170px" aria-label="Sort classes" onchange="setOverviewSort(this.value)">
+          <option value="alpha" ${_ovSort==='alpha'?'selected':''}>Sort: A → Z</option>
+          <option value="newest" ${_ovSort==='newest'?'selected':''}>Sort: Newest first</option>
+          <option value="oldest" ${_ovSort==='oldest'?'selected':''}>Sort: Oldest first</option>
+        </select>
+        <button class="btn btn-outline btn-sm" onclick="openModal('create-class-modal')">+ New Class</button>
+      </div>
     </div>
     <div class="stat-grid">
       <div class="stat-box"><div class="stat-val">${stats.length}</div><div class="stat-lbl">Classes</div></div>
