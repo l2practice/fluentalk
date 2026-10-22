@@ -290,6 +290,7 @@ async function getMyHistory() {
     SessionID: s.SessionID, AssignID: s.AssignID, Topic: s.Topic, Part: s.Part, StartTime: s.StartTime,
     DurationMin: s.DurationMin, AttemptNo: s.AttemptNo, IsMilestone: s.IsMilestone,
     Overall: s.Overall, FC: s.FC, LR: s.LR, GR: s.GR, P: s.P, GradedBy: s.GradedBy,
+    Type: s.Type || '', DocUrl: s.DocUrl || '',
     Deadline: s.AssignID ? (dl[s.AssignID] || '') : ''
   }));
   light.reverse();
@@ -388,7 +389,10 @@ async function saveResult(p) {
       QuestionsJSON: JSON.stringify(p.questionsJSON || []),
       ResultsJSON: JSON.stringify(p.resultsJSON || []),
       ReportText: String(p.reportText || '').substring(0, 8000),
-      Analysis: JSON.stringify(p.analysis || null)
+      Analysis: JSON.stringify(p.analysis || null),
+      // A Test Simulation is kept in Google Docs, not here: Apps Script
+      // builds the Doc from this, then deletes this record.
+      DocPayload: p.docPayload ? JSON.stringify(p.docPayload) : ''
     }));
     tx.set(progRef, { StudentID: u.studentId, StudentName: u.fullName, ClassID: cid, items: { [sid]: light } }, { merge: true });
     if (cid) tx.set(statRef, {

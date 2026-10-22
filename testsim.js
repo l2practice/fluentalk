@@ -690,7 +690,8 @@ async function tsGradeAndSave(answered, missing) {
         scores: r.scores || null, errors: r.errors || [], suggestion: r.suggestion || '', natural: r.natural || '', logic: r.logic || null, seconds: r.secs || 0
       })),
       reportText: buildReport(answered, rpt, graded, attemptNo),
-      analysis: buildAnalysisPayload()
+      analysis: buildAnalysisPayload(),
+      docPayload: tsDocPayload(answered, rpt, { overall, fc, lr, gr, p, graded, gradedBy, gradeError })
     });
     if (saved.success) { A.lastSessionId = saved.sessionId || ''; if (saved.attemptNo) recordedNo = saved.attemptNo; }
     else {
@@ -700,7 +701,119 @@ async function tsGradeAndSave(answered, missing) {
   } catch (e) { toast('Could not save this test: ' + e.message, 'error', 8000); }
   A.retryCount = recordedNo;
   if (!graded) toast('Grading failed — the test was saved without a score', 'error', 8000);
+  A.testDocUrl = ''; A.testDocBusy = !!A.lastSessionId;
   renderResults(answered, rpt, graded, recordedNo, overall, fc, lr, gr, p, gradeError, false, gradedBy, gradedCount);
+  if (A.lastSessionId) tsMakeDoc(A.lastSessionId);
+}
+
+// ── GOOGLE DOCS: the only lasting copy of a test ──
+// The full test goes into one Doc; the app keeps just the attempt line
+// (date, scores, Doc link). Apps Script builds the Doc from the record saved
+// above and then deletes that record.
+async function tsMakeDoc(sessionId, asTeacher) {
+  A.testDocBusy = true; tsDocSlot();
+  try {
+    const res = await gasCall(asTeacher ? 'teacher.exportDoc' : 'speak.exportDoc', { sessionId });
+    if (!res.success) throw new Error(res.error || 'Doc not created');
+    if (!res.testDoc) toast('Apps Script is still running the old Code.gs — paste the new one and deploy a New version so tests move fully into Docs.', 'error', 9000);
+    A.testDocUrl = res.url;
+    clearTabCache();
+    toast('Your test is saved in Google Docs', 'success', 4000);
+  } catch (e) {
+    toast('Could not create the Google Doc yet (' + e.message + '). Press "Create Docs" to try again — your test is kept until then.', 'error', 9000);
+  } finally { A.testDocBusy = false; tsDocSlot(); }
+}
+function tsDocSlotHtml() {
+  if (A.testDocUrl) return `<a class="btn btn-green" href="${_h(A.testDocUrl)}" target="_blank" rel="noopener">📄 Open Docs</a>`;
+  if (A.testDocBusy) return `<button class="btn btn-green" disabled>⏳ Saving to Google Docs…</button>`;
+  return A.lastSessionId ? `<button class="btn btn-green" onclick="tsMakeDoc('${_h(A.lastSessionId)}')">📄 Create Docs</button>` : '';
+}
+function tsDocSlot() { const el = document.getElementById('ts-doc-slot'); if (el) el.innerHTML = tsDocSlotHtml(); }
+// History / teacher: a test opens its own Doc, or builds it if that never happened.
+function tsOpenDoc(url, sessionId, asTeacher) {
+  if (url) { window.open(url, '_blank', 'noopener'); return; }
+  if (sessionId) tsMakeDoc(sessionId, asTeacher).then(() => { if (A.testDocUrl) window.open(A.testDocUrl, '_blank', 'noopener'); });
+}
+
+// Everything the Doc shows, measured on this device: CEFR mix, words by
+// level, words per sentence, sentence types, grammar, delivery, accuracy,
+// collocations, and each answer with its B1+ words coloured by level.
+function tsDocPayload(answered, rpt, g) {
+  const LV = { B1: 1, B2: 1, C1: 1, C2: 1 };
+  const sentStats = text => {
+    const ss = String(text || '').split(/[.!?]+/).map(x => x.trim()).filter(x => /[a-z]/i.test(x));
+    const words = (String(text || '').match(/\b[a-z][a-z'-]*\b/gi) || []).length;
+    return { words, sentences: ss.length, perSentence: ss.length ? Math.round(words / ss.length * 10) / 10 : 0 };
+  };
+  const segments = text => {
+    const out = [];
+    const push = (t, l) => { if (out.length && out[out.length - 1][1] === l) out[out.length - 1][0] += t; else out.push([t, l]); };
+    String(text || '').split(/([A-Za-z][A-Za-z'-]*)/).forEach((part, i) => {
+      if (!part) return;
+      if (i % 2 === 0) { push(part, ''); return; }
+      if (FILLER_RE.test(part)) { FILLER_RE.lastIndex = 0; push(part, 'f'); return; }
+      FILLER_RE.lastIndex = 0;
+      const hit = cefrReady() ? cefrWord(part.toLowerCase()) : null;
+      push(part, hit && CONTENT_POS[hit.pos] && LV[hit.level] ? hit.level : '');
+    });
+    return out;
+  };
+  const lexOf = (text, q) => { try { return typeof LexCoach !== 'undefined' ? LexCoach.analyze(text, q) : null; } catch (e) { return null; } };
+  const colloc = a => a ? {
+    level: a.level ? a.level.label : '', mix: a.level ? a.level.pct : null,
+    used: a.used.concat(a.ielts).map(u => ({ said: u.said, vi: u.vi || '' })).slice(0, 12),
+    suggest: a.suggest.map(x => ({ word: x.word, options: x.options.map(o => o.phrase + (o.vi ? ' (' + o.vi + ')' : '')).slice(0, 3) })).slice(0, 6),
+    overused: a.overused.map(o => ({ word: o.word, n: o.n, alts: o.alts.slice(0, 4) })).slice(0, 6),
+    topic: (a.topic || []).map(t => ({ phrase: t.phrase, vi: t.vi || '', band: t.band || '' })).slice(0, 6)
+  } : null;
+
+  const all = A.langText || answered.map(r => r.studentAnswer).join(' ');
+  const lex = (() => { try { return cefrProfile(all); } catch (e) { return null; } })();
+  const gram = (() => { try { return grammarProfile(all); } catch (e) { return null; } })();
+  const acc = (() => { try { return grammarErrorScan(all); } catch (e) { return null; } })();
+  const st = sentStats(all);
+  const GNAME = { presentCont: 'present continuous', pastCont: 'past continuous', presentPerfect: 'present perfect', pastPerfect: 'past perfect',
+    perfectCont: 'perfect continuous', future: 'future forms', modal: 'modal verbs', passive: 'passive', conditional: 'conditionals',
+    relativeClause: 'relative clauses', comparative: 'comparatives', superlative: 'superlatives', gerundInfin: 'gerund / infinitive patterns',
+    linker: 'linking words', pastSimple: 'past simple' };
+  const f = gram ? gram.features : {};
+  const info = A.testInfo || {};
+  return {
+    v: 1, startTime: TS.t0 || A.t0, durationMin: Math.max(1, Math.round((Date.now() - new Date(TS.t0 || A.t0)) / 60000)),
+    bands: { overall: g.overall || '', fc: g.fc || '', lr: g.lr || '', gr: g.gr || '', p: g.p || '' }, graded: !!g.graded, gradedBy: g.gradedBy || '', gradeError: g.gradeError || '',
+    parts: tsPartBands(answered), missing: info.missing || 0, total: info.total || answered.length, part2Secs: info.part2Secs || 0,
+    profile: {
+      words: st.words, uniqueWords: lex ? lex.uniqueWords : 0, sentences: st.sentences, perSentence: st.perSentence,
+      contentWords: lex ? lex.counted : 0,
+      cefrPct: lex ? lex.pct : null, cefrCounts: lex ? lex.counts : null,
+      levelWords: lex ? { B1: lex.samples.B1, B2: lex.samples.B2, C1: lex.samples.C1, C2: lex.samples.C2 } : null,
+      sentenceTypes: gram ? gram.sentences : null,
+      grammarUsed: Object.keys(GNAME).filter(k => f[k] > 0).map(k => GNAME[k] + ' ×' + f[k]),
+      grammarMissing: ['presentPerfect', 'conditional', 'relativeClause', 'passive', 'comparative', 'pastPerfect'].filter(k => !f[k]).map(k => GNAME[k]),
+      tenseVariety: f.tenseVariety || 0,
+      prosody: A.prosody ? { wpm: A.prosody.wpm, pauses: A.prosody.pauses, longPauses: A.prosody.longPauses, longestPause: A.prosody.longestPause,
+        silencePct: A.prosody.silencePct, mlr: A.prosody.mlr } : null,
+      accuracy: acc ? acc.findings.slice(0, 10).map(x => ({ said: x.snippet.trim(), fix: x.fix, type: x.type })) : [],
+      colloc: colloc(lexOf(all, ''))
+    },
+    report: rpt || null,
+    answers: answered.map(r => {
+      const s2 = sentStats(r.studentAnswer);
+      const lx = (() => { try { return cefrProfile(r.studentAnswer); } catch (e) { return null; } })();
+      const sec = Math.round(r._dur || r.secs || 0);
+      return {
+        part: r.part, topic: r.topic || '', question: String(r.question || '').replace(/^\[[^\]]*\]\s*/, ''),
+        label: r.part === 'part1' ? 'Part 1 · ' + r.topic : r.part === 'part2' ? 'Part 2 · Long turn' : 'Part 3',
+        segments: segments(r.studentAnswer), seconds: r.secs || 0,
+        words: s2.words, sentences: s2.sentences, perSentence: s2.perSentence,
+        wpm: sec ? Math.round(s2.words / sec * 60) : 0,
+        b1plus: lx ? Math.round((lx.pct.B1 + lx.pct.B2 + lx.pct.C1 + lx.pct.C2) * 10) / 10 : null,
+        overall: r.overall || '', scores: r.scores ? { fc: r.scores.fluency?.score, lr: r.scores.lexical?.score, gr: r.scores.grammar?.score, p: r.scores.pronunciation?.score } : null,
+        errors: r.errors || [], suggestion: r.suggestion || '', natural: r.natural || '', logic: r.logic || null,
+        vocab: colloc(lexOf(r.studentAnswer, r.question))
+      };
+    })
+  };
 }
 
 // Band per part, for the results summary.

@@ -3089,7 +3089,10 @@ function showProgressDetail(rowIdx) {
             <div class="qacc-hdr">
               <div class="qa-n">${s.AttemptNo||si+1}</div>
               <div class="qa-q" style="flex:1">${fmtDT(s.StartTime)} · ${s.DurationMin||0} min${s.Late ? ' <span class="badge badge-late">Trễ hạn</span>' : ''}</div>
-              ${s.Overall ? `<div class="qa-band">${s.Overall}</div>
+              ${String(s.Type) === 'test'
+                ? `${s.Overall ? `<div class="qa-band">${s.Overall}</div>` : '<span style="font-size:11px;color:var(--g400)">not graded</span>'}
+                  <button class="btn btn-outline btn-sm" style="color:var(--green-d)" onclick="tsOpenDoc('${_h(s.DocUrl || '')}','${s.SessionID}',true)">📄 Open Docs</button>`
+                : s.Overall ? `<div class="qa-band">${s.Overall}</div>
                 <button class="btn btn-outline btn-sm doc-export-btn" style="color:var(--green-d)" onclick="exportToDoc('${s.SessionID}',true)">📄 Export to Google Doc</button>`
                 : `<span style="font-size:11px;color:var(--g400)">not graded</span>`}
             </div>
@@ -4235,8 +4238,8 @@ async function renderMyHistory(c) {
               <td>
                 ${milestones.length
                   ? `<div style="display:flex;gap:4px;flex-wrap:wrap">${milestones.map(m =>
-                      `<span style="font-size:11px;background:var(--g100);border-radius:6px;padding:2px 8px;white-space:nowrap">
-                        #${m.AttemptNo}: <strong style="color:${scoreColor(m.Overall)}">${m.Overall}</strong>
+                      `<span style="font-size:11px;background:var(--g100);border-radius:6px;padding:2px 8px;white-space:nowrap${m.DocUrl ? ';cursor:pointer' : ''}"${m.DocUrl ? ` title="Open this test's Doc" onclick="tsOpenDoc('${_h(m.DocUrl)}')"` : ''}>
+                        #${m.AttemptNo}: <strong style="color:${scoreColor(m.Overall)}">${m.Overall}</strong>${m.DocUrl ? ' 📄' : ''}
                       </span>`).join('')}</div>`
                   : '<span style="color:var(--g400);font-size:12px">—</span>'}
               </td>
@@ -4245,7 +4248,9 @@ async function renderMyHistory(c) {
               </td>
               <td style="text-align:right;white-space:nowrap">
                 <div style="display:flex;gap:6px;justify-content:flex-end">
-                  ${lastMilestone ? `<button class="btn btn-outline btn-sm" style="color:var(--green-d);font-size:11px" onclick="exportToDoc('${lastMilestone.SessionID}')">📄 Doc</button>` : ''}
+                  ${g.part === 'test'
+                    ? (last => `<button class="btn btn-outline btn-sm" style="color:var(--green-d);font-size:11px" onclick="tsOpenDoc('${_h(last.DocUrl || '')}','${last.SessionID}')">📄 Docs</button>`)(g.sessions[g.sessions.length - 1])
+                    : lastMilestone ? `<button class="btn btn-outline btn-sm" style="color:var(--green-d);font-size:11px" onclick="exportToDoc('${lastMilestone.SessionID}')">📄 Doc</button>` : ''}
                   <button class="btn btn-primary btn-sm" style="font-size:11px" onclick="retryFromGroup(${gi})">Re-try</button>
                 </div>
               </td>
@@ -6023,7 +6028,8 @@ function renderResults(answered, rpt, isMilestone, attemptNo, overall, fc, lr, g
     <div id="next-step-zone" style="margin-top:18px"></div>
 
     <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap">
-      ${isMilestone && A.lastSessionId ? `<button class="btn btn-green doc-export-btn" onclick="exportToDoc()">📄 ${A.mode === 'test' ? 'Open Docs' : 'Export to Google Doc'}</button>` : ''}
+      ${A.mode === 'test' ? `<span id="ts-doc-slot">${gradingPending ? '' : tsDocSlotHtml()}</span>`
+        : isMilestone && A.lastSessionId ? `<button class="btn btn-green doc-export-btn" onclick="exportToDoc()">📄 Export to Google Doc</button>` : ''}
       <button class="btn btn-outline" onclick="SS('S-student');studentTab('history')">📋 My History</button>
     </div>`;
 
