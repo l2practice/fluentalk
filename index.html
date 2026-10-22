@@ -1016,26 +1016,26 @@ svg{flex-shrink:0}
 <div class="modal-overlay" id="clear-data-modal">
   <div class="modal" style="max-width:440px">
     <div class="modal-header">
-      <span class="modal-title">🗑 Clear Session Data</span>
+      <span class="modal-title">🗑 Clear Data — move to Google Docs</span>
       <button class="modal-close" onclick="closeModal('clear-data-modal')">&times;</button>
     </div>
     <div class="modal-body" style="padding:20px">
       <p style="font-size:13px;color:var(--g600);line-height:1.6;margin:0 0 16px">
-        Xóa dữ liệu nặng trong <strong>Sessions</strong> sheet.
-        <strong>SessionIndex</strong> (lịch sử nhẹ) <strong>được giữ nguyên</strong>.
+        Chuyển <strong>nhận xét chi tiết</strong> (transcript, nhận xét AI) sang <strong>Google Docs</strong> để app nhẹ hơn.
+        <strong>Dòng kết quả và điểm được giữ nguyên</strong> trong bảng Result. App vẫn tự làm việc này cho các lượt cũ hơn 30 ngày mỗi đêm.
       </p>
       <div style="display:flex;flex-direction:column;gap:10px">
         <button class="btn btn-outline" style="width:100%;text-align:left;padding:12px 16px" onclick="doClearData(7)">
-          <strong>🗓 Older than 7 days</strong><br><span style="font-size:12px;color:var(--g600)">Xóa sessions cũ hơn 1 tuần</span>
+          <strong>🗓 Older than 7 days</strong><br><span style="font-size:12px;color:var(--g600)">Chuyển các lượt cũ hơn 1 tuần sang Docs</span>
         </button>
         <button class="btn btn-outline" style="width:100%;text-align:left;padding:12px 16px" onclick="doClearData(14)">
-          <strong>🗓 Older than 14 days</strong><br><span style="font-size:12px;color:var(--g600)">Xóa sessions cũ hơn 2 tuần</span>
+          <strong>🗓 Older than 14 days</strong><br><span style="font-size:12px;color:var(--g600)">Chuyển các lượt cũ hơn 2 tuần sang Docs</span>
         </button>
         <button class="btn btn-outline" style="width:100%;text-align:left;padding:12px 16px" onclick="doClearData(21)">
-          <strong>🗓 Older than 21 days</strong><br><span style="font-size:12px;color:var(--g600)">Xóa sessions cũ hơn 3 tuần</span>
+          <strong>🗓 Older than 21 days</strong><br><span style="font-size:12px;color:var(--g600)">Chuyển các lượt cũ hơn 3 tuần sang Docs</span>
         </button>
         <button class="btn" style="width:100%;text-align:left;padding:12px 16px;background:var(--red);color:#fff" onclick="doClearData(0)">
-          <strong>💣 Clear ALL</strong><br><span style="font-size:12px;opacity:.85">Xóa toàn bộ Sessions sheet</span>
+          <strong>📄 Move ALL now</strong><br><span style="font-size:12px;opacity:.85">Chuyển tất cả nhận xét chi tiết sang Docs (điểm vẫn giữ)</span>
         </button>
       </div>
       <div id="clear-result" style="margin-top:14px;font-size:13px;text-align:center"></div>
@@ -3083,7 +3083,7 @@ function showProgressDetail(rowIdx) {
     </div>
     <div style="padding:0 20px 16px">
       <div style="font-size:12px;font-weight:700;color:var(--g600);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">🗣 All Sessions (${row.sessions.length})</div>
-      <div style="font-size:12px;color:var(--g500);margin-bottom:12px">Open the Google Doc on any graded attempt to read the full per-question feedback.</div>
+      <div style="font-size:12px;color:var(--g500);margin-bottom:12px">Scores stay here. Full feedback is in Google Docs — open it on any graded attempt (it moves there automatically after 30 days).</div>
       ${row.sessions.slice().reverse().map((s, si) => `
           <div class="qacc">
             <div class="qacc-hdr">
@@ -3093,7 +3093,9 @@ function showProgressDetail(rowIdx) {
                 ? `${s.Overall ? `<div class="qa-band">${s.Overall}</div>` : '<span style="font-size:11px;color:var(--g400)">not graded</span>'}
                   <button class="btn btn-outline btn-sm" style="color:var(--green-d)" onclick="tsOpenDoc('${_h(s.DocUrl || '')}','${s.SessionID}',true)">📄 Open Docs</button>`
                 : s.Overall ? `<div class="qa-band">${s.Overall}</div>
-                <button class="btn btn-outline btn-sm doc-export-btn" style="color:var(--green-d)" onclick="exportToDoc('${s.SessionID}',true)">📄 Export to Google Doc</button>`
+                ${s.DocUrl ? `<button class="btn btn-outline btn-sm" style="color:var(--green-d)" onclick="tsOpenDoc('${_h(s.DocUrl)}')">📄 Open Docs</button>`
+                  : `<button class="btn btn-outline btn-sm doc-export-btn" style="color:var(--green-d)" onclick="exportToDoc('${s.SessionID}',true)">📄 Export to Google Doc</button>`}`
+                : s.DocUrl ? `<button class="btn btn-outline btn-sm" style="color:var(--green-d)" onclick="tsOpenDoc('${_h(s.DocUrl)}')">📄 Open Docs</button>`
                 : `<span style="font-size:11px;color:var(--g400)">not graded</span>`}
             </div>
           </div>`).join('')}
@@ -3127,7 +3129,9 @@ async function exportSessions() {
   showOverlay('Building your export sheet…');
   try {
     const topics = [_progTopic, _progTopic2, _progTopic3].filter(t => t && t !== '__NONE__' && t !== '__ALL__');
-    const res = await gasCall('teacher.exportSessions', { classId: _progFilter || '', table,
+    // The filters go too: Apps Script adds, for each homework in the export,
+    // the full report (whole roster, status, scores, improvement, Doc links).
+    const res = await gasCall('teacher.exportSessions', { classId: _progFilter || '', table, taskType: _progTaskType, topics, sinceDays: _progDays,
       title: [classNameOf(_progFilter) || _progFilter || 'All classes', topics.length ? topics.join(', ') : ({ homework: 'Homework', jam: 'JAM', free: 'Free', test: 'Test Simulation', all: 'All types' }[_progTaskType] || '')].filter(Boolean).join(' · ') });
     hideOverlay();
     if (!res.success) { toast('Export failed: ' + (res.error || 'unknown error'), 'error', 8000); return; }
@@ -3381,16 +3385,16 @@ async function deleteClassData() {
   const cls = _teacherClasses.find(c => c.ClassID === classId);
   const name = cls?.ClassName || classId;
   if (!confirm(`⚠️ Đóng và xoá toàn bộ data luyện tập của lớp ${name}?\n\n` +
-      `• Mỗi sinh viên có Google Doc nhận xét + email tổng kết (bằng chứng bài làm)\n` +
-      `• Bạn nhận email kèm bảng tổng kết Google Sheet cho từng bài\n` +
+      `• Nhận xét chi tiết được chuyển vào Google Docs của từng sinh viên\n` +
       `• Mọi lượt nói được lưu vào tab Archive của Google Sheet chính\n` +
-      `• Sau đó data của lớp được xoá khỏi app\n\nViệc này chạy nền vài phút. Không thể hoàn tác.`)) return;
+      `• Sau đó các dòng kết quả của lớp bị xoá khỏi app (không gửi email)\n\n` +
+      `Nên bấm Export to Sheet trước để giữ bảng báo cáo đầy đủ.\nViệc này chạy nền vài phút. Không thể hoàn tác.`)) return;
   showOverlay('Đang lên lịch…');
   try {
     const res = await gasCall('teacher.deleteClassData', { classId });
     hideOverlay();
     if (!res.success) { toast('Lỗi: ' + res.error, 'error'); return; }
-    toast(`✓ Đã lên lịch dọn data lớp ${name}. Trong vài phút bạn sẽ nhận email bảng tổng kết; sinh viên nhận email kết quả. Data trong app được xoá sau khi gửi email xong.`, 'success', 12000);
+    toast(`✓ Đã lên lịch dọn data lớp ${name}. Trong vài phút nhận xét được chuyển sang Google Docs, rồi data của lớp được xoá khỏi app.`, 'success', 12000);
     _progLoaded = false;
     _progReload = false;
     teacherTab('progress');
@@ -3403,15 +3407,21 @@ function openClearDataModal() {
 }
 
 async function doClearData(days) {
-  const label = days > 0 ? `sessions cũ hơn ${days} ngày` : 'TOÀN BỘ sessions';
-  if (!confirm(`⚠️ Xóa ${label}?\nSessionIndex giữ nguyên. Không thể hoàn tác.`)) return;
+  const label = days > 0 ? `các lượt cũ hơn ${days} ngày` : 'TẤT CẢ các lượt';
+  if (!confirm(`Chuyển nhận xét chi tiết của ${label} sang Google Docs ngay bây giờ?\nDòng kết quả và điểm vẫn giữ trong app. Free practice cũ thì bị xoá phần chi tiết.`)) return;
   const box = document.getElementById('clear-result');
-  if (box) box.innerHTML = '<div class="spinner" style="width:20px;height:20px;display:inline-block;vertical-align:middle"></div> Đang xóa…';
+  if (box) box.innerHTML = '<div class="spinner" style="width:20px;height:20px;display:inline-block;vertical-align:middle"></div> Đang chuyển sang Google Docs… (có thể vài phút)';
   document.querySelectorAll('#clear-data-modal button').forEach(b => b.disabled = true);
   try {
     const res = await gasCall('teacher.clearOldData', { days });
     if (!res.success) { if (box) box.innerHTML = '<span style="color:var(--red-d)">Lỗi: ' + res.error + '</span>'; }
-    else { if (box) box.innerHTML = `<span style="color:var(--green-d)">✓ Đã xóa <strong>${res.deleted}</strong> sessions.</span>`; toast('Cleared ' + res.deleted + ' sessions', 'success'); }
+    else if (res.moved == null) { if (box) box.innerHTML = '<span style="color:var(--red-d)">Apps Script vẫn chạy Code.gs cũ (đã xoá ' + res.deleted + ' lượt, không chuyển Docs). Hãy dán Code.gs mới và Deploy New version.</span>'; }
+    else {
+      if (box) box.innerHTML = `<span style="color:var(--green-d)">✓ Đã chuyển <strong>${res.moved}</strong> lượt sang Google Docs (Homework ${res.homework} · JAM ${res.jam} · Test ${res.tests})` +
+        (res.deleted ? `, xoá chi tiết ${res.deleted} lượt free practice` : '') + '.</span>' +
+        (res.unfinished ? '<div style="color:var(--gold-d);margin-top:4px">Còn một phần chưa xong — bấm lại, hoặc để job ban đêm làm tiếp.</div>' : '');
+      toast('Moved ' + res.moved + ' attempts to Google Docs', 'success');
+    }
   } catch(e) { if (box) box.innerHTML = '<span style="color:var(--red-d)">Lỗi: ' + e.message + '</span>'; }
   document.querySelectorAll('#clear-data-modal button').forEach(b => b.disabled = false);
 }
@@ -4250,7 +4260,8 @@ async function renderMyHistory(c) {
                 <div style="display:flex;gap:6px;justify-content:flex-end">
                   ${g.part === 'test'
                     ? (last => `<button class="btn btn-outline btn-sm" style="color:var(--green-d);font-size:11px" onclick="tsOpenDoc('${_h(last.DocUrl || '')}','${last.SessionID}')">📄 Docs</button>`)(g.sessions[g.sessions.length - 1])
-                    : lastMilestone ? `<button class="btn btn-outline btn-sm" style="color:var(--green-d);font-size:11px" onclick="exportToDoc('${lastMilestone.SessionID}')">📄 Doc</button>` : ''}
+                    : lastMilestone ? `<button class="btn btn-outline btn-sm" style="color:var(--green-d);font-size:11px" onclick="${lastMilestone.DocUrl ? `tsOpenDoc('${_h(lastMilestone.DocUrl)}')` : `exportToDoc('${lastMilestone.SessionID}')`}">📄 Doc</button>`
+                    : (url => url ? `<button class="btn btn-outline btn-sm" style="color:var(--green-d);font-size:11px" onclick="tsOpenDoc('${_h(url)}')">📄 Doc</button>` : '')(g.sessions.map(x => x.DocUrl).filter(Boolean).pop())}
                   <button class="btn btn-primary btn-sm" style="font-size:11px" onclick="retryFromGroup(${gi})">Re-try</button>
                 </div>
               </td>
