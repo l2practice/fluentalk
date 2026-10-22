@@ -775,12 +775,24 @@ async function tsGradeAndSave(answered, missing) {
 
 // Grading failed: mark the same answers again (no need to sit the test
 // again), put the bands on the attempt line and make a new Doc.
-async function tsRegrade() {
+async function tsRegrade(btn) {
+  if (A.testRegrading) return;              // already marking: ignore extra clicks
   const answered = A.testAnswered;
   if (!answered || !A.lastSessionId) { toast('Nothing to grade — this test is no longer open on this page.', 'error'); return; }
-  if (A.testDocBusy) { toast('Wait until the Google Doc is saved, then press Grade again.', 'info'); return; }
+  A.testRegrading = true;
+  const spin = '<span class="spinner" style="width:15px;height:15px;border-width:2px;margin:0 6px 0 0;display:inline-block;vertical-align:-3px"></span>';
+  if (btn) { btn.disabled = true; btn.innerHTML = spin + 'Grading… please wait'; }
+  try {
+    // The Doc of the unmarked test may still be saving; marking waits for it.
+    while (A.testDocBusy) { if (btn) btn.innerHTML = spin + 'Saving your test first…'; await new Promise(r => setTimeout(r, 500)); }
+    await tsRegradeNow(answered);
+  } finally { A.testRegrading = false; }
+}
+async function tsRegradeNow(answered) {
   const no = A.retryCount;
   renderResults(answered, null, false, no, null, null, null, null, null, '', true);
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  setGradingStatus('Grading again — this takes about a minute. Please keep this page open.');
   // Only the parts still unmarked go back to the grader.
   const todo = ['part1', 'part2', 'part3'].filter(p => answered.some(r => r.part === p && !r.scores));
   const col = await tsCollectGrades(todo);

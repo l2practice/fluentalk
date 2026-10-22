@@ -6000,7 +6000,7 @@ function renderResults(answered, rpt, isMilestone, attemptNo, overall, fc, lr, g
       <div style="font-weight:700;color:var(--gold-d)">⏳ The AI grader was busy — this attempt wasn't scored</div>
       ${A.mode === 'test' ? `<p style="margin-top:6px;font-size:13px;color:var(--gold-d);line-height:1.7">Your test and the measurements below were saved. Press <strong>Grade again</strong> to mark the same answers — you do not need to sit the test again.</p>
       <p style="margin-top:8px;font-size:13px;color:var(--gold-d);line-height:1.7;font-style:italic">Bài thi đã được lưu nhưng AI chưa chấm được. Bấm Grade again để chấm lại chính bài này, không cần thi lại.</p>
-      <button class="btn btn-primary btn-sm" style="margin-top:10px" onclick="tsRegrade()">🔄 Grade again</button>`
+      <button class="btn btn-primary btn-sm" style="margin-top:10px" onclick="tsRegrade(this)">🔄 Grade again</button>`
       : `<p style="margin-top:6px;font-size:13px;color:var(--gold-d);line-height:1.7">Your answers and the measurements below were saved. The AI is temporarily overloaded, so no band was given this time. <strong>Practise once more and your next attempt will be graded</strong> — you won't lose this milestone.</p>
       <p style="margin-top:8px;font-size:13px;color:var(--gold-d);line-height:1.7;font-style:italic">Lượt luyện tập đã được ghi nhận nhưng chưa thể chấm điểm vì phản hồi từ AI đang bị nghẽn. Hãy luyện tập thêm 1 lần nữa để AI chấm.</p>`}
       <details style="margin-top:8px"><summary style="font-size:11px;color:var(--g500);cursor:pointer">Technical detail</summary>
