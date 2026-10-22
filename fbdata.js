@@ -408,6 +408,32 @@ async function saveResult(p) {
   return res;
 }
 
+// A Test Simulation whose grading failed, graded again: the scores go onto
+// its attempt line, and the test is stored once more (DocPayload) so Apps
+// Script makes a new Doc with the bands and feedback.
+async function regradeTest(p) {
+  const u = await me();
+  const sid = String(p.sessionId || '');
+  const progRef = fs.doc('progress/' + u.uid);
+  const it = (((await progRef.get()).data() || {}).items || {})[sid];
+  if (!it || !(String(it.Type) === 'test' || String(it.Part) === 'test')) return fail('Test not found.');
+  // The rules let a student read only their own record, and a deleted one
+  // has no owner, so "permission denied" here means it is gone.
+  let waiting = false;
+  try { waiting = (await fs.doc('sessions/' + sid).get()).exists; } catch (e) { if (e.code !== 'permission-denied') throw e; }
+  if (waiting) return fail('This test is still waiting for its Google Doc — press Create Docs first, then grade again.');
+  const F = k => new firebase.firestore.FieldPath('items', sid, k);
+  await progRef.update(F('Overall'), p.overall || '', F('FC'), p.fc || '', F('LR'), p.lr || '', F('GR'), p.gr || '', F('P'), p.p || '',
+    F('IsMilestone'), p.overall ? 'true' : 'false', F('GradedBy'), p.gradedBy || '', F('DocUrl'), '');
+  await fs.doc('sessions/' + sid).set(Object.assign({}, it, {
+    Overall: p.overall || '', FC: p.fc || '', LR: p.lr || '', GR: p.gr || '', P: p.p || '', IsMilestone: p.overall ? 'true' : 'false',
+    GradedBy: p.gradedBy || '', DocUrl: '', uid: u.uid, QuestionsJSON: '[]', ResultsJSON: '[]', Analysis: 'null',
+    ReportText: String(p.reportText || '').substring(0, 8000), DocPayload: JSON.stringify(p.docPayload || {})
+  }));
+  forget('progress');
+  return ok({ sessionId: sid });
+}
+
 // The student extends themselves to the assignment's "allow extension until"
 // time. No reason, no teacher approval, no email: the teacher decided in
 // advance by setting that time. The rules check the value and the clock.
@@ -764,7 +790,7 @@ const ACTIONS = {
   'student.getOverview': getOverview, 'student.getHomework': getHomework, 'student.getMyHistory': getMyHistory,
   'student.getPeerComparison': getPeerComparison, 'student.getJamTopics': getJamTopics,
   'student.requestExtension': selfExtend, 'student.selfExtend': selfExtend,
-  'speak.findExisting': findExisting, 'speak.saveResult': saveResult,
+  'speak.findExisting': findExisting, 'speak.saveResult': saveResult, 'speak.regradeTest': regradeTest,
   'teacher.getClasses': getClasses, 'teacher.createClass': createClass,
   'teacher.setClassStatus': setClassStatus, 'teacher.archiveClass': p => setClassStatus({ classId: p.classId, status: 'Archived' }),
   'teacher.getStudents': getStudents, 'teacher.activateUser': activateUser,

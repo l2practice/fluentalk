@@ -303,6 +303,7 @@ async function tsRun() {
   tsNotes(true);
   await tsRing(TS_PREP_SEC, 'Preparation');
   await tsSay(TS_SCRIPT.p2Go);
+  tsHideCard(true);          // as in the exam room: talk from your notes
   await tsAnswer({ part: 'part2', topic: P.card.cue, question: [P.card.cue].concat(P.card.points).join('\n'), max: TS_LONG_TURN_SEC, ring: true });
   tsNotes(false);
   await tsSay(TS_SCRIPT.p2End);
@@ -481,7 +482,9 @@ function tsOpenStage() {
           <svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="52" class="ts-ring-bg"/><circle cx="60" cy="60" r="52" class="ts-ring-fg" id="ts-ring-fg"/></svg>
           <div class="ts-ring-in"><div class="ts-ring-num" id="ts-ring-num">60</div><div class="ts-ring-lbl" id="ts-ring-lbl"></div></div>
         </div>
-        <textarea class="ts-notes" id="ts-notes" style="display:none" placeholder="Your notes (only you see them)…"></textarea>
+        <div class="ts-notes" id="ts-notes" style="display:none">
+          ${[1, 2, 4, 3].map(n => `<label class="ts-note"><span>${n}</span><textarea aria-label="Note ${n}"></textarea></label>`).join('')}
+        </div>
       </div>
       <div class="ts-rec" id="ts-rec" style="display:none">
         <span class="ts-dot"></span><span>Recording</span><span id="ts-rec-time" class="ts-time">0:00</span>
@@ -526,12 +529,30 @@ function tsShowCard(card) {
   if (!el) return;
   el.className = 'ts-q ts-card';
   el.style.display = '';
-  el.innerHTML = `<div class="ts-card-lbl">Candidate task card</div><div class="ts-card-cue">${_h(card.cue)}</div>` +
-    (card.points.length ? `<div class="ts-card-pts">${card.points.map(p => `<div>${_h(p)}</div>`).join('')}</div>` : '');
+  el.innerHTML = `<div class="ts-card-top"><div class="ts-card-lbl">Candidate task card</div>
+      <button class="ts-card-btn" id="ts-card-toggle" onclick="tsToggleCard()">🙈 Hide question</button></div>
+    <div class="ts-card-body"><div class="ts-card-cue">${_h(card.cue)}</div>` +
+    (card.points.length ? `<div class="ts-card-pts">${card.points.map(p => `<div>${_h(p)}</div>`).join('')}</div>` : '') + `</div>
+    <div class="ts-card-gone">The task card is put away while you speak, as in the real test. Use your notes.</div>`;
 }
+// Part 2 notes: four boxes, numbered clockwise (1 2 / 4 3), one per point.
 function tsNotes(on) {
   const n = document.getElementById('ts-notes');
-  if (n) { n.style.display = on ? '' : 'none'; if (on) n.value = ''; }
+  if (!n) return;
+  n.style.display = on ? '' : 'none';
+  if (on) n.querySelectorAll('textarea').forEach(t => { t.value = ''; });
+}
+// The task card disappears once the long turn starts; the student can peek.
+function tsHideCard(hide) {
+  const el = document.getElementById('ts-q');
+  if (!el || !el.classList.contains('ts-card')) return;
+  el.classList.toggle('ts-card-hidden', hide);
+  const b = document.getElementById('ts-card-toggle');
+  if (b) b.textContent = hide ? '👁 Show question' : '🙈 Hide question';
+}
+function tsToggleCard() {
+  const el = document.getElementById('ts-q');
+  if (el) tsHideCard(!el.classList.contains('ts-card-hidden'));
 }
 function tsRecUI(on, label) {
   const r = document.getElementById('ts-rec'), b = document.getElementById('ts-done'), h = document.getElementById('ts-hint'), l = document.getElementById('ts-done-lbl');
@@ -702,8 +723,31 @@ async function tsGradeAndSave(answered, missing) {
   A.retryCount = recordedNo;
   if (!graded) toast('Grading failed — the test was saved without a score', 'error', 8000);
   A.testDocUrl = ''; A.testDocBusy = !!A.lastSessionId;
+  A.testAnswered = answered;
   renderResults(answered, rpt, graded, recordedNo, overall, fc, lr, gr, p, gradeError, false, gradedBy, gradedCount);
   if (A.lastSessionId) tsMakeDoc(A.lastSessionId);
+}
+
+// Grading failed: mark the same answers again (no need to sit the test
+// again), put the bands on the attempt line and make a new Doc.
+async function tsRegrade() {
+  const answered = A.testAnswered;
+  if (!answered || !A.lastSessionId) { toast('Nothing to grade — this test is no longer open on this page.', 'error'); return; }
+  if (A.testDocBusy) { toast('Wait until the Google Doc is saved, then press Grade again.', 'info'); return; }
+  const no = A.retryCount;
+  renderResults(answered, null, false, no, null, null, null, null, null, '', true);
+  let rpt = null, gradedBy = '', gradedCount = 0;
+  try { ({ rpt, gradedBy, gradedCount } = await gradeAnswers(answered, 'test')); }
+  catch (e) { renderResults(answered, null, false, no, '', '', '', '', '', e.message || String(e), false); return; }
+  const fc = avg(answered, 'fluency'), lr = avg(answered, 'lexical'), gr = avg(answered, 'grammar'), p = avg(answered, 'pronunciation');
+  const overall = calcOverall(fc, lr, gr, p);
+  const res = await gasCall('speak.regradeTest', { sessionId: A.lastSessionId, overall, fc, lr, gr, p, gradedBy,
+    reportText: buildReport(answered, rpt, true, no),
+    docPayload: tsDocPayload(answered, rpt, { overall, fc, lr, gr, p, graded: true, gradedBy, gradeError: '' }) });
+  if (!res.success) toast('Graded, but the score could not be saved: ' + res.error, 'error', 9000);
+  A.testDocUrl = ''; A.testDocBusy = !!res.success;
+  renderResults(answered, rpt, true, no, overall, fc, lr, gr, p, '', false, gradedBy, gradedCount);
+  if (res.success) { clearTabCache(); tsMakeDoc(A.lastSessionId); }
 }
 
 // ── GOOGLE DOCS: the only lasting copy of a test ──
@@ -912,7 +956,17 @@ body.ts-lock{overflow:hidden}
 .ts-ring-in{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
 .ts-ring-num{font-size:2.2rem;font-weight:800;color:var(--ink-strong);line-height:1}
 .ts-ring-lbl{font-size:11px;color:var(--g500);margin-top:4px;text-transform:uppercase;letter-spacing:.08em}
-.ts-notes{flex:1;min-width:240px;max-width:420px;height:150px;background:var(--white);color:var(--ink-strong);border:1px dashed var(--line2);border-radius:14px;padding:12px 14px;font:inherit;font-size:14px;resize:none}
+.ts-notes{flex:1;min-width:260px;max-width:560px;display:grid;grid-template-columns:1fr 1fr;border:1.5px solid var(--ink-strong);border-radius:10px;overflow:hidden;background:var(--white)}
+.ts-note{position:relative;display:block;border-right:1px solid var(--line2);border-bottom:1px solid var(--line2)}
+.ts-note:nth-child(2n){border-right:none}.ts-note:nth-child(n+3){border-bottom:none}
+.ts-note span{position:absolute;top:6px;left:10px;font-weight:700;font-size:15px;color:var(--ink-strong);pointer-events:none}
+.ts-note textarea{display:block;width:100%;height:110px;border:none;outline:none;resize:none;background:transparent;color:var(--ink-strong);font:inherit;font-size:14px;line-height:1.5;padding:28px 10px 8px}
+.ts-note textarea:focus{background:rgba(var(--acc-rgb),.05)}
+.ts-card-top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
+.ts-card-top .ts-card-lbl{margin:0}
+.ts-card-btn{background:none;border:1px solid var(--line2);border-radius:999px;padding:4px 12px;font:inherit;font-size:12px;color:var(--g600);cursor:pointer}
+.ts-card-gone{display:none;font-size:14px;color:var(--g500);font-style:italic}
+.ts-card-hidden .ts-card-body{display:none}.ts-card-hidden .ts-card-gone{display:block}
 .ts-rec{display:flex;align-items:center;gap:10px;font-weight:700;color:var(--red-d);background:var(--red-l);border-radius:999px;padding:8px 16px}
 .ts-dot{width:10px;height:10px;border-radius:50%;background:var(--red);animation:tsBlink 1s infinite}
 .ts-time{font-variant-numeric:tabular-nums;color:var(--ink-strong)}
