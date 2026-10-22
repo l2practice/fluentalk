@@ -5224,6 +5224,12 @@ async function gemFetch(sys, usr, attempt, jsonMode, noThinkCfg) {
   const cand = j.candidates?.[0];
   const text = (cand?.content?.parts || []).map(p => p.text || '').join('').trim();
 
+  // A JSON reply cut off at the output limit cannot be parsed, so treat it
+  // like an empty one: retry without reasoning, then with the larger model.
+  if (text && jsonMode && cand?.finishReason === 'MAX_TOKENS') {
+    if (!noThinkCfg) return gemFetch(sys, usr, attempt, jsonMode, true);
+    if (attempt === 1) return gemFetch(sys, usr, 2, jsonMode, true);
+  }
   if (!text) {
     const why = cand?.finishReason || 'unknown';
     // MAX_TOKENS with an empty body means reasoning consumed the whole budget
@@ -5563,60 +5569,110 @@ async function prepareAnalysis(answered) {
 
 // Marks `answered` in place (scores, errors, rewrites) and returns the
 // session report. Throws when neither grader produced a usable reply.
+// Long sets (a full test) are marked in chunks of at most GRADE_CHUNK answers:
+// one reply for 17 answers runs into the output limit and comes back cut off,
+// and the backup grader's free tier cannot take that much in one minute.
+const GRADE_CHUNK = 8;
+function gradeChunks(answered, part) {
+  const idx = answered.map((_, i) => i);
+  if (idx.length <= GRADE_CHUNK) return [idx];
+  // A test keeps Part 1 apart from Part 2 + 3 (the discussion follows the card).
+  const groups = part === 'test'
+    ? [idx.filter(i => answered[i].part === 'part1'), idx.filter(i => answered[i].part !== 'part1')].filter(g => g.length)
+    : [idx];
+  const out = [];
+  groups.forEach(g => {
+    const n = Math.ceil(g.length / GRADE_CHUNK), size = Math.ceil(g.length / n);
+    for (let i = 0; i < g.length; i += size) out.push(g.slice(i, i + size));
+  });
+  return out;
+}
+// One session report from the chunks' reports.
+function mergeReports(rs) {
+  rs = rs.filter(Boolean);
+  if (rs.length < 2) return rs[0] || null;
+  const uniq = a => [...new Set(a)];
+  const all = k => rs.flatMap(r => r[k] || []);
+  return {
+    good: uniq(all('good')), phrasalVerbs: uniq(all('phrasalVerbs')), idioms: uniq(all('idioms')),
+    collocations: { strong: uniq(rs.flatMap(r => r.collocations?.strong || [])), off: rs.flatMap(r => r.collocations?.off || []) },
+    logic: rs.map(r => r.logic).filter(Boolean).join(' '),
+    weak: uniq(rs.map(r => r.weak).filter(Boolean)).join(' · '),
+    adv: rs.map(r => r.adv).filter(Boolean).join('\n\n'),
+    up: rs.map(r => r.up).filter(Boolean).pop() || '',
+    flags: Object.assign({}, ...rs.map(r => r.flags || {}))
+  };
+}
+
+// Marks `answered` in place (scores, errors, rewrites) and returns the
+// session report. Throws when neither grader produced a usable reply.
 async function gradeAnswers(answered, part) {
   let gradedBy = '';
-  const qaBlock = answered.map((r, i) => {
-    const kw = (r.keywords || []).join(', ');
-    const ot = (r.overtimeSec > 0)
-      ? `\n[TIMING: candidate spoke ~${Math.round((120 + r.overtimeSec))}s — ${r.overtimeSec}s OVER the 2-minute Part 2 limit]`
-      : '';
-    return `Q${i+1}: "${r.question}"\nA${i+1}: "${r.studentAnswer}"${kw ? '\nKeywords: ' + kw : ''}${ot}`;
-  }).join('\n\n');
-  const prompt = buildGradePrompt(qaBlock, answered.length, A.langEvidence, part);
-  const sys    = 'IELTS Speaking examiner. Return ONLY valid JSON.';
+  const sys = 'IELTS Speaking examiner. Return ONLY valid JSON.';
 
-  const want = answered.length;
-  let parsed = null;
-
+  // A reply that does not parse, or has no "qs", is a failure like any other:
+  // try the larger Gemini model, then the backup grader.
+  const usable = out => { if (!out || !Array.isArray(out.qs) || !out.qs.length) throw new Error('the reply was cut off or was not valid JSON'); return out; };
   async function attempt(p) {
-    try {
-      setGradingStatus('Gemini is marking your answers…');
-      const out = _parseGradeJSON(await gemFetch(sys, p, 1, true));
-      gradedBy = GM;
-      return out;
-    } catch (eGem) {
-      console.warn('Gemini grading failed:', eGem);
-      // Groq meters chat models separately from Whisper, so falling back
-      // here does not consume transcription quota.
-      if (!A.groqKey) throw eGem;
-      setGradingStatus('Gemini unavailable — trying the backup grader…');
+    let eGem;
+    for (const k of [1, 2]) {
       try {
-        const out = _parseGradeJSON(await groqGrade(sys, p));
-        gradedBy = GROQ_GRADE_MODEL;
+        setGradingStatus(k === 1 ? 'Gemini is marking your answers…' : 'Asking Gemini again with the larger model…');
+        const out = usable(_parseGradeJSON(await gemFetch(sys, p, k, true)));
+        gradedBy = k === 1 ? GM : GM2;
         return out;
-      } catch (eGroq) {
-        console.warn('Groq grading failed:', eGroq);
-        throw new Error(eGem.message + '  ·  backup: ' + eGroq.message);
-      }
+      } catch (e) { eGem = e; console.warn('Gemini grading failed (' + k + '):', e); }
+    }
+    // Groq meters chat models separately from Whisper, so falling back
+    // here does not consume transcription quota.
+    if (!A.groqKey) throw eGem;
+    setGradingStatus('Gemini unavailable — trying the backup grader…');
+    try {
+      const out = usable(_parseGradeJSON(await groqGrade(sys, p)));
+      gradedBy = GROQ_GRADE_MODEL;
+      return out;
+    } catch (eGroq) {
+      console.warn('Groq grading failed:', eGroq);
+      throw new Error('Gemini: ' + eGem.message + '  ·  backup: ' + eGroq.message);
     }
   }
 
-  parsed = await attempt(prompt);
-
-  // Models sometimes return one object because the schema example showed
-  // one. Ask again, naming the shortfall, before accepting a partial mark.
-  if (parsed?.qs && parsed.qs.length < want) {
-    console.warn('Grader returned ' + parsed.qs.length + ' of ' + want + ' — retrying');
-    setGradingStatus(`Only ${parsed.qs.length} of ${want} answers came back — asking again…`);
-    try {
-      const retry = await attempt(prompt +
-        `\n\nYour previous reply contained only ${parsed.qs.length} object(s) in "qs". ` +
-        `That is incomplete. Return all ${want}, one per question, in order.`);
-      if (retry?.qs && retry.qs.length > parsed.qs.length) parsed = retry;
-    } catch (eRetry) { console.warn('Retry failed:', eRetry); }
+  async function gradeOne(list) {
+    const qaBlock = list.map((r, i) => {
+      const kw = (r.keywords || []).join(', ');
+      const ot = (r.overtimeSec > 0)
+        ? `\n[TIMING: candidate spoke ~${Math.round((120 + r.overtimeSec))}s — ${r.overtimeSec}s OVER the 2-minute Part 2 limit]`
+        : '';
+      return `Q${i+1}: "${r.question}"\nA${i+1}: "${r.studentAnswer}"${kw ? '\nKeywords: ' + kw : ''}${ot}`;
+    }).join('\n\n');
+    const prompt = buildGradePrompt(qaBlock, list.length, A.langEvidence, part);
+    const want = list.length;
+    let parsed = await attempt(prompt);
+    // Models sometimes return one object because the schema example showed
+    // one. Ask again, naming the shortfall, before accepting a partial mark.
+    if (parsed.qs.length < want) {
+      console.warn('Grader returned ' + parsed.qs.length + ' of ' + want + ' — retrying');
+      setGradingStatus(`Only ${parsed.qs.length} of ${want} answers came back — asking again…`);
+      try {
+        const retry = await attempt(prompt +
+          `\n\nYour previous reply contained only ${parsed.qs.length} object(s) in "qs". ` +
+          `That is incomplete. Return all ${want}, one per question, in order.`);
+        if (retry.qs.length > parsed.qs.length) parsed = retry;
+      } catch (eRetry) { console.warn('Retry failed:', eRetry); }
+    }
+    return parsed;
   }
 
-  if (!parsed?.qs || !parsed.qs.length) throw new Error('Grader returned malformed JSON');
+  const chunks = gradeChunks(answered, part), marks = [], reports = [];
+  for (let c = 0; c < chunks.length; c++) {
+    const list = chunks[c].map(i => answered[i]);
+    const parsed = await gradeOne(list);
+    if (chunks.length > 1) setGradingStatus(`Marked ${c + 1} of ${chunks.length} sections…`);
+    chunks[c].forEach((ai, k) => { if (parsed.qs[k]) marks[ai] = parsed.qs[k]; });
+    reports.push(parsed.r);
+  }
+  const parsed = { qs: marks, r: mergeReports(reports) };
+  const want = answered.length;
 
   // Teacher-set encouragement offset. Applied to all four criteria, never
   // to a subset: lifting three of them would leave the fourth looking like
@@ -5651,7 +5707,7 @@ async function gradeAnswers(answered, part) {
   };
 
   parsed.qs.forEach((g, i) => {
-    if (!answered[i]) return;
+    if (!g || !answered[i]) return;
     const sc = {
       fluency:      { score: capped(lift(g.fc || g.fluency), 'fc') },
       lexical:      { score: capEcho(lift(g.lr || g.lexical), answered[i]) },
@@ -5673,7 +5729,7 @@ async function gradeAnswers(answered, part) {
       relevant: g.logic.relevant !== false, logical: g.logic.logical !== false, note: String(g.logic.note || '')
     } : null;
   });
-  return { rpt: parsed.r || null, gradedBy, gradedCount: Math.min(parsed.qs.length, want) };
+  return { rpt: parsed.r || null, gradedBy, gradedCount: Math.min(parsed.qs.filter(Boolean).length, want) };
 }
 
 async function finishSession() {
@@ -5939,8 +5995,11 @@ function renderResults(answered, rpt, isMilestone, attemptNo, overall, fc, lr, g
 
     ${gradeError ? `<div class="card" style="background:var(--gold-l);border-color:var(--gold)">
       <div style="font-weight:700;color:var(--gold-d)">⏳ The AI grader was busy — this attempt wasn't scored</div>
-      <p style="margin-top:6px;font-size:13px;color:var(--gold-d);line-height:1.7">Your answers and the measurements below were saved. The AI is temporarily overloaded, so no band was given this time. <strong>Practise once more and your next attempt will be graded</strong> — you won't lose this milestone.</p>
-      <p style="margin-top:8px;font-size:13px;color:var(--gold-d);line-height:1.7;font-style:italic">Lượt luyện tập đã được ghi nhận nhưng chưa thể chấm điểm vì phản hồi từ AI đang bị nghẽn. Hãy luyện tập thêm 1 lần nữa để AI chấm.</p>
+      ${A.mode === 'test' ? `<p style="margin-top:6px;font-size:13px;color:var(--gold-d);line-height:1.7">Your test and the measurements below were saved. Press <strong>Grade again</strong> to mark the same answers — you do not need to sit the test again.</p>
+      <p style="margin-top:8px;font-size:13px;color:var(--gold-d);line-height:1.7;font-style:italic">Bài thi đã được lưu nhưng AI chưa chấm được. Bấm Grade again để chấm lại chính bài này, không cần thi lại.</p>
+      <button class="btn btn-primary btn-sm" style="margin-top:10px" onclick="tsRegrade()">🔄 Grade again</button>`
+      : `<p style="margin-top:6px;font-size:13px;color:var(--gold-d);line-height:1.7">Your answers and the measurements below were saved. The AI is temporarily overloaded, so no band was given this time. <strong>Practise once more and your next attempt will be graded</strong> — you won't lose this milestone.</p>
+      <p style="margin-top:8px;font-size:13px;color:var(--gold-d);line-height:1.7;font-style:italic">Lượt luyện tập đã được ghi nhận nhưng chưa thể chấm điểm vì phản hồi từ AI đang bị nghẽn. Hãy luyện tập thêm 1 lần nữa để AI chấm.</p>`}
       <details style="margin-top:8px"><summary style="font-size:11px;color:var(--g500);cursor:pointer">Technical detail</summary>
         <div style="margin-top:6px;font-family:var(--fm);font-size:11px;background:var(--white);border-radius:6px;padding:8px 10px;color:var(--g700);word-break:break-word">${gradeError}</div>
       </details>
