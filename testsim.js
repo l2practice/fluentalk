@@ -239,7 +239,8 @@ function tsOnInput(now) {
 // ── THE TEST ────────────────────────────────
 const TS_STOP = new Error('ts-stop');
 const TS = { on: false, stopped: false, stream: null, mime: '', ac: null, analyser: null, voice: null,
-             plan: null, recs: [], trq: Promise.resolve(), done: 0, waiters: [], keyBad: false, t0: null, step: 0, steps: 0 };
+             plan: null, recs: [], trq: Promise.resolve(), done: 0, waiters: [], keyBad: false, t0: null, step: 0, steps: 0,
+             grades: {}, reports: {} };
 
 function tsSleep(ms) {
   return new Promise(res => { const t = setTimeout(res, ms); TS.waiters.push(() => { clearTimeout(t); res(); }); });
@@ -260,7 +261,7 @@ async function tsStart() {
   tsUnlockSpeech();
   try { TS.ac = new (window.AudioContext || window.webkitAudioContext)(); TS.ac.resume?.(); } catch (e) { TS.ac = null; }
 
-  Object.assign(TS, { on: true, stopped: false, recs: [], trq: Promise.resolve(), done: 0, waiters: [], keyBad: false, t0: new Date().toISOString() });
+  Object.assign(TS, { on: true, stopped: false, recs: [], trq: Promise.resolve(), done: 0, waiters: [], keyBad: false, t0: new Date().toISOString(), grades: {}, reports: {} });
   TS.plan = tsBuildPlan(r.p1, r.cards, r.pool);
   TS.steps = TS.plan.part1.reduce((n, t) => n + t.qs.length, 0) + 1 + TS.plan.part3.length;
   TS.step = 0;
@@ -293,6 +294,7 @@ async function tsRun() {
       await tsAnswer({ part: 'part1', topic: tp.topic, question: q, max: TS_MAX_ANSWER.part1 });
     }
   }
+  tsQueueGrade('part1');     // marked while the student does Part 2 and 3
 
   tsPart('Part 2', 'Individual long turn');
   TS.step++;
@@ -306,6 +308,7 @@ async function tsRun() {
   tsHideCard(true);          // as in the exam room: talk from your notes
   await tsAnswer({ part: 'part2', topic: P.card.cue, question: [P.card.cue].concat(P.card.points).join('\n'), max: TS_LONG_TURN_SEC, ring: true });
   tsNotes(false);
+  tsQueueGrade('part2');
   await tsSay(TS_SCRIPT.p2End);
 
   tsPart('Part 3', 'Two-way discussion');
@@ -315,6 +318,7 @@ async function tsRun() {
     await tsAsk(q, 'Part 3');
     await tsAnswer({ part: 'part3', topic: P.card.cue, question: q, max: TS_MAX_ANSWER.part3 });
   }
+  tsQueueGrade('part3');
   tsShowQ('');
   await tsSay(TS_SCRIPT.end);
   await tsFinish();
@@ -390,7 +394,10 @@ function tsDone() { if (_tsFinish) _tsFinish(); }
 
 async function tsAnswer(item) {
   tsGuard();
-  const rec = { part: item.part, topic: item.topic || '', question: item.question, studentAnswer: '', keywords: [], _words: [], _dur: 0, secs: 0, err: '' };
+  // Each answer carries its part, so the grader, the results and the Doc
+  // can all tell Part 1 from Part 3.
+  const label = item.part === 'part1' ? '[Part 1 · ' + item.topic + '] ' : item.part === 'part2' ? '[Part 2] ' : '[Part 3] ';
+  const rec = { part: item.part, topic: item.topic || '', label, question: label + item.question, studentAnswer: '', keywords: [], _words: [], _dur: 0, secs: 0, err: '' };
   TS.recs.push(rec);
   let mr;
   try { mr = TS.mime ? new MediaRecorder(TS.stream, { mimeType: TS.mime }) : new MediaRecorder(TS.stream); }
@@ -659,12 +666,6 @@ async function tsFinish() {
   await TS.trq;
   if (Date.now() - shownAt < 3500) await new Promise(r => setTimeout(r, 3500 - (Date.now() - shownAt)));
 
-  // Each answer carries its part, so the grader, the results and the Doc
-  // can all tell Part 1 from Part 3.
-  TS.recs.forEach(r => {
-    r.label = r.part === 'part1' ? '[Part 1 · ' + r.topic + '] ' : r.part === 'part2' ? '[Part 2] ' : '[Part 3] ';
-    r.question = r.label + r.question;
-  });
   const answered = TS.recs.filter(r => (r.studentAnswer || '').trim());
   const missing = TS.recs.length - answered.length;
   tsTeardown();
@@ -675,6 +676,49 @@ async function tsFinish() {
   }
   await tsGradeAndSave(answered, missing);
 }
+
+// ── MARKING, ONE PART AT A TIME ──
+// Each part is marked as soon as its answers are transcribed, while the
+// student goes on with the next part: the wait at the end is only Part 3, and
+// each request is small. A part that fails is tried again at the end.
+const TS_PART_NAME = { part1: 'Part 1', part2: 'Part 2', part3: 'Part 3' };
+function tsQueueGrade(part) {
+  const transcribed = TS.trq;   // this part's answers are all queued before it
+  TS.grades[part] = transcribed.then(() => TS.stopped ? null : tsGradePart(part));
+}
+async function tsGradePart(part) {
+  const list = TS.recs.filter(r => r.part === part && (r.studentAnswer || '').trim());
+  if (!list.length) return null;
+  let ctx = { evidence: '', caps: {} };
+  try {
+    try { await LexCoach.ready(2500); } catch (_) {}
+    list.forEach(r => { r._m = localMetrics(r.studentAnswer); r._echo = questionEcho(r.question.replace(/^\[[^\]]*\]\s*/, ''), r.studentAnswer); });
+    const words = list.reduce((a, r) => a.concat(r._words || []), []), dur = list.reduce((a, r) => a + (r._dur || 0), 0);
+    const la = analyzeLanguage(list.map(r => r.studentAnswer).join(' '), prosodyFrom(words, dur));
+    ctx = { evidence: la.evidence, caps: la.caps || {} };
+  } catch (e) { console.warn('[test] part analysis', e); }
+  // One try here; tsCollectGrades tries a failed part once more at the end,
+  // minutes later, rather than hammering a grader that is overloaded now.
+  try {
+    const g = await gradeAnswers(list, 'test', ctx);
+    TS.reports[part] = g.rpt;
+    return Object.assign({ ok: true, part }, g);
+  } catch (e) { return { ok: false, part, err: e.message || String(e) }; }
+}
+// Waits for the three parts; a part that failed is marked once more now.
+async function tsCollectGrades(only) {
+  const out = { errors: [], gradedBy: '' };
+  for (const part of only || ['part1', 'part2', 'part3']) {
+    setGradingStatus('Marking ' + TS_PART_NAME[part] + '…');
+    let g = !only && TS.grades[part] ? await TS.grades[part] : null;
+    if (!g || !g.ok) g = await tsGradePart(part);
+    if (!g) continue;
+    if (g.ok) { if (!out.gradedBy || !/^gemini/i.test(g.gradedBy)) out.gradedBy = g.gradedBy; }
+    else out.errors.push(TS_PART_NAME[part] + ': ' + g.err);
+  }
+  return out;
+}
+function tsMergedReport() { return mergeReports(['part1', 'part2', 'part3'].map(p => TS.reports[p])); }
 
 async function tsGradeAndSave(answered, missing) {
   A.mode = 'test'; A.topic = TS_TOPIC; A.assignId = ''; A.t0 = TS.t0;
@@ -690,9 +734,10 @@ async function tsGradeAndSave(answered, missing) {
   } catch (e) {}
 
   renderResults(answered, null, false, attemptNo, null, null, null, null, null, '', true);
-  let rpt = null, gradeError = '', gradedBy = '', gradedCount = 0, graded = true;
-  try { ({ rpt, gradedBy, gradedCount } = await gradeAnswers(answered, 'test')); }
-  catch (e) { gradeError = e.message || String(e); graded = false; }
+  const col = await tsCollectGrades();
+  const rpt = tsMergedReport(), gradedBy = col.gradedBy, gradeError = col.errors.join('  ·  ');
+  const graded = !col.errors.length && answered.some(r => r.scores);
+  const gradedCount = answered.filter(r => r.scores).length;
 
   const fc = avg(answered, 'fluency'), lr = avg(answered, 'lexical'), gr = avg(answered, 'grammar'), p = avg(answered, 'pronunciation');
   const overall = calcOverall(fc, lr, gr, p);
@@ -723,7 +768,7 @@ async function tsGradeAndSave(answered, missing) {
   A.retryCount = recordedNo;
   if (!graded) toast('Grading failed — the test was saved without a score', 'error', 8000);
   A.testDocUrl = ''; A.testDocBusy = !!A.lastSessionId;
-  A.testAnswered = answered;
+  A.testAnswered = answered; A.testGradedBy = gradedBy;
   renderResults(answered, rpt, graded, recordedNo, overall, fc, lr, gr, p, gradeError, false, gradedBy, gradedCount);
   if (A.lastSessionId) tsMakeDoc(A.lastSessionId);
 }
@@ -736,9 +781,11 @@ async function tsRegrade() {
   if (A.testDocBusy) { toast('Wait until the Google Doc is saved, then press Grade again.', 'info'); return; }
   const no = A.retryCount;
   renderResults(answered, null, false, no, null, null, null, null, null, '', true);
-  let rpt = null, gradedBy = '', gradedCount = 0;
-  try { ({ rpt, gradedBy, gradedCount } = await gradeAnswers(answered, 'test')); }
-  catch (e) { renderResults(answered, null, false, no, '', '', '', '', '', e.message || String(e), false); return; }
+  // Only the parts still unmarked go back to the grader.
+  const todo = ['part1', 'part2', 'part3'].filter(p => answered.some(r => r.part === p && !r.scores));
+  const col = await tsCollectGrades(todo);
+  if (col.errors.length) { renderResults(answered, null, false, no, '', '', '', '', '', col.errors.join('  ·  '), false); return; }
+  const rpt = tsMergedReport(), gradedBy = col.gradedBy || A.testGradedBy || '', gradedCount = answered.filter(r => r.scores).length;
   const fc = avg(answered, 'fluency'), lr = avg(answered, 'lexical'), gr = avg(answered, 'grammar'), p = avg(answered, 'pronunciation');
   const overall = calcOverall(fc, lr, gr, p);
   const res = await gasCall('speak.regradeTest', { sessionId: A.lastSessionId, overall, fc, lr, gr, p, gradedBy,
