@@ -5606,7 +5606,10 @@ function mergeReports(rs) {
 
 // Marks `answered` in place (scores, errors, rewrites) and returns the
 // session report. Throws when neither grader produced a usable reply.
-async function gradeAnswers(answered, part) {
+// `ctx` ({ evidence, caps }) replaces the session-wide measurements when only
+// part of a session is marked (a Test Simulation part, marked during the test).
+async function gradeAnswers(answered, part, ctx) {
+  const EVIDENCE = ctx ? ctx.evidence : A.langEvidence;
   let gradedBy = '';
   const sys = 'IELTS Speaking examiner. Return ONLY valid JSON.';
 
@@ -5645,7 +5648,7 @@ async function gradeAnswers(answered, part) {
         : '';
       return `Q${i+1}: "${r.question}"\nA${i+1}: "${r.studentAnswer}"${kw ? '\nKeywords: ' + kw : ''}${ot}`;
     }).join('\n\n');
-    const prompt = buildGradePrompt(qaBlock, list.length, A.langEvidence, part);
+    const prompt = buildGradePrompt(qaBlock, list.length, EVIDENCE, part);
     const want = list.length;
     let parsed = await attempt(prompt);
     // Models sometimes return one object because the schema example showed
@@ -5691,7 +5694,7 @@ async function gradeAnswers(answered, part) {
   // Ceilings are applied after the offset, or the offset would lift a
   // score straight back through them. Telling the model about them is not
   // enough — a stated limit is advice, an applied one is a limit.
-  const CAPS = A.langCaps || {};
+  const CAPS = (ctx ? ctx.caps : A.langCaps) || {};
   const capped = (v, key) => {
     const n = parseFloat(v);
     if (!n || !CAPS[key]) return v;
