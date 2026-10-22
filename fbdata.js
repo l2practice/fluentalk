@@ -118,13 +118,15 @@ async function isTeacherUser(u) {
 
 // ── same rules as Code.gs: which rows belong to one task, how many attempts ──
 function isJamRow(s) { return String(s.Type) === 'jam' || String(s.Part) === 'jam'; }
+function isTestRow(s) { return String(s.Type) === 'test' || String(s.Part) === 'test'; }
 function sameTask(s, p) {
   const assignId = String(p.assignId || '').trim();
   if (assignId) return String(s.AssignID || '').trim() === assignId;
   if (String(s.AssignID || '').trim()) return false;
   if (low(s.Topic) !== low(p.topic)) return false;
   const wantJam = String(p.type) === 'jam' || String(p.part) === 'jam';
-  return isJamRow(s) === wantJam;
+  const wantTest = String(p.type) === 'test' || String(p.part) === 'test';
+  return isJamRow(s) === wantJam && isTestRow(s) === wantTest;
 }
 function attemptsSoFar(rows) {
   let maxNo = 0;
@@ -385,7 +387,7 @@ async function saveResult(p) {
       uid: u.uid,
       QuestionsJSON: JSON.stringify(p.questionsJSON || []),
       ResultsJSON: JSON.stringify(p.resultsJSON || []),
-      ReportText: String(p.reportText || '').substring(0, 4000),
+      ReportText: String(p.reportText || '').substring(0, 8000),
       Analysis: JSON.stringify(p.analysis || null)
     }));
     tx.set(progRef, { StudentID: u.studentId, StudentName: u.fullName, ClassID: cid, items: { [sid]: light } }, { merge: true });
@@ -616,10 +618,11 @@ async function saveSetting(p) {
 
 function typeFilter(taskType) {
   return r => {
-    const jam = isJamRow(r);
+    const jam = isJamRow(r), test = isTestRow(r);
     if (taskType === 'jam') return jam;
+    if (taskType === 'test') return test;
     if (taskType === 'free') return String(r.Type) === 'free' && !jam;
-    if (taskType === 'homework') return !jam && String(r.Type) !== 'free';
+    if (taskType === 'homework') return !jam && !test && String(r.Type) !== 'free';
     return true;
   };
 }

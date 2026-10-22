@@ -1445,6 +1445,7 @@ svg{flex-shrink:0}
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="fbdata.js"></script>
+<script src="testsim.js"></script>
 <script>
 // Line icons (same drawing style as ArticuWrite's aw-common.js)
 const ICONS = {
@@ -1471,6 +1472,7 @@ const ICONS = {
   trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
   rocket: '<path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/>',
   key: '<circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M17 6l3 3M15 8l2 2"/>',
+  exam: '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4h6v3H9z"/><path d="M9 13.5l2 2 4-4"/>',
 };
 function ic(n) { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + (ICONS[n] || '') + '</svg>'; }
 // ════════════════════════════════════════════
@@ -2974,9 +2976,11 @@ function renderProgressRows(rows) {
     const scoreStr = latestBatch.length
       ? latestBatch.map(m => `<span style="color:${scoreColor(m.Overall)};font-weight:700">${m.Overall}</span>`).join(' · ')
       : '<span style="color:var(--g400);font-style:italic;font-size:12px">not graded</span>';
+    const isTest = String(r.Type) === 'test';
+    // A test is graded every time; practice only on milestone attempts.
     const hasUngraded = r.sessions.some(s => {
       const an = parseInt(s.AttemptNo) || 0;
-      return [3,5,8,10,13,15,18,20].includes(an) && !s.Overall;
+      return (isTest || [3,5,8,10,13,15,18,20].includes(an)) && !s.Overall;
     });
     const sessionKey = ri;
     const late = r.sessions.filter(x => x.Late).length;
@@ -2984,8 +2988,8 @@ function renderProgressRows(rows) {
       <td style="font-family:var(--fm);font-size:12px">${r.StudentID}</td>
       <td style="font-weight:600">${r.StudentName||'—'}</td>
       <td>${r.ClassID ? `<div style="font-weight:600;font-size:12px">${r.ClassName || classNameOf(r.ClassID)}</div><div style="font-size:10px;color:var(--g400);font-family:var(--fm)">${r.ClassID}</div>` : '—'}</td>
-      <td><span class="badge badge-blue">${r.Part||'—'}</span>${
-        (String(r.Type)==='jam'||String(r.Part)==='jam')
+      <td>${isTest ? '<span class="badge badge-blue" title="Full Part 1–2–3 mock test">' + ic('exam') + 'Test Sim</span>' : `<span class="badge badge-blue">${r.Part||'—'}</span>`}${
+        isTest ? '' : (String(r.Type)==='jam'||String(r.Part)==='jam')
           ? ' <span class="badge" title="JAM — one-minute fluency drill" style="background:var(--gold-l);color:var(--gold-d)">' + ic('clock') + 'JAM</span>'
           : (r.Type==='free' ? ' <span class="badge" title="Student practised this on their own, not assigned homework" style="background:var(--purple-l);color:var(--purple)">Free</span>' : '')
       }</td>
@@ -3021,7 +3025,7 @@ function sortProg(col) {
 
 function filterProgressTable() {
   const q = (document.getElementById('prog-search')?.value || '').toLowerCase();
-  const modeOf = r => (String(r.Type)==='jam'||String(r.Part)==='jam') ? 'jam' : (r.Type==='free' ? 'free' : 'homework');
+  const modeOf = r => (String(r.Type)==='jam'||String(r.Part)==='jam') ? 'jam' : String(r.Type)==='test' ? 'test' : (r.Type==='free' ? 'free' : 'homework');
   const selectedTopics = selectedProgressTopics();
   const filtered = _progRows.filter(r =>
     (!_progMode || modeOf(r) === _progMode) &&
@@ -3106,7 +3110,7 @@ function progressExportTable() {
     const last = ord[ord.length - 1];
     // Same as the on-screen column: the latest four graded milestones.
     const ms = ord.filter(x => String(x.IsMilestone) === 'true' && x.Overall).slice(-4);
-    const mode = (String(r.Type) === 'jam' || String(r.Part) === 'jam') ? 'JAM' : (r.Type === 'free' ? (r.Part || '') + ' (Free)' : (r.Part || ''));
+    const mode = (String(r.Type) === 'jam' || String(r.Part) === 'jam') ? 'JAM' : String(r.Type) === 'test' ? 'Test Simulation' : (r.Type === 'free' ? (r.Part || '') + ' (Free)' : (r.Part || ''));
     return [String(r.StudentID || ''), r.StudentName || '', r.ClassName || classNameOf(r.ClassID) || r.ClassID || '', mode, r.Topic || '',
       fmtDT(ord[0]?.StartTime), fmtDT(last?.StartTime), last?.DurationMin ? last.DurationMin + 'm' : '', ord.length,
       ms.map(x => x.Overall).join(' · '), ord.filter(x => x.Late).length];
@@ -3121,7 +3125,7 @@ async function exportSessions() {
   try {
     const topics = [_progTopic, _progTopic2, _progTopic3].filter(t => t && t !== '__NONE__' && t !== '__ALL__');
     const res = await gasCall('teacher.exportSessions', { classId: _progFilter || '', table,
-      title: [classNameOf(_progFilter) || _progFilter || 'All classes', topics.length ? topics.join(', ') : ({ homework: 'Homework', jam: 'JAM', free: 'Free', all: 'All types' }[_progTaskType] || '')].filter(Boolean).join(' · ') });
+      title: [classNameOf(_progFilter) || _progFilter || 'All classes', topics.length ? topics.join(', ') : ({ homework: 'Homework', jam: 'JAM', free: 'Free', test: 'Test Simulation', all: 'All types' }[_progTaskType] || '')].filter(Boolean).join(' · ') });
     hideOverlay();
     if (!res.success) { toast('Export failed: ' + (res.error || 'unknown error'), 'error', 8000); return; }
     // An older Code.gs ignores the table and lists every attempt instead.
@@ -3840,6 +3844,11 @@ function renderPracticeHome(c) {
         <div class="mode-title">JAM — Just A Minute</div>
         <div class="mode-sub">Speak for 60 seconds without stopping</div>
       </div>
+      <div class="mode-tile" onclick="openTestSim()">
+        <div class="mode-icon">${ic('exam')}</div>
+        <div class="mode-title">Test Simulation</div>
+        <div class="mode-sub">A full Part 1–2–3 test, as in the exam room</div>
+      </div>
     </div>`;
 }
 
@@ -4171,6 +4180,7 @@ async function renderMyHistory(c) {
     if (p === 'part3') return 'P3';
     if (p === 'jam')   return 'JAM';
     if (p === 'free')  return 'Free';
+    if (p === 'test')  return 'Test';
     return p || '—';
   };
   const modeColor = p => {
@@ -4178,6 +4188,7 @@ async function renderMyHistory(c) {
     if (p === 'part2') return 'badge-green';
     if (p === 'part3') return 'badge-gold';
     if (p === 'jam')   return 'badge-gold';
+    if (p === 'test')  return 'badge-blue';
     return 'badge-grey';
   };
   const fmtDeadline = d => {
@@ -4247,6 +4258,7 @@ async function renderMyHistory(c) {
 
 function retryFromHistory(topic, assignId, part, questionsJSON) {
   if (gateBlocked()) return;
+  if (part === 'test') { SS('S-student'); studentTab('practice').then(openTestSim); return; }
   let savedQs = [];
   if (questionsJSON) { try { savedQs = JSON.parse(questionsJSON); } catch(e) {} }
 
@@ -5305,14 +5317,25 @@ not add credit and can signal weaker planning/coherence — note the impact on
 Fluency & Coherence. Do not otherwise change how you score the language itself.
 ` : '';
 
-  const p3 = part === 'part3' ? `
+  const full = part === 'test' ? `
+FULL TEST NOTE: this is a complete mock test, not one part. Each question is
+labelled [Part 1 · topic], [Part 2] or [Part 3]. Judge every answer by what
+its part asks for: Part 1 wants short, direct answers with a reason or an
+example (two to four sentences is right, do not penalise that brevity);
+Part 2 is a one-to-two-minute organised long turn that should cover the cue
+card points; Part 3 wants developed, abstract discussion. Let the overall
+band reflect the whole test, as an examiner's would, and in "adv" name the
+part that held the candidate back most.
+` : '';
+
+  const p3 = (part === 'part3' || part === 'test') ? `
 PART 3 NOTE: this is the abstract discussion section. If the candidate answers
 only with personal anecdotes, tell them to address the topic at a general or
 societal level first, then use a personal example as support.
 ` : '';
 
   return `You are an experienced IELTS Speaking examiner. Grade these ${n} answers.
-${ev}${p2}${p3}
+${ev}${full}${p2}${p3}
 Apply these rules when scoring. Each one is IF-THEN; only fire it when the
 condition is genuinely met.
 
@@ -5333,6 +5356,18 @@ FLUENCY & COHERENCE
   micro-pauses with a high articulation rate means someone starting and
   stopping, not someone speaking slowly. Do not invent delivery problems the
   numbers do not show, and do not overlook ones they do.
+
+LOGIC & RELEVANCE (judged inside Fluency & Coherence)
+- Read each answer against its own question first. If it answers a different
+  question, misreads it, or drifts to another topic -> lower FC, set
+  "relevant": false, and say in one line what the question was really asking.
+- Ideas that contradict each other, a reason that does not support the claim,
+  an example that does not illustrate the point, or a conclusion that does
+  not follow -> lower FC, set "logical": false, and show the logical version.
+- Part 2: check the cue card points were covered; a point skipped entirely is a
+  relevance gap. Part 3: a claim with no reason or example is under-developed.
+- A relevant, well-reasoned answer earns credit in FC even when the language
+  is simple. Do not mark an answer illogical just because it is short.
 
 LEXICAL RESOURCE
 - Unnatural phrasing or word-for-word translation from the first language ->
@@ -5412,7 +5447,8 @@ half bands on the four criteria). Only "overall" may use a .5.
       "fc": 5, "lr": 6, "gr": 5, "p": 5,   // each a whole number 1-9
       "errors": [{"wrong":"what they said","correct":"the fix","type":"grammar|vocab|collocation","reason":"short why"}],
       "suggestion": "one actionable line, with a usable example",
-      "natural": "their best sentence rewritten as a fluent speaker would say it"
+      "natural": "their best sentence rewritten as a fluent speaker would say it",
+      "logic": {"relevant": true, "logical": true, "note": "one line: does it answer THIS question, and do the ideas hang together? If not, what to fix"}
     }
     // ... continue until there are ${n} objects in total
   ],
@@ -5424,6 +5460,7 @@ half bands on the four criteria). Only "overall" may use a .5.
     },
     "phrasalVerbs": ["phrasal verbs they used, marked (ok) or (wrong: ...)"],
     "idioms":       ["idioms or fixed expressions used, marked (natural) or (forced/misquoted)"],
+    "logic": "one or two sentences on how well the answers addressed the questions and how logically the ideas were developed",
     "weak": "the single biggest weakness",
     "up": "Band 8 rewrite of their strongest answer",
     "adv": "one short paragraph of advice, encouraging if the band is 5.5 or below",
@@ -5483,6 +5520,146 @@ function isValidAnswer(rec) {
   return { valid: false, reason: 'too_short' };
 }
 
+// The local pass is deterministic and finishes in about a second, so the
+// student can start reading real feedback immediately instead of staring at
+// a spinner while the AI works. Padding the wait with a fake delay would
+// only add time; showing what is already computed removes it.
+async function prepareAnalysis(answered) {
+  answered.forEach(r => {
+    r._m    = localMetrics(r.studentAnswer);
+    r._echo = questionEcho(r.question, r.studentAnswer);
+  });
+  A.langText = answered.map(r => r.studentAnswer).join(' ');
+  try { await LexCoach.ready(2500); } catch (_) {}
+  const allWords = answered.reduce((a, r) => a.concat(r._words || []), []);
+  const allDur   = answered.reduce((a, r) => a + (r._dur || 0), 0);
+  A.prosody = prosodyFrom(allWords, allDur);
+  try {
+    const la = analyzeLanguage(A.langText, A.prosody);
+    A.langEvidence = la.evidence;
+    A.langCaps     = la.caps || {};
+    A.langAcc      = la.acc  || null;
+  } catch (e) {
+    A.langEvidence = ''; A.langCaps = {}; A.langAcc = null;
+    console.warn('Language analysis failed:', e);
+  }
+}
+
+// Marks `answered` in place (scores, errors, rewrites) and returns the
+// session report. Throws when neither grader produced a usable reply.
+async function gradeAnswers(answered, part) {
+  let gradedBy = '';
+  const qaBlock = answered.map((r, i) => {
+    const kw = (r.keywords || []).join(', ');
+    const ot = (r.overtimeSec > 0)
+      ? `\n[TIMING: candidate spoke ~${Math.round((120 + r.overtimeSec))}s — ${r.overtimeSec}s OVER the 2-minute Part 2 limit]`
+      : '';
+    return `Q${i+1}: "${r.question}"\nA${i+1}: "${r.studentAnswer}"${kw ? '\nKeywords: ' + kw : ''}${ot}`;
+  }).join('\n\n');
+  const prompt = buildGradePrompt(qaBlock, answered.length, A.langEvidence, part);
+  const sys    = 'IELTS Speaking examiner. Return ONLY valid JSON.';
+
+  const want = answered.length;
+  let parsed = null;
+
+  async function attempt(p) {
+    try {
+      setGradingStatus('Gemini is marking your answers…');
+      const out = _parseGradeJSON(await gemFetch(sys, p, 1, true));
+      gradedBy = GM;
+      return out;
+    } catch (eGem) {
+      console.warn('Gemini grading failed:', eGem);
+      // Groq meters chat models separately from Whisper, so falling back
+      // here does not consume transcription quota.
+      if (!A.groqKey) throw eGem;
+      setGradingStatus('Gemini unavailable — trying the backup grader…');
+      try {
+        const out = _parseGradeJSON(await groqGrade(sys, p));
+        gradedBy = GROQ_GRADE_MODEL;
+        return out;
+      } catch (eGroq) {
+        console.warn('Groq grading failed:', eGroq);
+        throw new Error(eGem.message + '  ·  backup: ' + eGroq.message);
+      }
+    }
+  }
+
+  parsed = await attempt(prompt);
+
+  // Models sometimes return one object because the schema example showed
+  // one. Ask again, naming the shortfall, before accepting a partial mark.
+  if (parsed?.qs && parsed.qs.length < want) {
+    console.warn('Grader returned ' + parsed.qs.length + ' of ' + want + ' — retrying');
+    setGradingStatus(`Only ${parsed.qs.length} of ${want} answers came back — asking again…`);
+    try {
+      const retry = await attempt(prompt +
+        `\n\nYour previous reply contained only ${parsed.qs.length} object(s) in "qs". ` +
+        `That is incomplete. Return all ${want}, one per question, in order.`);
+      if (retry?.qs && retry.qs.length > parsed.qs.length) parsed = retry;
+    } catch (eRetry) { console.warn('Retry failed:', eRetry); }
+  }
+
+  if (!parsed?.qs || !parsed.qs.length) throw new Error('Grader returned malformed JSON');
+
+  // Teacher-set encouragement offset. Applied to all four criteria, never
+  // to a subset: lifting three of them would leave the fourth looking like
+  // the student's weakness when it is only the one that was not lifted,
+  // which would send them practising the wrong thing.
+  const ADJ = parseFloat(A.scoreAdjust) || 0;
+  // IELTS reports each of the four criteria as a whole band; only the
+  // overall speaking score falls on a half. So every criterion is rounded
+  // to an integer, and the overall is the .5-rounded mean of those four.
+  const lift = v => {
+    const n = parseFloat(v);
+    if (!n) return v;
+    return Math.max(1, Math.min(9, Math.round(n + ADJ)));
+  };
+
+  // Ceilings are applied after the offset, or the offset would lift a
+  // score straight back through them. Telling the model about them is not
+  // enough — a stated limit is advice, an applied one is a limit.
+  const CAPS = A.langCaps || {};
+  const capped = (v, key) => {
+    const n = parseFloat(v);
+    if (!n || !CAPS[key]) return v;
+    return Math.min(n, CAPS[key].max);
+  };
+  // Echoing is a property of one answer, so it caps that answer's lexis
+  // rather than the whole session.
+  const capEcho = (v, r) => {
+    const n = parseFloat(v);
+    if (!n || !r._echo) return v;
+    const bad = r._echo.count >= QUESTION_ECHO_LIMIT || r._echo.copied;
+    return bad ? Math.min(n, CAP_BAND) : v;
+  };
+
+  parsed.qs.forEach((g, i) => {
+    if (!answered[i]) return;
+    const sc = {
+      fluency:      { score: capped(lift(g.fc || g.fluency), 'fc') },
+      lexical:      { score: capEcho(lift(g.lr || g.lexical), answered[i]) },
+      grammar:      { score: capped(lift(g.gr || g.grammar), 'gr') },
+      pronunciation:{ score: capped(lift(g.p  || g.pronunciation), 'p') }
+    };
+    answered[i].scores = sc;
+    // Overall is the .5-rounded mean of the four whole-band criteria, the
+    // way IELTS derives the reported speaking band.
+    const vals = ['fluency','lexical','grammar','pronunciation']
+      .map(k => parseFloat(sc[k].score)).filter(v => v > 0);
+    answered[i].overall = vals.length
+      ? Math.round(vals.reduce((a, v) => a + v, 0) / vals.length * 2) / 2
+      : Math.round((parseFloat(g.overall) || 0) * 2) / 2;
+    answered[i].errors  = g.errors || [];
+    answered[i].suggestion = g.suggestion || '';
+    answered[i].natural = g.natural || '';
+    answered[i].logic = g.logic && typeof g.logic === 'object' ? {
+      relevant: g.logic.relevant !== false, logical: g.logic.logical !== false, note: String(g.logic.note || '')
+    } : null;
+  });
+  return { rpt: parsed.r || null, gradedBy, gradedCount: Math.min(parsed.qs.length, want) };
+}
+
 async function finishSession() {
   if (A.talking) await stopTalk();
   clearInterval(A.qcdTm);
@@ -5508,28 +5685,7 @@ async function finishSession() {
   }
   if (!answered.length) { if (confirm('No valid answers recorded. Exit?')) { SS('S-student'); studentTab('practice'); } return; }
 
-  // The local pass is deterministic and finishes in about a second, so the
-  // student can start reading real feedback immediately instead of staring at
-  // a spinner while the AI works. Padding the wait with a fake delay would
-  // only add time; showing what is already computed removes it.
-  answered.forEach(r => {
-    r._m    = localMetrics(r.studentAnswer);
-    r._echo = questionEcho(r.question, r.studentAnswer);
-  });
-  A.langText = answered.map(r => r.studentAnswer).join(' ');
-  try { await LexCoach.ready(2500); } catch (_) {}
-  const allWords = answered.reduce((a, r) => a.concat(r._words || []), []);
-  const allDur   = answered.reduce((a, r) => a + (r._dur || 0), 0);
-  A.prosody = prosodyFrom(allWords, allDur);
-  try {
-    const la = analyzeLanguage(A.langText, A.prosody);
-    A.langEvidence = la.evidence;
-    A.langCaps     = la.caps || {};
-    A.langAcc      = la.acc  || null;
-  } catch (e) {
-    A.langEvidence = ''; A.langCaps = {}; A.langAcc = null;
-    console.warn('Language analysis failed:', e);
-  }
+  await prepareAnalysis(answered);
 
   const attemptNo = A.retryCount + 1;
   let shouldGrade = isMilestone(attemptNo) || A.pendingMilestone;
@@ -5540,115 +5696,7 @@ async function finishSession() {
   let rpt = null, gradeFailed = false, gradeError = '', gradedBy = '', gradedCount = 0;
 
   try {
-    if (shouldGrade) {
-      const qaBlock = answered.map((r, i) => {
-        const kw = (r.keywords || []).join(', ');
-        const ot = (r.overtimeSec > 0)
-          ? `\n[TIMING: candidate spoke ~${Math.round((120 + r.overtimeSec))}s — ${r.overtimeSec}s OVER the 2-minute Part 2 limit]`
-          : '';
-        return `Q${i+1}: "${r.question}"\nA${i+1}: "${r.studentAnswer}"${kw ? '\nKeywords: ' + kw : ''}${ot}`;
-      }).join('\n\n');
-      const prompt = buildGradePrompt(qaBlock, answered.length, A.langEvidence, A.mode);
-      const sys    = 'IELTS Speaking examiner. Return ONLY valid JSON.';
-
-      const want = answered.length;
-      let parsed = null;
-
-      async function attempt(p) {
-        try {
-          setGradingStatus('Gemini is marking your answers…');
-          const out = _parseGradeJSON(await gemFetch(sys, p, 1, true));
-          gradedBy = GM;
-          return out;
-        } catch (eGem) {
-          console.warn('Gemini grading failed:', eGem);
-          // Groq meters chat models separately from Whisper, so falling back
-          // here does not consume transcription quota.
-          if (!A.groqKey) throw eGem;
-          setGradingStatus('Gemini unavailable — trying the backup grader…');
-          try {
-            const out = _parseGradeJSON(await groqGrade(sys, p));
-            gradedBy = GROQ_GRADE_MODEL;
-            return out;
-          } catch (eGroq) {
-            console.warn('Groq grading failed:', eGroq);
-            throw new Error(eGem.message + '  ·  backup: ' + eGroq.message);
-          }
-        }
-      }
-
-      parsed = await attempt(prompt);
-
-      // Models sometimes return one object because the schema example showed
-      // one. Ask again, naming the shortfall, before accepting a partial mark.
-      if (parsed?.qs && parsed.qs.length < want) {
-        console.warn('Grader returned ' + parsed.qs.length + ' of ' + want + ' — retrying');
-        setGradingStatus(`Only ${parsed.qs.length} of ${want} answers came back — asking again…`);
-        try {
-          const retry = await attempt(prompt +
-            `\n\nYour previous reply contained only ${parsed.qs.length} object(s) in "qs". ` +
-            `That is incomplete. Return all ${want}, one per question, in order.`);
-          if (retry?.qs && retry.qs.length > parsed.qs.length) parsed = retry;
-        } catch (eRetry) { console.warn('Retry failed:', eRetry); }
-      }
-
-      if (!parsed?.qs || !parsed.qs.length) throw new Error('Grader returned malformed JSON');
-      gradedCount = Math.min(parsed.qs.length, want);
-
-      // Teacher-set encouragement offset. Applied to all four criteria, never
-      // to a subset: lifting three of them would leave the fourth looking like
-      // the student's weakness when it is only the one that was not lifted,
-      // which would send them practising the wrong thing.
-      const ADJ = parseFloat(A.scoreAdjust) || 0;
-      // IELTS reports each of the four criteria as a whole band; only the
-      // overall speaking score falls on a half. So every criterion is rounded
-      // to an integer, and the overall is the .5-rounded mean of those four.
-      const lift = v => {
-        const n = parseFloat(v);
-        if (!n) return v;
-        return Math.max(1, Math.min(9, Math.round(n + ADJ)));
-      };
-
-      // Ceilings are applied after the offset, or the offset would lift a
-      // score straight back through them. Telling the model about them is not
-      // enough — a stated limit is advice, an applied one is a limit.
-      const CAPS = A.langCaps || {};
-      const capped = (v, key) => {
-        const n = parseFloat(v);
-        if (!n || !CAPS[key]) return v;
-        return Math.min(n, CAPS[key].max);
-      };
-      // Echoing is a property of one answer, so it caps that answer's lexis
-      // rather than the whole session.
-      const capEcho = (v, r) => {
-        const n = parseFloat(v);
-        if (!n || !r._echo) return v;
-        const bad = r._echo.count >= QUESTION_ECHO_LIMIT || r._echo.copied;
-        return bad ? Math.min(n, CAP_BAND) : v;
-      };
-
-      parsed.qs.forEach((g, i) => {
-        if (!answered[i]) return;
-        const sc = {
-          fluency:      { score: capped(lift(g.fc || g.fluency), 'fc') },
-          lexical:      { score: capEcho(lift(g.lr || g.lexical), answered[i]) },
-          grammar:      { score: capped(lift(g.gr || g.grammar), 'gr') },
-          pronunciation:{ score: capped(lift(g.p  || g.pronunciation), 'p') }
-        };
-        answered[i].scores = sc;
-        // Overall is the .5-rounded mean of the four whole-band criteria, the
-        // way IELTS derives the reported speaking band.
-        const vals = ['fluency','lexical','grammar','pronunciation']
-          .map(k => parseFloat(sc[k].score)).filter(v => v > 0);
-        answered[i].overall = vals.length
-          ? Math.round(vals.reduce((a, v) => a + v, 0) / vals.length * 2) / 2
-          : Math.round((parseFloat(g.overall) || 0) * 2) / 2;
-        answered[i].errors  = g.errors || [];
-        answered[i].suggestion = g.suggestion || '';
-        answered[i].natural = g.natural || '';
-      });
-      rpt = parsed.r || null;
-    }
+    if (shouldGrade) ({ rpt, gradedBy, gradedCount } = await gradeAnswers(answered, A.mode));
   } catch (eg) {
     gradeFailed = true;
     gradeError  = eg.message || String(eg);
@@ -5684,7 +5732,7 @@ async function finishSession() {
         question: r.question, keywords: r.keywords || [],
         studentAnswer: r.studentAnswer, overall: r.overall || '',
         scores: r.scores || null, errors: r.errors || [],
-        suggestion: r.suggestion || '', natural: r.natural || '',
+        suggestion: r.suggestion || '', natural: r.natural || '', logic: r.logic || null,
         overtimeSec: r.overtimeSec || 0
       })),
       reportText: buildReport(answered, rpt, shouldGrade, attemptNo),
@@ -5813,6 +5861,13 @@ function buildReport(answered, r, isMilestone, attemptNo) {
       lines.push('- **Word pairings to fix:** ' + r.collocations.off.map(x => x.said + ' -> ' + x.better).join(' · '));
     if (r.phrasalVerbs?.length) lines.push('- **Phrasal verbs:** ' + r.phrasalVerbs.join(' · '));
     if (r.idioms?.length)       lines.push('- **Idioms:** ' + r.idioms.join(' · '));
+    if (r.logic)        lines.push('- **Logic & relevance:** ' + r.logic);
+    const off = (answered || []).map((a, i) => ({ a, i })).filter(x => x.a.logic && (!x.a.logic.relevant || !x.a.logic.logical) && x.a.logic.note);
+    if (off.length) {
+      lines.push('');
+      lines.push('### 🧭 LOGIC & RELEVANCE TO FIX');
+      off.forEach(x => lines.push('- Q' + (x.i + 1) + ' (' + (!x.a.logic.relevant ? 'off the question' : 'reasoning') + '): ' + x.a.logic.note));
+    }
     if (r.weak)         lines.push('- **Area to improve:** ' + r.weak);
     if (r.up)           { lines.push(''); lines.push('### 🚀 UPGRADED VERSION (Band 8+)'); lines.push(r.up); }
     if (r.adv)          { lines.push(''); lines.push('### 💡 ADVICE'); lines.push(r.adv); }
@@ -5888,8 +5943,9 @@ function renderResults(answered, rpt, isMilestone, attemptNo, overall, fc, lr, g
       </div>` : `
       <div class="card" style="background:var(--green-l);border-color:var(--green)">
         <div style="font-weight:700;color:var(--green-d);font-size:1rem">✅ Attempt ${attemptNo} recorded!</div>
-        ${next ? `<p style="margin-top:6px;font-size:13px;color:var(--green-d)"><strong>${next - attemptNo} more</strong> attempt(s) until the next graded milestone (attempt ${next}).</p>` : ''}
+        ${next && A.mode !== 'test' ? `<p style="margin-top:6px;font-size:13px;color:var(--green-d)"><strong>${next - attemptNo} more</strong> attempt(s) until the next graded milestone (attempt ${next}).</p>` : ''}
       </div>`}
+    ${A.mode === 'test' && !gradingPending ? tsResultsSummary(answered) : ''}
 
     ${isMilestone ? answered.map((r, i) => `
       <div class="qacc">
@@ -5903,6 +5959,11 @@ function renderResults(answered, rpt, isMilestone, attemptNo, overall, fc, lr, g
           <div>
             <div class="qs-lbl">Student's Answer</div>
             <div class="qs-student">"${r.studentAnswer||'(no answer)'}"</div>
+            ${r.logic ? `<div class="qs-lbl" style="margin-top:10px">Logic &amp; relevance</div>
+              <div style="font-size:13px;line-height:1.6;color:${r.logic.relevant && r.logic.logical ? 'var(--green-d)' : 'var(--gold-d)'}">
+                ${r.logic.relevant ? '✓ Answers the question' : '⚠ Does not fully answer the question'} · ${r.logic.logical ? '✓ Logical' : '⚠ Reasoning gap'}
+                ${r.logic.note ? `<div style="color:var(--g700);margin-top:2px">${_h(r.logic.note)}</div>` : ''}
+              </div>` : ''}
             ${r.suggestion ? `<div class="qs-sugg" style="margin-top:8px">${r.suggestion}</div>` : ''}
             ${r.natural ? `<div class="qs-lbl" style="margin-top:10px">How a fluent speaker would say it</div>
               <div class="qs-sugg" style="border-left-color:var(--green)">${r.natural}</div>` : ''}
@@ -5931,6 +5992,7 @@ function renderResults(answered, rpt, isMilestone, attemptNo, overall, fc, lr, g
       <div class="card">
         <div class="card-title" style="margin-bottom:12px">📊 Detailed Analysis</div>
         ${rpt.adv ? `<div class="rpt-box" style="margin-bottom:12px">${rpt.adv.replace(/\n/g,'<br>')}</div>` : ''}
+        ${rpt.logic ? `<div style="margin-bottom:10px"><strong>Logic &amp; relevance:</strong> ${_h(rpt.logic)}</div>` : ''}
         ${rpt.good?.length ? `<div style="margin-bottom:10px"><strong>Good phrases:</strong> ${rpt.good.join(' · ')}</div>` : ''}
 
         ${rpt.collocations?.strong?.length ? `<div style="margin-bottom:8px">
@@ -5961,7 +6023,7 @@ function renderResults(answered, rpt, isMilestone, attemptNo, overall, fc, lr, g
     <div id="next-step-zone" style="margin-top:18px"></div>
 
     <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap">
-      ${isMilestone && A.lastSessionId ? `<button class="btn btn-green doc-export-btn" onclick="exportToDoc()">📄 Export to Google Doc</button>` : ''}
+      ${isMilestone && A.lastSessionId ? `<button class="btn btn-green doc-export-btn" onclick="exportToDoc()">📄 ${A.mode === 'test' ? 'Open Docs' : 'Export to Google Doc'}</button>` : ''}
       <button class="btn btn-outline" onclick="SS('S-student');studentTab('history')">📋 My History</button>
     </div>`;
 
@@ -6361,7 +6423,7 @@ async function exportToDoc(sessionId, asTeacher) {
   const id = sessionId || A.lastSessionId;
   if (!id) { toast('Nothing to export yet', 'error'); return; }
   const btns = document.querySelectorAll('.doc-export-btn');
-  btns.forEach(b => { b.disabled = true; b.textContent = '⏳ Building document…'; });
+  btns.forEach(b => { b.dataset.label = b.dataset.label || b.textContent; b.disabled = true; b.textContent = '⏳ Building document…'; });
   try {
     const res = await gasCall(asTeacher ? 'teacher.exportDoc' : 'speak.exportDoc', { sessionId: id });
     if (!res.success) { toast(res.error, 'error', 6000); return; }
@@ -6373,7 +6435,7 @@ async function exportToDoc(sessionId, asTeacher) {
   } catch (e) {
     toast('Export failed: ' + e.message, 'error', 6000);
   } finally {
-    btns.forEach(b => { b.disabled = false; b.textContent = '📄 Export to Google Doc'; });
+    btns.forEach(b => { b.disabled = false; b.textContent = b.dataset.label || '📄 Export to Google Doc'; });
   }
 }
 
@@ -6882,6 +6944,7 @@ async function renderTeacherProgress(c) {
           <option value="homework" ${_progTaskType==='homework'?'selected':''}>Homework</option>
           <option value="jam" ${_progTaskType==='jam'?'selected':''}>JAM</option>
           <option value="free" ${_progTaskType==='free'?'selected':''}>Free Speaking</option>
+          <option value="test" ${_progTaskType==='test'?'selected':''}>Test Simulation</option>
         </select>
       </div>
       ${[_progTopic, _progTopic2, _progTopic3].map((selected, i) => `
