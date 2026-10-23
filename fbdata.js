@@ -405,7 +405,20 @@ async function saveResult(p) {
     return ok({ sessionId: sid, attemptNo, isMilestone: isMilestone === 'true' });
   });
   forget('progress');
+  if (res.success && !res.duplicate && p.assignId && res.attemptNo >= DONE_ATTEMPTS) notifyExtendedDone(u, p.assignId);
   return res;
+}
+
+// A student working on an extension who has now done every required
+// attempt: Apps Script tells the teacher, once per student and homework.
+// Fire and forget — the save itself must never wait on, or fail with, email.
+const DONE_ATTEMPTS = 10;   // MIN_ATTEMPTS in Code.gs, HW_TARGET in index.html
+async function notifyExtendedDone(u, assignId) {
+  try {
+    const a = (await myAssignments()).find(x => x.AssignID === assignId);
+    if (!a || !((a.ext || {}).students || {})[u.uid] || ((a.doneMailed || {})[u.uid])) return;
+    await gas('notify.extendedDone', { assignId });
+  } catch (e) { console.warn('[notify.extendedDone]', e); }
 }
 
 // A Test Simulation whose grading failed, graded again: the scores go onto
