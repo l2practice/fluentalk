@@ -2894,7 +2894,7 @@ async function deleteAsn(assignId, title) {
 
 // ── STUDY PROGRESS ───────────────────────────
 let _progSessions = [], _progFilter = '', _progMode = '', _progDays = 6, _progTopic = '__NONE__', _progTopic2 = '__NONE__', _progTopic3 = '__NONE__', _progLoaded = false, _progTopics = [], _progTopicsFor = '', _progReload = false;
-let _simFromDate = '', _simToDate = '', _simSelectedStudent = '', _simCompareIds = [], _simSearchQuery = '', _simDatesInitialized = false;
+let _simFromDate = '', _simToDate = '', _simSelectedStudent = '', _simCompareIds = [], _simSearchQuery = '', _simCompareSearchQuery = '', _simDatesInitialized = false;
 let _simSortCol = 'StudentName', _simSortDir = 1;
 
 function localDateInputValue(date) {
@@ -2961,18 +2961,6 @@ function simChartSvg(series, id, single) {
   const maxScore=9;
   const x=n=>maxAttempt===1?L+innerW/2:L+(n-1)/(maxAttempt-1)*innerW, y=v=>T+innerH-(v/maxScore)*innerH;
   const colors=['#E0895F','#6E8DEB','#3FAE6A','#A99BE6','#D9A441','#E25D74','#36A7A2','#D879C2'];
-  const pointItems=series.flatMap((s,si)=>s.points.map(p=>({s,si,p,px:x(p.attempt),py:y(p.score)})));
-  const pointGroups=[];
-  pointItems.forEach(item=>{
-    let group=pointGroups.find(g=>Math.abs(g.px-item.px)<=12&&Math.abs(g.py-item.py)<=12);
-    if(!group){group={px:item.px,py:item.py,items:[]};pointGroups.push(group);}
-    group.items.push(item);
-  });
-  const tooltipByPoint=new Map();
-  pointGroups.forEach(group=>{
-    const text=group.items.map(({s,p})=>`${s.name}${s.studentId?' ('+s.studentId+')':''} · Attempt ${p.attempt} · ${p.date.toLocaleString()} · Overall ${p.score.toFixed(1)} · Fluency ${p.session.FC||'—'} · Lexical ${p.session.LR||'—'} · Grammar ${p.session.GR||'—'} · Pronunciation ${p.session.P||'—'}`).join('\n');
-    group.items.forEach(({p})=>tooltipByPoint.set(p,text));
-  });
   const ticks=[0,2,4,6,8,9];
   const grid=ticks.map(v=>`<g><line x1="${L}" y1="${y(v)}" x2="${W-R}" y2="${y(v)}" stroke="var(--line)"/><text x="${L-10}" y="${y(v)+4}" text-anchor="end" fill="var(--g500)" font-size="11">${v}</text></g>`).join('');
   const attemptAxis=Array.from({length:maxAttempt},(_,i)=>i+1).map(n=>`<g><line x1="${x(n)}" y1="${T+innerH}" x2="${x(n)}" y2="${T+innerH+4}" stroke="var(--g400)"/><text x="${x(n)}" y="${H-18}" text-anchor="middle" fill="var(--g500)" font-size="10">${n}</text></g>`).join('');
@@ -2982,7 +2970,7 @@ function simChartSvg(series, id, single) {
     const path=xy.length===1?`M ${xy[0].x} ${xy[0].y}`:xy.reduce((d,a,i)=>i===0?`M ${a.x} ${a.y}`:d+` Q ${(xy[i-1].x+a.x)/2} ${xy[i-1].y} ${a.x} ${a.y}`, '');
     const area=path+` L ${xy[xy.length-1].x} ${T+innerH} L ${xy[0].x} ${T+innerH} Z`;
     return `<g><path d="${area}" fill="url(#${id}-grad-${si})" opacity="${single?'.24':'.07'}"/><path d="${path}" fill="none" stroke="${col}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>${xy.map(({x:px,y:py,p})=>{
-      const details=tooltipByPoint.get(p)||'';
+      const details=`${s.name}${s.studentId?' ('+s.studentId+')':''} · Attempt ${p.attempt} · ${p.date.toLocaleString()} · Overall ${p.score.toFixed(1)} · Fluency ${p.session.FC||'—'} · Lexical ${p.session.LR||'—'} · Grammar ${p.session.GR||'—'} · Pronunciation ${p.session.P||'—'}`;
       return `<circle cx="${px}" cy="${py}" r="5.5" fill="${col}" stroke="var(--white)" stroke-width="2" tabindex="0" role="img" data-tooltip="${_h(details)}"></circle>`;
     }).join('')}</g>`;
   }).join('');
@@ -2991,24 +2979,36 @@ function simChartSvg(series, id, single) {
 }
 function bindSimulationChartTooltips(root) {
   root.querySelectorAll('.sim-chart-wrap').forEach(wrap=>{
-    const tip=wrap.querySelector('.sim-chart-tooltip');
-    wrap.querySelectorAll('circle[data-tooltip]').forEach(point=>{
-      const show=e=>{
-        tip.textContent=point.getAttribute('data-tooltip')||''; tip.style.display='block';
-        if(e&&Number.isFinite(e.clientX)){
-          const rect=wrap.getBoundingClientRect(), left=Math.min(Math.max(8,e.clientX-rect.left+12),Math.max(8,rect.width-240));
-          const top=Math.max(6,e.clientY-rect.top-70); tip.style.left=left+'px'; tip.style.top=top+'px';
-        }
-      };
-      point.addEventListener('pointerenter',show); point.addEventListener('pointermove',show);
-      point.addEventListener('pointerleave',()=>{tip.style.display='none';});
-      point.addEventListener('focus',()=>show(null)); point.addEventListener('blur',()=>{tip.style.display='none';});
+    const tip=wrap.querySelector('.sim-chart-tooltip'), svg=wrap.querySelector('svg');
+    const hide=()=>{tip.style.display='none';};
+    const show=(text,e)=>{
+      tip.textContent=text; tip.style.display='block';
+      if(e&&Number.isFinite(e.clientX)){
+        const rect=wrap.getBoundingClientRect(), left=Math.min(Math.max(8,e.clientX-rect.left+12),Math.max(8,rect.width-290));
+        const top=Math.max(6,e.clientY-rect.top-70); tip.style.left=left+'px'; tip.style.top=top+'px';
+      }
+    };
+    svg.addEventListener('pointermove',e=>{
+      const cursor=svg.createSVGPoint(); cursor.x=e.clientX; cursor.y=e.clientY;
+      const p=cursor.matrixTransform(svg.getScreenCTM().inverse());
+      const nearby=Array.from(svg.querySelectorAll('circle[data-tooltip]')).filter(point=>{
+        const dx=Number(point.getAttribute('cx'))-p.x, dy=Number(point.getAttribute('cy'))-p.y;
+        return dx*dx+dy*dy<=18*18;
+      });
+      const details=Array.from(new Set(nearby.map(point=>point.getAttribute('data-tooltip')).filter(Boolean)));
+      if(details.length) show(details.join('\n\n'),e); else hide();
+    });
+    svg.addEventListener('pointerleave',hide);
+    svg.querySelectorAll('circle[data-tooltip]').forEach(point=>{
+      point.addEventListener('focus',()=>show(point.getAttribute('data-tooltip')||'',null));
+      point.addEventListener('blur',hide);
     });
   });
 }
 function renderSimulationProgress(c) {
   const rows=simResultRows();
   const searchHadFocus=document.activeElement?.id==='prog-search';
+  const compareSearchHadFocus=document.activeElement?.id==='sim-compare-search';
   const filtered=rows.filter(r=>{
     const q=(document.getElementById('prog-search')?.value||_simSearchQuery).toLowerCase();
     return !q || String(r.StudentName).toLowerCase().includes(q) || String(r.StudentID).toLowerCase().includes(q);
@@ -3039,6 +3039,8 @@ function renderSimulationProgress(c) {
   const primarySeries=selected?[{name:selected.StudentName,studentId:selected.StudentID,points:simStudentScores(selected)}]:[];
   const compareSeries=_simCompareIds.map(id=>rows.find(r=>r.StudentID===id)).filter(r=>r&&r.sessions.length>0)
     .map(r=>({name:r.StudentName,studentId:r.StudentID,points:simStudentScores(r)})).filter(s=>s.points.length>0);
+  const comparePickerRows=rows.slice().sort((a,b)=>String(a.StudentName).localeCompare(String(b.StudentName),undefined,{sensitivity:'base'}))
+    .filter(r=>!_simCompareSearchQuery||String(r.StudentName).toLowerCase().includes(_simCompareSearchQuery.toLowerCase())||String(r.StudentID).toLowerCase().includes(_simCompareSearchQuery.toLowerCase()));
   const sortHead=(key,label)=>`<th onclick="sortSimulationProgress('${key}')" title="Sort by ${label}" style="cursor:pointer;user-select:none">${label} ${_simSortCol===key?(_simSortDir===1?'↑':'↓'):'↕'}</th>`;
   const colorList=['#E0895F','#6E8DEB','#3FAE6A','#A99BE6','#D9A441','#E25D74','#36A7A2','#D879C2'];
   c.innerHTML=`<div class="search-row"><input class="search-inp" placeholder="Filter by name / ID…" id="prog-search" value="${_h(_simSearchQuery)}" oninput="_simSearchQuery=this.value;renderSimulationProgress(document.getElementById('sim-progress-wrap'))" style="max-width:260px"><span style="font-size:12px;color:var(--g600)">${filtered.length} results</span></div>
@@ -3046,13 +3048,14 @@ function renderSimulationProgress(c) {
     <div class="sim-progress-charts">
       <section class="card"><div class="card-header"><div><div class="card-title">Student score progress</div><div style="font-size:12px;color:var(--g500)">${selected?_h(selected.StudentName):'Select one student from the table to view their attempts.'}</div></div></div>${selected?simChartSvg(primarySeries,'sim-primary',true):'<div class="empty" style="padding:28px">No students selected</div>'}</section>
       <section class="card"><div class="card-header"><div><div class="card-title">Compare students</div><div style="font-size:12px;color:var(--g500)">Students with 0/3 are omitted from this chart.</div></div><button class="btn btn-outline btn-sm" onclick="toggleSimulationCompare()">${_simCompareOpen?'Done':'Compare others'}</button></div>
-        ${_simCompareOpen?`<div style="margin-bottom:12px"><label style="font-size:12px;cursor:pointer"><input type="checkbox" ${_simCompareIds.length===rows.length&&rows.length?'checked':''} onchange="setSimulationCompareAll(this.checked)"> Select whole class</label><div style="display:flex;flex-wrap:wrap;gap:7px;margin-top:8px">${rows.map(r=>`<label style="border:1px solid var(--line);border-radius:999px;padding:4px 8px;font-size:11px;cursor:pointer"><input type="checkbox" ${_simCompareIds.includes(r.StudentID)?'checked':''} onchange="toggleSimulationCompareStudent('${_h(r.StudentID)}',this.checked)"> ${_h(r.StudentName)}</label>`).join('')}</div></div>`:''}
+        ${_simCompareOpen?`<div style="margin-bottom:12px;border:1px solid var(--line);border-radius:10px;padding:10px;background:var(--surf2)"><div style="display:flex;gap:6px;margin-bottom:8px"><button class="btn btn-outline btn-sm" onclick="setSimulationCompareAll(true)">All class</button><button class="btn btn-outline btn-sm" onclick="setSimulationCompareAll(false)">None</button><span style="margin-left:auto;align-self:center;font-size:11px;color:var(--g500)">${_simCompareIds.length} selected</span></div><input class="search-inp" id="sim-compare-search" placeholder="Search student name / ID…" value="${_h(_simCompareSearchQuery)}" oninput="_simCompareSearchQuery=this.value;renderSimulationProgress(document.getElementById('sim-progress-wrap'))" style="width:100%;margin-bottom:8px"><div style="max-height:170px;overflow:auto;display:flex;flex-direction:column;gap:2px">${comparePickerRows.map(r=>`<label style="display:flex;align-items:center;gap:8px;padding:5px 6px;border-radius:6px;font-size:12px;cursor:pointer"><input type="checkbox" ${_simCompareIds.includes(r.StudentID)?'checked':''} onchange="toggleSimulationCompareStudent('${_h(r.StudentID)}',this.checked)"><span>${_h(r.StudentName)}</span><span style="margin-left:auto;font-size:10px;color:var(--g400)">${_h(r.StudentID)}</span></label>`).join('')||'<div style="padding:12px;text-align:center;color:var(--g500);font-size:12px">No matching students</div>'}</div></div>`:''}
         ${compareSeries.length?simChartSvg(compareSeries,'sim-compare',false):`<div class="empty" style="padding:28px">${_simCompareOpen?'Choose students with at least one attempt to compare.':'Choose Compare others to select students.'}</div>`}
         ${compareSeries.length?`<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">${compareSeries.map((s,i)=>`<span style="font-size:10px;color:var(--g600)"><i style="display:inline-block;width:12px;height:3px;vertical-align:middle;margin-right:4px;background:${colorList[i%colorList.length]}"></i>${_h(s.name)}</span>`).join('')}</div>`:''}
       </section>
     </div>`;
   bindSimulationChartTooltips(c);
   if(searchHadFocus){const input=document.getElementById('prog-search');input?.focus();input?.setSelectionRange(input.value.length,input.value.length);}
+  if(compareSearchHadFocus){const input=document.getElementById('sim-compare-search');input?.focus();input?.setSelectionRange(input.value.length,input.value.length);}
 }
 function selectSimulationStudent(id) { _simSelectedStudent=id; renderSimulationProgress(document.getElementById('sim-progress-wrap')); }
 function sortSimulationProgress(col) {
