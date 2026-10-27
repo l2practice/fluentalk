@@ -3278,11 +3278,11 @@ function showProgressDetail(rowIdx) {
               <div class="qa-q" style="flex:1">${fmtDT(s.StartTime)} · ${s.DurationMin||0} min${s.Late ? ' <span class="badge badge-late">Trễ hạn</span>' : ''}</div>
               ${String(s.Type) === 'test'
                 ? `${s.Overall ? `<div class="qa-band">${s.Overall}</div>` : '<span style="font-size:11px;color:var(--g400)">not graded</span>'}
-                  <button class="btn btn-outline btn-sm" style="color:var(--green-d)" onclick="tsOpenDoc('${_h(s.DocUrl || '')}','${s.SessionID}',true)">📄 Open Docs</button>`
+                  <button class="btn btn-outline btn-sm" style="color:var(--green-d)" onclick="tsOpenDoc('${_h(s.DocUrl || '')}','${s.SessionID}',true,'${_h(row.StudentID)}')">📄 Open Docs</button>`
                 : s.Overall ? `<div class="qa-band">${s.Overall}</div>
-                ${s.DocUrl ? `<button class="btn btn-outline btn-sm" style="color:var(--green-d)" onclick="tsOpenDoc('${_h(s.DocUrl)}')">📄 Open Docs</button>`
+                ${s.DocUrl ? `<button class="btn btn-outline btn-sm" style="color:var(--green-d)" onclick="tsOpenDoc('${_h(s.DocUrl)}','${s.SessionID}',true,'${_h(row.StudentID)}')">📄 Open Docs</button>`
                   : `<button class="btn btn-outline btn-sm doc-export-btn" style="color:var(--green-d)" onclick="exportToDoc('${s.SessionID}',true)">📄 Export to Google Doc</button>`}`
-                : s.DocUrl ? `<button class="btn btn-outline btn-sm" style="color:var(--green-d)" onclick="tsOpenDoc('${_h(s.DocUrl)}')">📄 Open Docs</button>`
+                : s.DocUrl ? `<button class="btn btn-outline btn-sm" style="color:var(--green-d)" onclick="tsOpenDoc('${_h(s.DocUrl)}','${s.SessionID}',true,'${_h(row.StudentID)}')">📄 Open Docs</button>`
                 : `<span style="font-size:11px;color:var(--g400)">not graded</span>`}
             </div>
           </div>`).join('')}

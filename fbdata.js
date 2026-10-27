@@ -799,7 +799,7 @@ async function gas(action, payload) {
 }
 const GAS_ACTIONS = ['auth.register', 'auth.forgotPassword', 'auth.verifyCode', 'auth.resetPassword',
   'teacher.addStudent', 'teacher.updateStudent', 'teacher.exportSessions', 'teacher.deleteClassData',
-  'teacher.clearOldData', 'teacher.exportDoc', 'speak.exportDoc'];
+  'teacher.clearOldData', 'teacher.exportDoc', 'teacher.formatDoc', 'speak.exportDoc', 'speak.formatDoc'];
 
 const ACTIONS = {
   'auth.login': login, 'auth.teacherLogin': teacherLogin,

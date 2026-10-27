@@ -827,14 +827,21 @@ async function tsMakeDoc(sessionId, asTeacher) {
   } finally { A.testDocBusy = false; tsDocSlot(); }
 }
 function tsDocSlotHtml() {
-  if (A.testDocUrl) return `<a class="btn btn-green" href="${_h(A.testDocUrl)}" target="_blank" rel="noopener">📄 Open Docs</a>`;
+  if (A.testDocUrl) return `<button class="btn btn-green" onclick="tsOpenDoc('${_h(A.testDocUrl)}')">📄 Open Docs</button>`;
   if (A.testDocBusy) return `<button class="btn btn-green" disabled>⏳ Saving to Google Docs…</button>`;
   return A.lastSessionId ? `<button class="btn btn-green" onclick="tsMakeDoc('${_h(A.lastSessionId)}')">📄 Create Docs</button>` : '';
 }
 function tsDocSlot() { const el = document.getElementById('ts-doc-slot'); if (el) el.innerHTML = tsDocSlotHtml(); }
 // History / teacher: a test opens its own Doc, or builds it if that never happened.
-function tsOpenDoc(url, sessionId, asTeacher) {
-  if (url) { window.open(url, '_blank', 'noopener'); return; }
+function tsOpenDoc(url, sessionId, asTeacher, studentId) {
+  if (url) {
+    const win = window.open('about:blank', '_blank');
+    gasCall(asTeacher ? 'teacher.formatDoc' : 'speak.formatDoc', { url, studentId })
+      .then(res => { if (res && !res.success) toast('Could not apply document formatting: ' + (res.error || 'unknown error'), 'error', 7000); })
+      .catch(err => toast('Could not apply document formatting: ' + err.message, 'error', 7000))
+      .finally(() => { if (win && !win.closed) win.location.href = url; else window.open(url, '_blank', 'noopener'); });
+    return;
+  }
   if (sessionId) tsMakeDoc(sessionId, asTeacher).then(() => { if (A.testDocUrl) window.open(A.testDocUrl, '_blank', 'noopener'); });
 }
 
