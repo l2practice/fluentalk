@@ -2887,7 +2887,113 @@ async function deleteAsn(assignId, title) {
 }
 
 // ── STUDY PROGRESS ───────────────────────────
-let _progSessions = [], _progFilter = '', _progMode = '', _progDays = 6, _progTopic = '__NONE__', _progTopic2 = '__NONE__', _progTopic3 = '__NONE__', _progLoaded = false, _progTopics = [], _progTaskType = 'homework', _progTopicsFor = '', _progReload = false;
+let _progSessions = [], _progFilter = '', _progMode = '', _progDays = 6, _progTopic = '__NONE__', _progTopic2 = '__NONE__', _progTopic3 = '__NONE__', _progLoaded = false, _progTopics = [], _progTopicsFor = '', _progReload = false;
+let _simFromDate = '', _simToDate = '', _simSelectedStudent = '', _simCompareIds = [], _simSearchQuery = '', _simDatesInitialized = false;
+
+function localDateInputValue(date) {
+  const d = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return d.toISOString().slice(0, 10);
+}
+function simDateRangeSessions() {
+  const from = _simFromDate ? new Date(_simFromDate + 'T00:00:00') : null;
+  const to = _simToDate ? new Date(_simToDate + 'T23:59:59.999') : null;
+  return _progSessions.filter(s => {
+    const d = new Date(s.StartTime || s.Date || '');
+    return !Number.isNaN(d.getTime()) && (!from || d >= from) && (!to || d <= to);
+  });
+}
+function simResultRows() {
+  const byId = new Map();
+  const classStudents = (_teacherStudents || []).filter(s => String(s.ClassID || '').toUpperCase() === String(_progFilter).toUpperCase());
+  classStudents.forEach(s => {
+    const id = String(s.StudentID || s.studentId || '').trim();
+    if (id) byId.set(id, { StudentID:id, StudentName:s.FullName || s.StudentName || s.Name || id, ClassID:s.ClassID || _progFilter, ClassName:s.ClassName || classNameOf(s.ClassID || _progFilter), Part:'test', Topic:'Test Simulation', Type:'test', sessions:[] });
+  });
+  simDateRangeSessions().forEach(s => {
+    const id = String(s.StudentID || '').trim();
+    if (!id) return;
+    if (!byId.has(id)) byId.set(id, { StudentID:id, StudentName:s.StudentName || id, ClassID:s.ClassID || _progFilter, ClassName:s.ClassName || classNameOf(s.ClassID || _progFilter), Part:'test', Topic:'Test Simulation', Type:'test', sessions:[] });
+    const row = byId.get(id);
+    if (!row.StudentName || row.StudentName === id) row.StudentName = s.StudentName || row.StudentName;
+    row.sessions.push(s);
+  });
+  return Array.from(byId.values()).sort((a,b) => String(a.StudentName).localeCompare(String(b.StudentName), undefined, {sensitivity:'base'}));
+}
+function simAttemptCountMarkup(count) {
+  const color = count >= 3 ? 'var(--red-d)' : count === 2 ? 'var(--gold-d)' : 'var(--g500)';
+  return `<span style="font-family:var(--fm);font-weight:${count >= 3 ? 800 : 600};color:${color}">${count}/3</span>`;
+}
+function simStudentScores(row) {
+  return row.sessions.slice().sort((a,b) => String(a.StartTime||'').localeCompare(String(b.StartTime||'')))
+    .map(s => ({ date:new Date(s.StartTime || s.Date || ''), score:Number(String(s.Overall || '').replace(',', '.')), session:s }))
+    .filter(p => Number.isFinite(p.date.getTime()) && Number.isFinite(p.score));
+}
+function simChartSvg(series, id, single) {
+  const W=820,H=310,L=54,R=22,T=22,B=48, innerW=W-L-R, innerH=H-T-B;
+  const all=series.flatMap(s=>s.points);
+  if (!all.length) return '<div class="empty" style="padding:30px">No scored simulation attempts in this date range.</div>';
+  let minDate=Math.min(...all.map(p=>p.date.getTime())), maxDate=Math.max(...all.map(p=>p.date.getTime()));
+  if (minDate===maxDate) { minDate-=86400000; maxDate+=86400000; }
+  const maxScore=Math.max(9,Math.ceil(Math.max(...all.map(p=>p.score))));
+  const x=t=>L+(t-minDate)/(maxDate-minDate)*innerW, y=v=>T+innerH-(v/maxScore)*innerH;
+  const colors=['#E0895F','#6E8DEB','#3FAE6A','#A99BE6','#D9A441','#E25D74','#36A7A2','#D879C2'];
+  const ticks=Array.from({length:Math.min(6,maxScore+1)},(_,i)=>Math.round(i*maxScore/(Math.min(6,maxScore+1)-1)));
+  const grid=ticks.map(v=>`<g><line x1="${L}" y1="${y(v)}" x2="${W-R}" y2="${y(v)}" stroke="var(--line)"/><text x="${L-10}" y="${y(v)+4}" text-anchor="end" fill="var(--g500)" font-size="11">${v}</text></g>`).join('');
+  const paths=series.map((s,si)=>{
+    const pts=s.points.slice().sort((a,b)=>a.date-b.date); if (!pts.length) return '';
+    const col=colors[si%colors.length], xy=pts.map(p=>({x:x(p.date.getTime()),y:y(p.score),p}));
+    const path=xy.length===1?`M ${xy[0].x} ${xy[0].y}`:xy.reduce((d,a,i)=>i===0?`M ${a.x} ${a.y}`:d+` Q ${(xy[i-1].x+a.x)/2} ${xy[i-1].y} ${a.x} ${a.y}`, '');
+    const area=path+` L ${xy[xy.length-1].x} ${T+innerH} L ${xy[0].x} ${T+innerH} Z`;
+    return `<g><path d="${area}" fill="url(#${id}-grad-${si})" opacity="${single?'.24':'.07'}"/><path d="${path}" fill="none" stroke="${col}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>${xy.map(({x:px,y:py,p})=>`<circle cx="${px}" cy="${py}" r="5" fill="${col}" stroke="var(--white)" stroke-width="2"><title>${_h(s.name)} · ${_h(p.date.toLocaleString())} · ${p.score.toFixed(1)} band · Attempt ${p.session.AttemptNo || ''}</title></circle>`).join('')}</g>`;
+  }).join('');
+  const dates=[minDate,(minDate+maxDate)/2,maxDate].map(t=>`<text x="${x(t)}" y="${H-16}" text-anchor="middle" fill="var(--g500)" font-size="10">${_h(new Date(t).toLocaleDateString())}</text>`).join('');
+  const defs=series.map((s,i)=>`<linearGradient id="${id}-grad-${i}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${colors[i%colors.length]}"/><stop offset="100%" stop-color="${colors[i%colors.length]}" stop-opacity="0"/></linearGradient>`).join('');
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${single?'Student score progress':'Student score comparison'}" style="width:100%;height:auto;overflow:visible"><defs>${defs}</defs>${grid}${paths}${dates}<text x="14" y="${T+innerH/2}" fill="var(--g500)" font-size="11" transform="rotate(-90 14 ${T+innerH/2})">IELTS band</text></svg>`;
+}
+function renderSimulationProgress(c) {
+  const rows=simResultRows();
+  const searchHadFocus=document.activeElement?.id==='prog-search';
+  const filtered=rows.filter(r=>{
+    const q=(document.getElementById('prog-search')?.value||_simSearchQuery).toLowerCase();
+    return !q || String(r.StudentName).toLowerCase().includes(q) || String(r.StudentID).toLowerCase().includes(q);
+  });
+  _progView=filtered;
+  const tableRows=filtered.map((r,ri)=>{
+    const ordered=r.sessions.slice().sort((a,b)=>String(a.StartTime||'').localeCompare(String(b.StartTime||'')));
+    const last=ordered[ordered.length-1];
+    const milestones=ordered.filter(s=>String(s.IsMilestone)==='true'&&s.Overall).slice(-4);
+    const scoreStr=milestones.length?milestones.map(s=>`<span style="color:${scoreColor(s.Overall)};font-weight:700">${_h(s.Overall)}</span>`).join(' · '):'<span style="color:var(--g400);font-style:italic;font-size:12px">not graded</span>';
+    const backupGraded=ordered.some(s=>s.GradedBy&&!/^gemini/i.test(s.GradedBy));
+    const hasUngraded=ordered.some(s=>!s.Overall);
+    return `<tr onclick="selectSimulationStudent('${_h(r.StudentID)}')" style="cursor:pointer;${_simSelectedStudent===r.StudentID?'background:var(--blue-l)':''}">
+      <td style="font-family:var(--fm);font-size:12px">${_h(r.StudentID)}</td>
+      <td style="font-weight:600">${_h(r.StudentName||'—')}</td>
+      <td>${r.ClassID?`<div style="font-weight:600;font-size:12px">${_h(r.ClassName||classNameOf(r.ClassID))}</div><div style="font-size:10px;color:var(--g400);font-family:var(--fm)">${_h(r.ClassID)}</div>`:'—'}</td>
+      <td><span class="badge badge-blue" title="Full Part 1–2–3 mock test">${ic('exam')}Test Sim</span></td>
+      <td style="font-weight:600;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Test Simulation</td>
+      <td style="font-size:12px">${_simFromDate||'—'}</td><td style="font-size:12px">${_simToDate||'—'}</td>
+      <td style="font-size:12px">${last?.DurationMin?`${_h(last.DurationMin)}m`:'—'}</td>
+      <td style="text-align:center">${simAttemptCountMarkup(ordered.length)}</td>
+      <td>${scoreStr}${backupGraded?' <span class="badge badge-gold" title="At least one attempt was marked by a backup model">backup</span>':''}</td>
+      <td style="text-align:center">${hasUngraded?'<span title="At least one test simulation in this date range has no saved score." style="cursor:help">⚠️</span>':''}</td>
+      <td style="text-align:right;white-space:nowrap"><button class="btn btn-outline btn-sm" style="color:var(--red);font-weight:700" onclick="event.stopPropagation();showProgressDetail(${ri})">Detail</button></td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="12" class="empty">No students found</td></tr>';
+  const selected=rows.find(r=>r.StudentID===_simSelectedStudent);
+  const primarySeries=selected?[{name:selected.StudentName,points:simStudentScores(selected)}]:[];
+  const compareRows=_simCompareIds.map(id=>rows.find(r=>r.StudentID===id)).filter(Boolean);
+  const compareSeries=compareRows.map(r=>({name:r.StudentName,points:simStudentScores(r)}));
+  c.innerHTML=`<div class="search-row"><input class="search-inp" placeholder="Filter by name / ID…" id="prog-search" value="${_h(_simSearchQuery)}" oninput="_simSearchQuery=this.value;renderSimulationProgress(document.getElementById('sim-progress-wrap'))" style="max-width:260px"><span style="font-size:12px;color:var(--g600)">${filtered.length} results</span></div>
+    <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Student ID</th><th>Full Name</th><th>Class</th><th>Mode</th><th>Topic</th><th>From date</th><th>To date</th><th>Duration</th><th>Attempts / 3</th><th>Milestone Scores</th><th>⚠</th><th></th></tr></thead><tbody>${tableRows}</tbody></table></div>
+    <section class="card" style="margin-top:18px"><div class="card-header"><div><div class="card-title">Student score progress</div><div style="font-size:12px;color:var(--g500)">${selected?_h(selected.StudentName):'Select one student from the table to view their attempts.'}</div></div><button class="btn btn-outline btn-sm" onclick="toggleSimulationCompare()">${_simCompareIds.length?'Close comparison':'Compare others'}</button></div>${selected?simChartSvg(primarySeries,'sim-primary',true):'<div class="empty" style="padding:28px">No students selected</div>'}</section>
+    ${_simCompareOpen?`<section class="card"><div class="card-header"><div><div class="card-title">Compare students</div><div style="font-size:12px;color:var(--g500)">Choose students or the whole class.</div></div><label style="font-size:12px"><input type="checkbox" ${_simCompareIds.length===rows.length&&rows.length?'checked':''} onchange="setSimulationCompareAll(this.checked)"> Select whole class</label></div><div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px">${rows.map(r=>`<label style="border:1px solid var(--line);border-radius:999px;padding:5px 10px;font-size:12px;cursor:pointer"><input type="checkbox" ${_simCompareIds.includes(r.StudentID)?'checked':''} onchange="toggleSimulationCompareStudent('${_h(r.StudentID)}',this.checked)"> ${_h(r.StudentName)}</label>`).join('')}</div>${compareSeries.length?simChartSvg(compareSeries,'sim-compare',false):'<div class="empty" style="padding:24px">Choose at least one student to compare.</div>'}<div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:10px">${compareSeries.map((s,i)=>`<span style="font-size:11px;color:var(--g600)"><i style="display:inline-block;width:14px;height:3px;vertical-align:middle;margin-right:5px;background:${['#E0895F','#6E8DEB','#3FAE6A','#A99BE6','#D9A441','#E25D74','#36A7A2','#D879C2'][i%8]}"></i>${_h(s.name)} · avg ${s.points.length?(s.points.reduce((a,p)=>a+p.score,0)/s.points.length).toFixed(1):'—'}</span>`).join('')}</div></section>`:''}`;
+  if(searchHadFocus){const input=document.getElementById('prog-search');input?.focus();input?.setSelectionRange(input.value.length,input.value.length);}
+}
+function selectSimulationStudent(id) { _simSelectedStudent=id; renderSimulationProgress(document.getElementById('sim-progress-wrap')); }
+let _simCompareOpen=false;
+function toggleSimulationCompare() { _simCompareOpen=!_simCompareOpen; renderSimulationProgress(document.getElementById('sim-progress-wrap')); }
+function toggleSimulationCompareStudent(id,checked) { _simCompareIds=checked?Array.from(new Set(_simCompareIds.concat(id))):_simCompareIds.filter(x=>x!==id); renderSimulationProgress(document.getElementById('sim-progress-wrap')); }
+function setSimulationCompareAll(checked) { _simCompareIds=checked?simResultRows().map(r=>r.StudentID):[]; renderSimulationProgress(document.getElementById('sim-progress-wrap')); }
 
 function filterProgressByClass(classId) {
   _progFilter = classId;
@@ -6999,26 +7105,33 @@ async function renderTeacherProgress(c) {
   // When a task type is set we fetch its topic list (light). Wrapped so a flaky
   // GAS response can't blank the whole page — worst case the topic list is just
   // "All topics".
-  if (_progTaskType && !_progTopicsFor) {
+  if (_progTaskType && _progTaskType !== 'test' && !_progTopicsFor) {
     try {
       const tRes = await gasCall('teacher.getClassTopics', { classId: _progFilter, taskType: _progTaskType });
       _progTopics = (tRes && tRes.success) ? (tRes.data || []) : [];
     } catch(e) { _progTopics = []; }
     _progTopicsFor = _progTaskType;   // remember which type these topics are for
   }
+  if (_progTaskType === 'test' && !_simDatesInitialized) {
+    const today = new Date(), start = new Date(today);
+    start.setDate(start.getDate() - 13);
+    _simFromDate = localDateInputValue(start);
+    _simToDate = localDateInputValue(today);
+    _simDatesInitialized = true;
+  }
 
   const toolbar = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
       <h2 style="font-size:1.3rem;display:flex;align-items:center;gap:12px;flex-wrap:wrap"><span class="h-ic" style="margin:0">${ic('progress')}</span>Study Progress ${classSelect('progress')}</h2>
       <div style="display:flex;gap:8px">
-        ${_progLoaded ? '<button class="btn btn-outline btn-sm" onclick="exportSessions()">' + ic('download') + 'Export to Sheet</button>' : ''}
-        <button class="btn btn-sm" style="background:var(--red);color:#fff" onclick="deleteClassData()">${ic('trash')}Xóa Data Lớp</button>
+        ${_progLoaded && _progTaskType!=='test' ? '<button class="btn btn-outline btn-sm" onclick="exportSessions()">' + ic('download') + 'Export to Sheet</button>' : ''}
+        ${_progTaskType==='test' ? '' : `<button class="btn btn-sm" style="background:var(--red);color:#fff" onclick="deleteClassData()">${ic('trash')}Xóa Data Lớp</button>`}
       </div>
     </div>
     <div class="search-row" style="align-items:flex-end">
       <div>
         <label style="font-size:11px;font-weight:700;color:var(--g500);text-transform:uppercase;display:block;margin-bottom:4px">Task type</label>
-        <select class="search-inp" style="max-width:160px" onchange="_progTaskType=this.value;_progTopic='__NONE__';_progTopic2='__NONE__';_progTopic3='__NONE__';_progTopicsFor='';_progLoaded=false;renderTeacherProgress(document.getElementById('teacher-content'))">
+        <select class="search-inp" style="max-width:160px" onchange="_progTaskType=this.value;_simDatesInitialized=false;_progTopic='__NONE__';_progTopic2='__NONE__';_progTopic3='__NONE__';_progTopicsFor='';_progLoaded=false;renderTeacherProgress(document.getElementById('teacher-content'))">
           <option value="all" ${_progTaskType==='all'?'selected':''}>All types</option>
           <option value="homework" ${_progTaskType==='homework'?'selected':''}>Homework</option>
           <option value="jam" ${_progTaskType==='jam'?'selected':''}>JAM</option>
@@ -7026,6 +7139,10 @@ async function renderTeacherProgress(c) {
           <option value="test" ${_progTaskType==='test'?'selected':''}>Test Simulation</option>
         </select>
       </div>
+      ${_progTaskType === 'test' ? `
+      <div><label style="font-size:11px;font-weight:700;color:var(--g500);text-transform:uppercase;display:block;margin-bottom:4px">From date</label><input type="date" id="sim-from-date" class="search-inp" value="${_h(_simFromDate)}"></div>
+      <div><label style="font-size:11px;font-weight:700;color:var(--g500);text-transform:uppercase;display:block;margin-bottom:4px">To date</label><input type="date" id="sim-to-date" class="search-inp" value="${_h(_simToDate)}"></div>
+      <div><label style="font-size:11px;font-weight:700;color:var(--g500);text-transform:uppercase;display:block;margin-bottom:4px">Results</label><select class="search-inp" style="max-width:160px"><option>All results</option></select></div>` : `
       ${[_progTopic, _progTopic2, _progTopic3].map((selected, i) => `
       <div>
         <label style="font-size:11px;font-weight:700;color:var(--g500);text-transform:uppercase;display:block;margin-bottom:4px">Topic ${i + 1}</label>
@@ -7034,15 +7151,9 @@ async function renderTeacherProgress(c) {
           ${_progTopics.map(t => `<option value="${String(t.topic).replace(/"/g,'&quot;')}" ${selected===t.topic?'selected':''}>${t.topic}</option>`).join('')}
         </select>
       </div>`).join('')}
-      <div>
-        <label style="font-size:11px;font-weight:700;color:var(--g500);text-transform:uppercase;display:block;margin-bottom:4px">Date range</label>
-        <select id="prog-days-sel" class="search-inp" style="max-width:150px" onchange="_progDays=parseInt(this.value)">
-          <option value="6" ${_progDays===6?'selected':''}>Last 6 days</option>
-          <option value="14" ${_progDays===14?'selected':''}>Last 14 days</option>
-          <option value="0" ${_progDays===0?'selected':''}>All results</option>
-        </select>
-      </div>
-      <button class="btn btn-primary" onclick="_progTopic=document.getElementById('prog-topic-sel-1').value;_progTopic2=document.getElementById('prog-topic-sel-2').value;_progTopic3=document.getElementById('prog-topic-sel-3').value;_progDays=parseInt(document.getElementById('prog-days-sel').value);_progMode='';_progLoaded=true;_progReload=true;renderTeacherProgress(document.getElementById('teacher-content'))">${ic('progress')}Load results</button>
+      `}
+      ${_progTaskType==='test' ? '' : `<div><label style="font-size:11px;font-weight:700;color:var(--g500);text-transform:uppercase;display:block;margin-bottom:4px">Date range</label><select id="prog-days-sel" class="search-inp" style="max-width:150px" onchange="_progDays=parseInt(this.value)"><option value="6" ${_progDays===6?'selected':''}>Last 6 days</option><option value="14" ${_progDays===14?'selected':''}>Last 14 days</option><option value="0" ${_progDays===0?'selected':''}>All results</option></select></div>`}
+      <button class="btn btn-primary" onclick="loadProgressResults()">${ic('progress')}Load results</button>
     </div>`;
 
   if (!_progLoaded) {
@@ -7056,7 +7167,9 @@ async function renderTeacherProgress(c) {
     _progReload = false;
     c.innerHTML = toolbar + '<div class="empty" style="padding:50px">Loading results…</div>';
     try {
-      const sessRes = await gasCall('teacher.getAllSessions', { classId: _progFilter, taskType: _progTaskType, sinceDays: _progDays });
+      const sessRes = await gasCall('teacher.getAllSessions', _progTaskType === 'test'
+        ? { classId: _progFilter, taskType: 'test', sinceDays: 0 }
+        : { classId: _progFilter, taskType: _progTaskType, sinceDays: _progDays });
       _progSessions = sessRes.data || [];
     } catch(e) {
       c.innerHTML = toolbar + '<div class="empty" style="padding:50px;color:var(--red-d)">Could not load — the server may be busy. Press Load results again.</div>';
@@ -7065,12 +7178,32 @@ async function renderTeacherProgress(c) {
     if (!_teacherClasses.length) {
       try { const clsRes = await gasCall('teacher.getClasses'); _teacherClasses = (clsRes.data||[]).filter(cl=>cl.Status!=='Archived'); } catch(e) {}
     }
+    if (_progTaskType === 'test') {
+      try { const stuRes = await gasCall('teacher.getStudents', {}); if (stuRes.success) _teacherStudents = stuRes.data || []; } catch(e) {}
+    }
     _progRows = buildProgressRows(_progSessions, _progFilter);
   }
   c.innerHTML = toolbar;
   const wrap = document.createElement('div');
-  renderProgressUI(wrap, _teacherClasses);
+  if (_progTaskType === 'test') { wrap.id='sim-progress-wrap'; renderSimulationProgress(wrap); }
+  else renderProgressUI(wrap, _teacherClasses);
   c.appendChild(wrap);
+}
+
+function loadProgressResults() {
+  if (_progTaskType === 'test') {
+    _simFromDate = document.getElementById('sim-from-date')?.value || '';
+    _simToDate = document.getElementById('sim-to-date')?.value || '';
+    if (_simFromDate && _simToDate && _simFromDate > _simToDate) { toast('From date must be on or before To date.', 'error'); return; }
+    _simSelectedStudent = ''; _simCompareIds = []; _simCompareOpen = false;
+  } else {
+    _progTopic=document.getElementById('prog-topic-sel-1').value;
+    _progTopic2=document.getElementById('prog-topic-sel-2').value;
+    _progTopic3=document.getElementById('prog-topic-sel-3').value;
+    _progDays=parseInt(document.getElementById('prog-days-sel').value);
+  }
+  _progMode=''; _progLoaded=true; _progReload=true;
+  renderTeacherProgress(document.getElementById('teacher-content'));
 }
 </script>
 </body>
