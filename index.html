@@ -2909,6 +2909,14 @@ function simDateRangeSessions() {
     return !Number.isNaN(d.getTime()) && (!from || d >= from) && (!to || d <= to);
   });
 }
+function simGivenName(name) {
+  const parts=String(name||'').trim().split(/\s+/).filter(Boolean);
+  return parts[parts.length-1]||'';
+}
+function compareSimulationNames(a,b) {
+  return simGivenName(a).localeCompare(simGivenName(b),'vi',{sensitivity:'base',numeric:true}) ||
+    String(a||'').localeCompare(String(b||''),'vi',{sensitivity:'base',numeric:true});
+}
 function simResultRows() {
   const byId = new Map();
   const classStudents = (_teacherStudents || []).filter(s => String(s.ClassID || '').toUpperCase() === String(_progFilter).toUpperCase());
@@ -2939,8 +2947,9 @@ function simResultRows() {
   rows.sort((a,b)=>{
     const av=value(a,_simSortCol), bv=value(b,_simSortCol);
     const ncols=['Attempts','Duration','MilestoneScores','Warning'];
-    const cmp=ncols.includes(_simSortCol)?(Number(av)-Number(bv)):String(av).localeCompare(String(bv),undefined,{numeric:true,sensitivity:'base'});
-    return (cmp||String(a.StudentName).localeCompare(String(b.StudentName),undefined,{sensitivity:'base'}))*_simSortDir;
+    const cmp=_simSortCol==='StudentName'?compareSimulationNames(a.StudentName,b.StudentName):
+      ncols.includes(_simSortCol)?(Number(av)-Number(bv)):String(av).localeCompare(String(bv),'vi',{numeric:true,sensitivity:'base'});
+    return (cmp||compareSimulationNames(a.StudentName,b.StudentName))*_simSortDir;
   });
   return rows;
 }
@@ -3039,7 +3048,7 @@ function renderSimulationProgress(c) {
   const primarySeries=selected?[{name:selected.StudentName,studentId:selected.StudentID,points:simStudentScores(selected)}]:[];
   const compareSeries=_simCompareIds.map(id=>rows.find(r=>r.StudentID===id)).filter(r=>r&&r.sessions.length>0)
     .map(r=>({name:r.StudentName,studentId:r.StudentID,points:simStudentScores(r)})).filter(s=>s.points.length>0);
-  const comparePickerRows=rows.slice().sort((a,b)=>String(a.StudentName).localeCompare(String(b.StudentName),undefined,{sensitivity:'base'}))
+  const comparePickerRows=rows.slice().sort((a,b)=>compareSimulationNames(a.StudentName,b.StudentName))
     .filter(r=>!_simCompareSearchQuery||String(r.StudentName).toLowerCase().includes(_simCompareSearchQuery.toLowerCase())||String(r.StudentID).toLowerCase().includes(_simCompareSearchQuery.toLowerCase()));
   const sortHead=(key,label)=>`<th onclick="sortSimulationProgress('${key}')" title="Sort by ${label}" style="cursor:pointer;user-select:none">${label} ${_simSortCol===key?(_simSortDir===1?'↑':'↓'):'↕'}</th>`;
   const colorList=['#E0895F','#6E8DEB','#3FAE6A','#A99BE6','#D9A441','#E25D74','#36A7A2','#D879C2'];
