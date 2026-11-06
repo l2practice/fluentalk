@@ -374,7 +374,8 @@ async function saveResult(p) {
     if (items[sid]) return ok({ sessionId: sid, duplicate: true, attemptNo: parseInt(items[sid].AttemptNo) || 0 });
     const attemptNo = attemptsSoFar(Object.values(items).filter(s => sameTask(s, p))) + 1;
     const isJam = String(p.type) === 'jam' || String(p.part) === 'jam';
-    const isMilestone = (!isJam && (MILESTONES.indexOf(attemptNo) >= 0 || !!p.overall)) ? 'true' : 'false';
+    // A JAM run counts as graded when the AI marked it; practice on its milestones.
+    const isMilestone = (isJam ? !!p.overall : (MILESTONES.indexOf(attemptNo) >= 0 || !!p.overall)) ? 'true' : 'false';
     const now = new Date().toISOString();
     const light = {
       SessionID: sid, StudentID: u.studentId, StudentName: u.fullName, ClassID: cid,
