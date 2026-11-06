@@ -4248,92 +4248,157 @@ async function finishJAM() {
   const status = document.getElementById('jam-status');
   if (status) status.textContent = '⏳ Transcribing what you said…';
   const rec = await stopMediaRecorder();
-  if (!rec || rec.blob.size < 1500) {
-    c.innerHTML = `<div class="empty">The recording was too short to analyse. <button class="btn btn-primary btn-sm" onclick="startJAM('${_jam.libId}','${String(_jam.topic).replace(/'/g,'&#39;')}')">Try again</button></div>`;
-    return;
-  }
+  const retryBtn = `<button class="btn btn-primary btn-sm" style="margin-top:10px" onclick="startJAM('${_jam.libId}','${String(_jam.topic).replace(/'/g,'&#39;')}')">Try again</button>`;
+  if (!rec || rec.blob.size < 1500) { c.innerHTML = `<div class="empty">The recording was too short to analyse.<br>${retryBtn}</div>`; return; }
   _jam.blob = rec.blob; _jam.mime = rec.mime;
   if (_jam.audioUrl) URL.revokeObjectURL(_jam.audioUrl);
   _jam.audioUrl = URL.createObjectURL(rec.blob);
 
-  let text = '';
-  try {
-    const tr = await transcribeGroq(rec.blob, rec.mime);
-    text = tr.text || '';
-  } catch(e) {
-    const info = classifyTranscribeError(e);
-    c.innerHTML = `<div class="empty">${info.text}<br><button class="btn btn-primary btn-sm" style="margin-top:10px" onclick="startJAM('${_jam.libId}','${String(_jam.topic).replace(/'/g,'&#39;')}')">Thu lại</button></div>`;
-    return;
-  }
+  let tr;
+  try { tr = await transcribeGroq(rec.blob, rec.mime); }
+  catch (e) { c.innerHTML = `<div class="empty">${classifyTranscribeError(e).text}<br>${retryBtn}</div>`; return; }
   _jam.runs++;
-  const lex = cefrProfile(text);
-  renderJAMResult(text, lex);
-
-  // Save the run so the teacher sees the practice happened. No band — JAM is
-  // fluency drill, graded by the student's own eyes on the vocabulary.
+  const text = (tr.text || '').trim();
+  const startIso = new Date(_jam.startTs).toISOString();
   const durMin = Math.max(1, Math.round((Date.now() - _jam.startTs) / 60000 * 10) / 10);
-  // The server numbers the run; _jam.runs only counts this sitting. Sending it
-  // as the attempt number used to collide with earlier sittings (every sitting
-  // restarted at 1), and the server dropped those runs as duplicates.
-  saveAttempt({
+  // One "answer" for the shared analysis, grader and Doc code.
+  const ans = { question: 'JAM — speak for one minute about: ' + _jam.topic, studentAnswer: text, keywords: [],
+                part: 'jam', topic: _jam.topic, _words: tr.words || [], _dur: tr.duration || 0, secs: 60 };
+  A.mode = 'jam'; A.topic = _jam.topic; A.assignId = ''; A.t0 = startIso; A.lastSessionId = '';
+  _jam.ans = ans; _jam.rpt = null; _jam.gradeError = ''; _jam.sessionId = ''; _jam.docUrl = ''; _jam.saving = true;
+  await prepareAnalysis([ans]);
+  renderJAMResult(ans);
+
+  // The AI examiner: bands, corrections, collocations and idioms for this topic.
+  let g = null;
+  if (wordCount(text) >= MIN_ANSWER_WORDS) {
+    try { g = await gradeAnswers([ans], 'jam'); _jam.rpt = g.rpt; }
+    catch (e) { _jam.gradeError = e.message || String(e); }
+  } else _jam.gradeError = 'Too little speech to mark — keep talking for the whole minute.';
+  const sc = ans.scores || {}, num = k => (sc[k] && sc[k].score) || '';
+  const fc = num('fluency'), lr = num('lexical'), gr = num('grammar'), p = num('pronunciation');
+  const overall = g ? (ans.overall || calcOverall(fc, lr, gr, p)) : '';
+  renderJamFeedback();
+
+  // The server numbers the run (_jam.runs only counts this sitting).
+  let lex = null; try { lex = cefrProfile(text); } catch (_) {}
+  const payload = {
     topic: _jam.topic, part: 'jam', mode: 'jam', type: 'jam',
-    attemptNo: _jam.runs, durationMin: durMin,
-    startTime: new Date(_jam.startTs).toISOString(), endTime: new Date().toISOString(),
-    resultsJSON: [{ text }], analysis: lex ? { cefr: lex.pct } : null
-  }).then(r => {
-    if (!r.success) toast('This run has not reached the server yet — it is kept on this device and will be sent automatically.', 'error', 7000);
-  });
+    attemptNo: _jam.runs, durationMin: durMin, startTime: startIso, endTime: new Date().toISOString(),
+    isMilestone: !!g, gradeError: _jam.gradeError, gradedBy: g ? g.gradedBy : '',
+    overall, fc: g ? fc : '', lr: g ? lr : '', gr: g ? gr : '', p: g ? p : '',
+    questionsJSON: [{ question: ans.question, keywords: [] }],
+    resultsJSON: [{ question: ans.question, part: 'jam', text, studentAnswer: text, overall: ans.overall || '', scores: ans.scores || null,
+      errors: ans.errors || [], suggestion: ans.suggestion || '', natural: ans.natural || '', logic: ans.logic || null }],
+    reportText: buildReport([ans], _jam.rpt, !!g, _jam.runs),
+    analysis: Object.assign({ cefr: lex ? lex.pct : null }, buildAnalysisPayload() || {}),
+    docPayload: tsDocPayload([ans], _jam.rpt, { overall, fc, lr, gr, p, graded: !!g, gradedBy: g ? g.gradedBy : '', gradeError: _jam.gradeError },
+      { kind: 'jam', topic: _jam.topic, startTime: startIso, durationMin: durMin, info: { total: 1, missing: 0 } })
+  };
+  try {
+    const r = await saveAttempt(payload);
+    if (r.success) _jam.sessionId = r.sessionId || '';
+    else toast('This run has not reached the server yet — it is kept on this device and will be sent automatically.', 'error', 7000);
+  } catch (e) { toast('Could not save this run: ' + e.message, 'error', 7000); }
+  _jam.saving = false;
+  jamDocSlot();
 }
 
-function renderJAMResult(text, lex) {
+// Each run can go into the student's JAM Doc (one Doc, a section per run);
+// the teacher opens the same Doc from Results → Detail.
+function jamDocSlotHtml() {
+  if (_jam.docUrl) return `<button class="btn btn-green" onclick="tsOpenDoc('${_h(_jam.docUrl)}')">📄 Open Google Doc</button>`;
+  if (_jam.saving) return `<button class="btn btn-green" disabled>⏳ Saving…</button>`;
+  if (_jam.docBusy) return `<button class="btn btn-green" disabled>⏳ Building your Doc…</button>`;
+  return _jam.sessionId ? `<button class="btn btn-green" onclick="jamExportDoc()">📄 Export to Google Doc</button>` : '';
+}
+function jamDocSlot() { const el = document.getElementById('jam-doc-slot'); if (el) el.innerHTML = jamDocSlotHtml(); }
+async function jamExportDoc() {
+  if (_jam.docBusy || !_jam.sessionId) return;
+  _jam.docBusy = true; jamDocSlot();
+  try {
+    const res = await gasCall('speak.exportDoc', { sessionId: _jam.sessionId });
+    if (!res.success) throw new Error(res.error || 'Doc not created');
+    if (!res.jamDoc) toast('Apps Script is still running the old Code.gs — paste the new one and deploy a New version for the full JAM Doc.', 'error', 9000);
+    _jam.docUrl = res.url;
+    clearTabCache();
+    window.open(res.url, '_blank');
+  } catch (e) { toast('Could not create the Google Doc: ' + e.message, 'error', 8000); }
+  finally { _jam.docBusy = false; jamDocSlot(); }
+}
+
+function renderJAMResult(ans) {
   const c = document.getElementById('student-content');
-  const LV = [['B1','var(--blue)'],['B2','#8B5CF6'],['C1','var(--gold-d)'],['C2','#E8284A']];
-  const bar = lex ? LV.map(([L]) => lex.pct[L] || 0) : [0,0,0,0];
-  const maxPct = Math.max(1, ...bar);
+  const text = ans.studentAnswer || '';
+  const words = wordCount(text), wpm = ans._dur ? Math.round(words / ans._dur * 60) : 0;
+  const topicQ = String(_jam.topic).replace(/'/g,'&#39;');
   c.innerHTML = `
     <button class="btn btn-outline btn-sm" onclick="studentTab('practice')" style="margin-bottom:16px">← Back to practice</button>
-    <h2 style="margin-bottom:4px"><span class="h-ic">${ic('clock')}</span>${_jam.topic}</h2>
-    <div style="font-size:13px;color:var(--g600);margin-bottom:18px">Run ${_jam.runs} · one minute · fluency drill</div>
+    <h2 style="margin-bottom:4px"><span class="h-ic">${ic('clock')}</span>${_h(_jam.topic)}</h2>
+    <div style="font-size:13px;color:var(--g600);margin-bottom:18px">Run ${_jam.runs} · ${words} words${wpm ? ' · ' + wpm + ' words/min' : ''} · one-minute fluency drill</div>
 
     <div class="card">
       <div class="card-title">🎧 Listen back &amp; try again</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
         <audio id="jam-audio" src="${_jam.audioUrl}" controls style="flex:1;min-width:200px;height:40px"></audio>
         <button class="btn btn-outline btn-sm" onclick="const a=document.getElementById('jam-audio');if(a){a.pause();a.currentTime=0;}">⏹ Stop</button>
-        <button class="btn btn-primary" onclick="startJAM('${_jam.libId}','${String(_jam.topic).replace(/'/g,'&#39;')}')">🔄 Re-try</button>
-        <button class="btn btn-green" onclick="jamDone()">✓ Done</button>
+        <button class="btn btn-primary" onclick="startJAM('${_jam.libId}','${topicQ}')">🔄 Re-try</button>
+        <span id="jam-doc-slot">${jamDocSlotHtml()}</span>
+        <button class="btn btn-outline" onclick="jamDone()">✓ Done</button>
       </div>
     </div>
 
-    ${lex ? `<div class="card">
-      <div class="card-title">📊 Vocabulary you reached for</div>
-      <div style="display:flex;gap:10px;align-items:flex-end;height:120px;margin:16px 0 8px;padding:0 6px">
-        ${LV.map(([L,col]) => {
-          const p = lex.pct[L] || 0;
-          return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%">
-            <div style="font-size:12px;font-weight:700;color:${col};margin-bottom:4px">${p}%</div>
-            <div style="width:100%;background:${col};border-radius:6px 6px 0 0;height:${Math.max(3, p/maxPct*90)}%;transition:height .4s"></div>
-            <div style="font-size:12px;font-weight:700;color:var(--g600);margin-top:6px">${L}</div>
-          </div>`;
-        }).join('')}
-      </div>
-      <div style="font-size:11px;color:var(--g500);text-align:center">Share of your distinct content words at each CEFR level. Aim to grow the B2–C1 bars over successive runs.</div>
-    </div>
+    <div id="jam-ai">${jamFeedbackHtml()}</div>
 
-    ${LV.map(([L,col]) => {
-      const words = lex.samples[L] || [];
-      if (!words.length) return '';
-      return `<div class="card" style="padding:14px">
-        <div style="font-size:12px;font-weight:700;color:${col};text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">${L} words you used</div>
-        <div style="display:flex;flex-wrap:wrap;gap:6px">${words.map(w => `<span class="badge" style="background:${col}22;color:${col}">${w}</span>`).join('')}</div>
-      </div>`;
-    }).join('')}` : '<div class="card"><div class="empty">Vocabulary analysis needs the CEFR dictionary, which did not load.</div></div>'}
+    ${(() => { const b = renderLexBlock(text, _jam.topic); return b ? `<div class="card"><div class="card-title" style="margin-bottom:4px">Collocations &amp; topic vocabulary</div>
+      <div style="font-size:11px;color:var(--g400);margin-bottom:12px">From the CEFR word list, a collocation dictionary and the IELTS vocabulary list, with Vietnamese meanings. Hover a green collocation to see its meaning.</div>${b}</div>` : ''; })()}
+
+    ${A.langText ? renderLanguageAnalysis(A.langText, A.prosody) : ''}
 
     <div class="card" style="background:var(--g50)">
       <div class="card-title">📝 What you said</div>
-      <p style="font-size:13px;color:var(--g700);line-height:1.7;margin-top:8px;font-style:italic">${text.replace(/</g,'&lt;') || '(nothing transcribed)'}</p>
+      <p style="font-size:14px;color:var(--g700);line-height:1.8;margin-top:8px">${text ? highlightTranscript(text) : '(nothing transcribed)'}</p>
+      <div style="font-size:11px;color:var(--g500);margin-top:6px">B1+ words are coloured by level; fillers are struck through.</div>
     </div>`;
 }
+
+// The AI examiner's part of the JAM result: filled in when marking finishes.
+function jamFeedbackHtml() {
+  const ans = _jam.ans || {}, r = _jam.rpt;
+  if (!ans.scores && !_jam.gradeError) return `<div class="card" style="background:var(--blue-l);border-color:var(--blue-m)">
+    <div style="display:flex;align-items:center;gap:12px"><div class="spinner" style="width:24px;height:24px;border-width:2px;margin:0;flex-shrink:0"></div>
+    <div><div style="font-weight:700;color:var(--blue-d)">The examiner is listening to your minute…</div>
+    <div id="grading-status" style="font-size:12px;color:var(--blue-d);margin-top:2px">Marking fluency, vocabulary, grammar and ideas</div></div></div></div>`;
+  if (!ans.scores) return `<div class="card" style="background:var(--gold-l);border-color:var(--gold)">
+    <div style="font-weight:700;color:var(--gold-d)">⏳ No AI feedback this time</div>
+    <p style="font-size:13px;color:var(--gold-d);margin-top:6px;line-height:1.6">${_h(_jam.gradeError)} The vocabulary and fluency measurements below are complete.</p></div>`;
+  const sc = ans.scores, L = ans.logic;
+  const chip = (t, cls) => `<span class="badge ${cls}" style="margin:2px">${_h(t)}</span>`;
+  const co = (r && r.collocations) || {};
+  return `<div class="res-hero">
+      <div style="font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:rgba(var(--fg-rgb),.35);margin-bottom:6px">JAM · Estimated band</div>
+      <div class="res-score">${ans.overall || '—'}</div>
+      <div class="crit-grid">${[['FC','fluency'],['LR','lexical'],['GR','grammar'],['P','pronunciation']].map(([n,k]) => `<div class="crit-box"><div class="crit-score">${(sc[k] && sc[k].score) || '—'}</div><div class="crit-name">${n}</div></div>`).join('')}</div>
+      <div style="font-size:10px;color:rgba(var(--fg-rgb),.35);margin-top:12px">Estimated band for one minute of speech, not an official IELTS result.</div>
+    </div>
+    <div class="card">
+      <div class="card-title" style="margin-bottom:10px">🧑‍🏫 Examiner feedback</div>
+      ${L ? `<div style="font-size:13px;line-height:1.6;margin-bottom:10px;color:${L.relevant && L.logical ? 'var(--green-d)' : 'var(--gold-d)'}"><strong>${L.relevant ? '✓ On the topic' : '⚠ Drifted off the topic'} · ${L.logical ? '✓ Ideas hang together' : '⚠ Reasoning gap'}</strong>${L.note ? `<div style="color:var(--g700)">${_h(L.note)}</div>` : ''}</div>` : ''}
+      ${r && r.adv ? `<div class="rpt-box" style="margin-bottom:12px">${_h(r.adv)}</div>` : ''}
+      ${(ans.errors || []).length ? `<div class="qs-lbl">Errors to fix</div>${ans.errors.map(e => `<div style="font-size:13px;margin-bottom:4px">❌ <s style="color:var(--red)">${_h(e.wrong)}</s> → ✅ <strong>${_h(e.correct)}</strong>${e.reason ? ' — ' + _h(e.reason) : ''}</div>`).join('')}` : ''}
+      ${ans.suggestion ? `<div class="qs-sugg" style="margin-top:8px">${_h(ans.suggestion)}</div>` : ''}
+      ${ans.natural ? `<div class="qs-lbl" style="margin-top:10px">How a fluent speaker would say it</div><div class="qs-sugg" style="border-left-color:var(--green)">${_h(ans.natural)}</div>` : ''}
+      ${(co.strong || []).length ? `<div class="qs-lbl" style="margin-top:10px">Collocations you got right</div><div>${co.strong.map(x => chip(x, 'badge-green')).join('')}</div>` : ''}
+      ${(co.off || []).length ? `<div class="qs-lbl" style="margin-top:10px">Word pairings to fix</div>${co.off.map(x => `<div style="font-size:13px;margin-bottom:3px"><s style="color:var(--red)">${_h(x.said)}</s> → <strong style="color:var(--green-d)">${_h(x.better)}</strong></div>`).join('')}` : ''}
+      ${(r && (r.phrasalVerbs || []).length) ? `<div class="qs-lbl" style="margin-top:10px">Phrasal verbs</div><div>${r.phrasalVerbs.map(x => chip(x, /wrong/i.test(x) ? 'badge-red' : 'badge-blue')).join('')}</div>` : ''}
+      ${(r && (r.idioms || []).length) ? `<div class="qs-lbl" style="margin-top:10px">Idioms you used</div><div>${r.idioms.map(x => chip(x, /forced|misquot|wrong/i.test(x) ? 'badge-gold' : 'badge-green')).join('')}</div>` : ''}
+      ${(r && (r.idiomIdeas || []).length) ? `<div class="qs-lbl" style="margin-top:12px">💬 Idioms you could use on this topic</div>
+        ${r.idiomIdeas.map(x => `<div style="margin:6px 0;font-size:13px;line-height:1.6"><strong>${_h(x.idiom)}</strong>${x.meaning ? ' — ' + _h(x.meaning) : ''}${x.vi ? ` <span style="color:var(--g500)">(${_h(x.vi)})</span>` : ''}${x.example ? `<div style="font-style:italic;color:var(--g600)">“${_h(x.example)}”</div>` : ''}</div>`).join('')}` : ''}
+      ${r && r.weak ? `<div style="font-size:13px;color:var(--g600);margin-top:10px"><strong>Biggest area to improve:</strong> ${_h(r.weak)}</div>` : ''}
+      ${r && r.up ? `<div class="qs-lbl" style="margin-top:10px">🚀 Band 8 version</div><div class="qs-sugg" style="border-left-color:var(--green)">${_h(r.up)}</div>` : ''}
+    </div>`;
+}
+function renderJamFeedback() { const el = document.getElementById('jam-ai'); if (el) el.innerHTML = jamFeedbackHtml(); }
 
 function jamDone() {
   if (_jam.audioUrl) { URL.revokeObjectURL(_jam.audioUrl); _jam.audioUrl = ''; }
@@ -4462,6 +4527,7 @@ async function renderMyHistory(c) {
 function retryFromHistory(topic, assignId, part, questionsJSON) {
   if (gateBlocked()) return;
   if (part === 'test') { SS('S-student'); studentTab('practice').then(openTestSim); return; }
+  if (part === 'jam') { SS('S-student'); studentTab('practice').then(() => startJAM('', topic)); return; }
   let savedQs = [];
   if (questionsJSON) { try { savedQs = JSON.parse(questionsJSON); } catch(e) {} }
 
@@ -5537,6 +5603,19 @@ band reflect the whole test, as an examiner's would, and in "adv" name the
 part that held the candidate back most.
 ` : '';
 
+  const jam = part === 'jam' ? `
+JAM NOTE: this is "Just A Minute" — about one minute of continuous speech on
+one topic, with no examiner questions. Mark it like a Part 2 long turn: weight
+fluency (keeping going, no long pauses, no repetition) and coherence (staying
+on the topic and developing it with reasons and examples). In "logic", say
+whether the talk stayed on the topic and how well it was developed.
+In "r", ALSO return "idiomIdeas": 3-4 idioms or fixed expressions a fluent
+speaker would naturally use on THIS topic, each
+{"idiom": "...", "meaning": "plain English meaning", "vi": "nghĩa tiếng Việt",
+ "example": "one sentence about this topic that uses it"}.
+Only real, common idioms that fit a spoken answer; never invent one.
+` : '';
+
   const p3 = (part === 'part3' || part === 'test') ? `
 PART 3 NOTE: this is the abstract discussion section. If the candidate answers
 only with personal anecdotes, tell them to address the topic at a general or
@@ -5544,7 +5623,7 @@ societal level first, then use a personal example as support.
 ` : '';
 
   return `You are an experienced IELTS Speaking examiner. Grade these ${n} answers.
-${ev}${full}${p2}${p3}
+${ev}${full}${jam}${p2}${p3}
 Apply these rules when scoring. Each one is IF-THEN; only fire it when the
 condition is genuinely met.
 
@@ -6518,6 +6597,9 @@ function grammarErrorScan(text) {
   // like "many peoples" and would cap a band the student did not lose.
   const IRREG_PL = /^(people|children|men|women|feet|teeth|geese|mice|sheep|fish|deer|police|staff|youth|series|species)$/;
   const UNCOUNT  = /^(information|advice|furniture|luggage|equipment|homework|research|knowledge|money|water|music|news|traffic|weather|work|progress|evidence|feedback|software|hardware|content|damage|luck|fun|help)$/;
+  // Mass nouns that are right after "a lot of / lots of" ("a lot of time"),
+  // though "two time" is still an error, so they are not in UNCOUNT.
+  const MASS     = /^(time|food|rice|meat|bread|fruit|coffee|tea|milk|sugar|salt|space|stuff|energy|experience|pressure|stress|effort|attention|freedom|love|noise|pollution|rubbish|garbage|air|sleep|exercise|practice|education|transport|transportation|entertainment|nature|safety|health|happiness|confidence|patience|support|English|vocabulary|grammar|history|culture|tourism|shopping|traffic|rain|snow|sunshine|light|heat|paper|plastic|land|gas|oil|electricity|power|data|interest|potential)$/i;
 
   // Third-person -s is not a plain suffix: go -> goes, study -> studies.
   const thirdPerson = v =>
@@ -6554,7 +6636,7 @@ function grammarErrorScan(text) {
     let re2 = /\b(two|three|four|five|six|seven|eight|nine|ten|many|several|few|both|lots of|a lot of)\s+([a-z']+)\b/g;
     while ((m = re2.exec(low))) {
       const n = m[2];
-      if (/s$/.test(n) || AUX.test(n) || IRREG_PL.test(n) || UNCOUNT.test(n)) continue;
+      if (/s$/.test(n) || AUX.test(n) || IRREG_PL.test(n) || UNCOUNT.test(n) || (/lot/.test(m[1]) && MASS.test(n))) continue;
       if (isNoun(n) && lemmaOf(n) === n) {
         findings.push({ type: 'plural form', snippet: m[0], fix: m[1] + ' ' + pluralise(n) });
         hit = true;

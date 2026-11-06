@@ -848,7 +848,9 @@ function tsOpenDoc(url, sessionId, asTeacher, studentId) {
 // Everything the Doc shows, measured on this device: CEFR mix, words by
 // level, words per sentence, sentence types, grammar, delivery, accuracy,
 // collocations, and each answer with its B1+ words coloured by level.
-function tsDocPayload(answered, rpt, g) {
+// `meta` lets JAM use the same Doc data: { kind, topic, startTime, durationMin, info }.
+function tsDocPayload(answered, rpt, g, meta) {
+  meta = meta || {};
   const LV = { B1: 1, B2: 1, C1: 1, C2: 1 };
   const sentStats = text => {
     const ss = String(text || '').split(/[.!?]+/).map(x => x.trim()).filter(x => /[a-z]/i.test(x));
@@ -887,9 +889,11 @@ function tsDocPayload(answered, rpt, g) {
     relativeClause: 'relative clauses', comparative: 'comparatives', superlative: 'superlatives', gerundInfin: 'gerund / infinitive patterns',
     linker: 'linking words', pastSimple: 'past simple' };
   const f = gram ? gram.features : {};
-  const info = A.testInfo || {};
+  const info = meta.info || A.testInfo || {};
+  const t0 = meta.startTime || TS.t0 || A.t0;
   return {
-    v: 1, startTime: TS.t0 || A.t0, durationMin: Math.max(1, Math.round((Date.now() - new Date(TS.t0 || A.t0)) / 60000)),
+    v: 1, kind: meta.kind || 'test', topic: meta.topic || '',
+    startTime: t0, durationMin: meta.durationMin || Math.max(1, Math.round((Date.now() - new Date(t0)) / 60000)),
     bands: { overall: g.overall || '', fc: g.fc || '', lr: g.lr || '', gr: g.gr || '', p: g.p || '' }, graded: !!g.graded, gradedBy: g.gradedBy || '', gradeError: g.gradeError || '',
     parts: tsPartBands(answered), missing: info.missing || 0, total: info.total || answered.length, part2Secs: info.part2Secs || 0,
     profile: {
@@ -913,7 +917,7 @@ function tsDocPayload(answered, rpt, g) {
       const sec = Math.round(r._dur || r.secs || 0);
       return {
         part: r.part, topic: r.topic || '', question: String(r.question || '').replace(/^\[[^\]]*\]\s*/, ''),
-        label: r.part === 'part1' ? 'Part 1 · ' + r.topic : r.part === 'part2' ? 'Part 2 · Long turn' : 'Part 3',
+        label: r.part === 'part1' ? 'Part 1 · ' + r.topic : r.part === 'part2' ? 'Part 2 · Long turn' : r.part === 'jam' ? 'JAM · ' + r.topic : 'Part 3',
         segments: segments(r.studentAnswer), seconds: r.secs || 0,
         words: s2.words, sentences: s2.sentences, perSentence: s2.perSentence,
         wpm: sec ? Math.round(s2.words / sec * 60) : 0,
