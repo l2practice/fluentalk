@@ -19,6 +19,9 @@
 //   sessions/{SessionID}   full attempt (same fields as the old Sessions sheet) + uid
 //   classStats/{ClassID}   topics: { key: { topic, part, total, last, students: { uid: {name,count,last} } } }
 //   extensionRequests/{id} uid, studentId, name, classId, assignId, title, reason, until, status
+//   pronReports/{id}       a student's "this word was marked wrong but I said it right": uid, studentId,
+//                          name, classId, word, expected, heard, accent, phones, context, clip (base64 wav),
+//                          status new | ai_wrong | ai_right
 // ════════════════════════════════════════════
 (function () {
 'use strict';
@@ -740,6 +743,48 @@ async function getClassStats() {
   return ok({ data: stats });
 }
 
+// ════════════════════════════════════════════
+// Pronunciation reports: a student flags a word the checker marked wrong.
+// Collected for the teacher, who listens and rules; the rulings tune the checker.
+// ════════════════════════════════════════════
+const PRON_STATUS = ['new', 'ai_wrong', 'ai_right'];
+const cut = (v, n) => String(v == null ? '' : v).slice(0, n);
+async function reportPron(p) {
+  const u = await me();
+  if (u.role === 'Teacher') return fail('Only students report from their own practice.');
+  const w = p.word || {};
+  if (!w.word) return fail('Nothing to report.');
+  const clip = typeof p.clip === 'string' && p.clip.length < 400000 ? p.clip : '';
+  const doc = {
+    uid: u.uid, studentId: u.studentId || '', name: u.fullName || '', classId: u.classId || '',
+    createdAt: FV.serverTimestamp(), created: new Date().toISOString(), status: 'new',
+    word: cut(w.word, 60), expected: cut(w.expected, 60), heard: cut(w.heard, 60), accent: cut(w.accent, 4),
+    score: typeof w.score === 'number' ? w.score : null, flagged: !!w.flagged,
+    patterns: (w.patterns || []).slice(0, 6).map(x => cut(x, 20)),
+    phones: (w.phones || []).slice(0, 20).map(x => ({ e: cut(x.e, 8), h: cut(x.h, 12), c: +x.c || 0 })),
+    context: cut(p.context, 300), question: cut(p.question, 300), mode: cut(p.mode, 20), topic: cut(p.topic, 120),
+    note: cut(p.note, 300), clip, clipMime: clip ? 'audio/wav' : ''
+  };
+  const ref = await fs.collection('pronReports').add(doc);
+  return ok({ id: ref.id });
+}
+async function getPronReports(p) {
+  let q = fs.collection('pronReports').orderBy('createdAt', 'desc').limit(Math.min(500, +p.limit || 300));
+  const snap = await q.get();
+  const data = snap.docs.map(d => Object.assign({ id: d.id }, d.data(), { createdAt: undefined }))
+    .filter(r => !p.status || r.status === p.status);
+  return ok({ data });
+}
+async function setPronReport(p) {
+  if (PRON_STATUS.indexOf(p.status) < 0) return fail('Unknown status');
+  await fs.doc('pronReports/' + p.id).update({ status: p.status, decidedAt: new Date().toISOString() });
+  return ok();
+}
+async function deletePronReport(p) {
+  await fs.doc('pronReports/' + p.id).delete();
+  return ok();
+}
+
 async function getExtensionRequests(p) {
   let q = fs.collection('extensionRequests');
   if (!p || p.status !== 'all') q = q.where('status', '==', (p && p.status) || 'pending');
@@ -808,6 +853,8 @@ const ACTIONS = {
   'student.getPeerComparison': getPeerComparison, 'student.getJamTopics': getJamTopics,
   'student.requestExtension': selfExtend, 'student.selfExtend': selfExtend,
   'speak.findExisting': findExisting, 'speak.saveResult': saveResult, 'speak.regradeTest': regradeTest,
+  'speak.reportPron': reportPron,
+  'teacher.getPronReports': getPronReports, 'teacher.setPronReport': setPronReport, 'teacher.deletePronReport': deletePronReport,
   'teacher.getClasses': getClasses, 'teacher.createClass': createClass,
   'teacher.setClassStatus': setClassStatus, 'teacher.archiveClass': p => setClassStatus({ classId: p.classId, status: 'Archived' }),
   'teacher.getStudents': getStudents, 'teacher.activateUser': activateUser,

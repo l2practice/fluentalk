@@ -89,6 +89,42 @@
       };
     },
 
+    // Pronunciation ceiling for one answer, from the share of sounds heard as
+    // expected. Only with enough speech checked; null means no ceiling.
+    cap(rec) {
+      const r = rec && rec._pron;
+      if (!r || r.accuracy == null || (r.phones_checked || 0) < 30) return null;
+      const pct = Math.round(r.accuracy * 100);
+      const max = CAP_BANDS.find(b => r.accuracy < b[0]);
+      return max ? { max: max[1], why: pct + '% of the sounds checked were heard as expected' } : null;
+    },
+
+    // ⚑ Report: "this word was marked wrong but I said it right". The word's
+    // clip from this session's recording goes with it, so the teacher can
+    // listen and rule; the rulings are collected to tune the checker.
+    async report(id, k) {
+      const rec = live[id];
+      const w = rec && rec._pronRows && rec._pronRows[k];
+      if (!w) return;
+      rec._pronReported = rec._pronReported || {};
+      if (rec._pronReported[k]) return;
+      if (!confirm(`Report "${w.word}" as marked wrong by mistake?\nYour recording of this word will be sent to your teacher.\n\nBáo "${w.word}" bị chấm sai? Đoạn ghi âm từ này sẽ được gửi cho giáo viên.`)) return;
+      rec._pronReported[k] = 'sending'; fill(rec);
+      let clip = '';
+      try { if (rec._pronAudio && w.start != null) clip = await clipWav(rec._pronAudio, w.start, w.end); } catch (e) { console.warn('[pron] clip', e); }
+      const A_ = typeof A !== 'undefined' ? A : {};
+      let res = null;
+      try {
+        res = await gasCall('speak.reportPron', {
+          word: w, clip, context: contextOf(rec.studentAnswer, w.word), question: rec.question || '',
+          mode: rec.part || A_.mode || '', topic: rec.topic || A_.topic || ''
+        });
+      } catch (e) { res = { success: false, error: e.message }; }
+      rec._pronReported[k] = res && res.success ? 'done' : null;
+      if (!(res && res.success) && typeof toast === 'function') toast('Could not send the report: ' + ((res && res.error) || 'network'), 'error');
+      fill(rec);
+    },
+
     slot(rec) {
       if (!rec || !rec._pronId) return '';
       return `<div class="pron-slot" data-pron-id="${rec._pronId}">${render(rec)}</div>`;
@@ -113,6 +149,37 @@
       if (window.Voice) { Voice.unlock(); Voice.say(word); }
     }
   };
+
+  // Accuracy below the first figure → Pronunciation at most the second.
+  const CAP_BANDS = [[0.75, 4], [0.82, 5], [0.88, 6], [0.93, 7]];
+
+  function contextOf(text, word) {
+    const ws = String(text || '').split(/\s+/);
+    const i = ws.findIndex(x => x.toLowerCase().replace(/[^a-z']/g, '') === String(word).toLowerCase());
+    return i < 0 ? '' : ws.slice(Math.max(0, i - 6), i + 7).join(' ');
+  }
+
+  // The word (plus a little around it) from the recording, as a 16 kHz mono WAV in base64.
+  async function clipWav(blob, start, end) {
+    const SR = 16000;
+    const Ctx = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+    const ac = new Ctx(1, SR, SR);
+    const data = await blob.arrayBuffer();
+    const buf = await new Promise((res, rej) => { const p = ac.decodeAudioData(data, res, rej); if (p && p.then) p.then(res, rej); });
+    const ch = buf.getChannelData(0), rate = buf.sampleRate;
+    const a = Math.max(0, Math.floor((start - 0.25) * rate)), b = Math.min(ch.length, Math.ceil(Math.min(end + 0.25, start + 3) * rate));
+    const pcm = ch.subarray(a, b);
+    const dv = new DataView(new ArrayBuffer(44 + pcm.length * 2));
+    const str = (o, t) => { for (let i = 0; i < t.length; i++) dv.setUint8(o + i, t.charCodeAt(i)); };
+    str(0, 'RIFF'); dv.setUint32(4, 36 + pcm.length * 2, true); str(8, 'WAVE'); str(12, 'fmt ');
+    dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, 1, true); dv.setUint32(24, rate, true);
+    dv.setUint32(28, rate * 2, true); dv.setUint16(32, 2, true); dv.setUint16(34, 16, true); str(36, 'data'); dv.setUint32(40, pcm.length * 2, true);
+    for (let i = 0; i < pcm.length; i++) dv.setInt16(44 + i * 2, Math.max(-1, Math.min(1, pcm[i])) * 0x7fff, true);
+    const bytes = new Uint8Array(dv.buffer);
+    let bin = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    return btoa(bin);
+  }
 
   async function check(url, o) {
     const form = new FormData();
@@ -160,9 +227,12 @@
     }
     const pats = (r.patterns || []).filter(p => p.count >= 2);
     const words = (r.issues || []).filter(w => w.flagged || (w.patterns || []).some(k => pats.some(p => p.key === k))).slice(0, 10);
-    if (!words.length) return head + `<div style="font-size:12px;color:var(--green-d)">✓ No clear pronunciation problem found.</div>`;
+    rec._pronRows = words;
+    const reported = rec._pronReported || {};
+    const capLine = rec._pronCap ? `<div style="font-size:11.5px;color:var(--g600);margin-top:6px">Pronunciation band limited to <strong>${rec._pronCap.max}</strong> — ${esc(rec._pronCap.why)}. <em>Điểm P tối đa ${rec._pronCap.max} theo kết quả kiểm tra phát âm (điểm tham khảo).</em></div>` : '';
+    if (!words.length) return head + `<div style="font-size:12px;color:var(--green-d)">✓ No clear pronunciation problem found.</div>` + capLine;
     return head + `
-      <div style="display:flex;flex-direction:column;gap:4px;font-size:12.5px">${words.map(w => `
+      <div style="display:flex;flex-direction:column;gap:4px;font-size:12.5px">${words.map((w, k) => `
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
           <strong style="min-width:70px">${esc(w.word)}</strong>
           <span style="font-family:var(--fm,monospace);color:var(--g600)">/${esc(w.expected)}/</span>
@@ -170,9 +240,13 @@
           <span style="margin-left:auto;white-space:nowrap">
             ${rec._pronAudio && w.start != null ? `<button class="btn btn-outline btn-sm" style="padding:2px 8px" onclick="Pron.playMine('${rec._pronId}',${w.start},${w.end})">▶ You</button>` : ''}
             <button class="btn btn-outline btn-sm" style="padding:2px 8px" onclick="Pron.playModel('${esc(w.word).replace(/'/g, '&#39;')}')">▶ Model</button>
+            ${reported[k] === 'done' ? `<span style="font-size:11px;color:var(--green-d);margin-left:4px">✓ Reported</span>`
+              : reported[k] === 'sending' ? `<span style="font-size:11px;color:var(--g500);margin-left:4px">Sending…</span>`
+              : `<button class="btn btn-outline btn-sm" style="padding:2px 8px" title="I said this word correctly — tell my teacher" onclick="Pron.report('${rec._pronId}',${k})">⚑ Report</button>`}
           </span>
         </div>`).join('')}</div>
-      ${pats.length ? `<div style="font-size:11.5px;color:var(--gold-d);margin-top:6px">Lặp lại nhiều: ${pats.map(p => esc(p.vi) + ' ×' + p.count).join(' · ')}</div>` : ''}`;
+      <div style="font-size:10.5px;color:var(--g400);margin-top:4px">Think a word was marked wrong by mistake? Press ⚑ Report — your teacher will listen and check. <em>Nếu thấy chấm nhầm, bấm ⚑ Report để GV nghe lại.</em></div>
+      ${pats.length ? `<div style="font-size:11.5px;color:var(--gold-d);margin-top:6px">Lặp lại nhiều: ${pats.map(p => esc(p.vi) + ' ×' + p.count).join(' · ')}</div>` : ''}${capLine}`;
   }
 
   window.Pron = P;

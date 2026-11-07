@@ -263,7 +263,6 @@ async function tsStart() {
 
   Object.assign(TS, { on: true, stopped: false, recs: [], trq: Promise.resolve(), done: 0, waiters: [], keyBad: false, t0: new Date().toISOString(), grades: {}, reports: {} });
   TS.plan = tsBuildPlan(r.p1, r.cards, r.pool);
-  Voice.prefetch(tsScriptLines(TS.plan));
   TS.steps = TS.plan.part1.reduce((n, t) => n + t.qs.length, 0) + 1 + TS.plan.part3.length;
   TS.step = 0;
   tsOpenStage();
@@ -277,30 +276,6 @@ async function tsStart() {
   TS.mime = pickMime();
   try { if (TS.ac) { TS.analyser = TS.ac.createAnalyser(); TS.analyser.fftSize = 512; TS.ac.createMediaStreamSource(TS.stream).connect(TS.analyser); } } catch (e) { TS.analyser = null; }
 
-  // Wait for the examiner's first lines, so the voice starts with the text
-  // instead of a moment after it. The first time the voice is downloaded
-  // (~90 MB) the wait is longer and shows progress; if it takes too long the
-  // test starts with the device voice and switches once the clips are ready.
-  if (Voice.mode() === 'kokoro' && Voice.supported() && Voice.state !== 'failed') {
-    // Everything up to the 6th Part 1 question (topic introductions included);
-    // the rest is already queued and is made while the student speaks.
-    const first = [];
-    let nq = 0;
-    for (const tp of TS.plan.part1) {
-      first.push(first.length ? TS_SCRIPT.p1Next(tsSpokenTopic(tp.topic)) : TS_SCRIPT.p1First(tsSpokenTopic(tp.topic)));
-      for (const q of tp.qs) { if (nq >= 6) break; first.push(q); nq++; }
-      if (nq >= 6) break;
-    }
-    const msg = () => Voice.state === 'loading' && !Voice.downloadedBefore()
-      ? "Downloading the examiner's voice… " + Voice.progress + '% (first time only)'
-      : "Preparing the examiner's voice for Part 1…";
-    showOverlay(msg());
-    const tick = setInterval(() => { const el = document.getElementById('busy-msg'); if (el) el.textContent = msg(); }, 500);
-    await Voice.ready(first, Voice.downloadedBefore() ? 45000 : 120000);
-    clearInterval(tick);
-    hideOverlay();
-    if (TS.stopped) return;
-  }
 
   try { await tsRun(); }
   catch (e) {
@@ -357,19 +332,12 @@ function tsSpokenTopic(t) {
 }
 
 // ── EXAMINER VOICE ──────────────────────────
-// voice.js speaks (natural Kokoro voice, or the device voice). With the voice
+// voice.js speaks with the device voice. With the voice
 // off, the script stays on screen for about the time it takes to read it.
-function tsUnlockSpeech() { Voice.unlock(); Voice.warm(); if (window.Pron) Pron.wake(); }
+function tsUnlockSpeech() { Voice.unlock(); if (window.Pron) Pron.wake(); }
 function tsSpeak(text) {
   if (Voice.mode() === 'off') return tsSleep(800 + String(text).split(/\s+/).length * 380);
   return Voice.say(text);
-}
-// Everything the examiner will say, in order, so each clip is ready in time.
-function tsScriptLines(P) {
-  const lines = [];
-  P.part1.forEach((tp, ti) => { const n = tsSpokenTopic(tp.topic); lines.push(ti === 0 ? TS_SCRIPT.p1First(n) : TS_SCRIPT.p1Next(n)); lines.push(...tp.qs); });
-  lines.push(TS_SCRIPT.p2Intro, TS_SCRIPT.p2Go, TS_SCRIPT.p2End, TS_SCRIPT.p3Intro, ...P.part3, TS_SCRIPT.end);
-  return lines;
 }
 async function tsSay(text) {
   tsGuard();

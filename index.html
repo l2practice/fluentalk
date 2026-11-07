@@ -887,6 +887,7 @@ svg{flex-shrink:0}
       <div class="sidenav-item" onclick="_hwLoaded=false;teacherTab('homework')"><span class="sidenav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4h6v3H9zM9 12h6M9 16h4"/></svg></span><span class="sn-lbl">Homework</span></div>
       <div class="sidenav-item" onclick="teacherTab('library')"><span class="sidenav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5a1 1 0 0 1 1-1h5v16H5a1 1 0 0 1-1-1V5z"/><path d="M14 4h5a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-5V4z"/></svg></span><span class="sn-lbl">Library</span></div>
       <div class="sidenav-item" onclick="teacherTab('progress')"><span class="sidenav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></span><span class="sn-lbl">Progress</span></div>
+      <div class="sidenav-item" onclick="teacherTab('pronReports')"><span class="sidenav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21V4M4 4h12l-2 4 2 4H4"/></svg></span><span class="sn-lbl">Pron. reports</span></div>
       <div class="sidenav-section">Archive</div>
       <div class="sidenav-item" onclick="teacherTab('studentArchive')"><span class="sidenav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9M10 13h4"/></svg></span><span class="sn-lbl">Archive</span></div>
       <div class="sidenav-item" onclick="teacherTab('classArchive')"><span class="sidenav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8M12 13v8"/></svg></span><span class="sn-lbl">Closed</span></div>
@@ -1925,9 +1926,83 @@ function logout() {
 let _teacherClasses = [], _teacherStudents = [], _teacherAssignments = [], _teacherSessions = [];
 let _sortCol = '', _sortDir = 1;
 
+// ── Pronunciation reports: words students say were marked wrong by mistake ──
+// The teacher listens to each clip and rules: the checker was wrong (the
+// student said it right) or right. The rulings, exported, tune the checker.
+let _prFilter = 'new', _prData = [];
+async function renderPronReports(c) {
+  const res = await gasCall('teacher.getPronReports', {});
+  if (!res.success) { c.innerHTML = '<div class="empty">' + _h(res.error || 'Could not load the reports') + '</div>'; return; }
+  _prData = res.data || [];
+  drawPronReports(c);
+}
+function drawPronReports(c) {
+  c = c || document.getElementById('teacher-content');
+  const n = st => _prData.filter(r => r.status === st).length;
+  const list = _prData.filter(r => !_prFilter || r.status === _prFilter);
+  const lbl = { new: 'To check', ai_wrong: 'Checker was wrong', ai_right: 'Checker was right' };
+  // most-reported words among the ones ruled "checker was wrong"
+  const byWord = {};
+  _prData.filter(r => r.status === 'ai_wrong').forEach(r => { byWord[r.word] = (byWord[r.word] || 0) + 1; });
+  const top = Object.entries(byWord).sort((a, b) => b[1] - a[1]).slice(0, 12);
+  c.innerHTML = `
+    <div class="card">
+      <div class="card-title">Pronunciation reports</div>
+      <p style="font-size:13px;color:var(--g600);line-height:1.6;margin-top:4px">Words a student says the pronunciation check marked wrong by mistake. Listen to each clip and rule.
+        Your rulings are collected to make the checker more accurate. <em>SV báo từ bị chấm nhầm — GV nghe đoạn ghi âm và xác nhận.</em></p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;align-items:center">
+        ${['new', 'ai_wrong', 'ai_right', ''].map(k => `<button class="btn btn-sm ${_prFilter === k ? 'btn-primary' : 'btn-outline'}" onclick="_prFilter='${k}';drawPronReports()">${k ? lbl[k] : 'All'} (${k ? n(k) : _prData.length})</button>`).join('')}
+        <button class="btn btn-sm btn-outline" style="margin-left:auto" onclick="exportPronReports()">⬇ Export (JSON)</button>
+      </div>
+      ${top.length ? `<div style="font-size:12px;color:var(--g600);margin-top:10px">Most often wrongly marked: ${top.map(([w, k]) => `<strong>${_h(w)}</strong> ×${k}`).join(' · ')}</div>` : ''}
+    </div>
+    ${list.length ? list.map(r => `
+      <div class="card" style="padding:12px 16px">
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+          <strong style="font-size:15px">${_h(r.word)}</strong>
+          <span style="font-family:var(--fm,monospace);font-size:13px;color:var(--g600)">/${_h(r.expected)}/ → heard /${_h(r.heard || '—')}/</span>
+          <span style="font-size:11px;color:var(--g500)">${r.accent === 'uk' ? 'UK' : 'US'} reference</span>
+          <span style="margin-left:auto;font-size:12px;color:var(--g500)">${_h(r.name)} · ${_h(r.studentId)} · ${_h(r.classId)} · ${r.created ? new Date(r.created).toLocaleString() : ''}</span>
+        </div>
+        ${r.context ? `<div style="font-size:12.5px;color:var(--g700);margin-top:6px">"…${_h(r.context)}…"</div>` : ''}
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px">
+          ${r.clip ? `<audio controls preload="none" src="data:audio/wav;base64,${r.clip}" style="height:34px;max-width:260px"></audio>` : '<span style="font-size:12px;color:var(--g400)">(no clip)</span>'}
+          <button class="btn btn-sm btn-outline" onclick="Pron.playModel('${_h(r.word).replace(/'/g, '&#39;')}')">▶ Model</button>
+          <span style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
+            <button class="btn btn-sm ${r.status === 'ai_wrong' ? 'btn-green' : 'btn-outline'}" onclick="rulePronReport('${r.id}','ai_wrong')">✓ Student said it right</button>
+            <button class="btn btn-sm ${r.status === 'ai_right' ? 'btn-primary' : 'btn-outline'}" onclick="rulePronReport('${r.id}','ai_right')">✗ Really mispronounced</button>
+            <button class="btn btn-sm btn-outline" title="Delete" onclick="deletePronReport('${r.id}')">🗑</button>
+          </span>
+        </div>
+      </div>`).join('') : '<div class="empty">No reports here.</div>'}`;
+}
+async function rulePronReport(id, status) {
+  const r = _prData.find(x => x.id === id);
+  if (!r) return;
+  const res = await gasCall('teacher.setPronReport', { id, status });
+  if (!res.success) { toast(res.error || 'Could not save', 'error'); return; }
+  r.status = status;
+  drawPronReports();
+}
+async function deletePronReport(id) {
+  if (!confirm('Delete this report?')) return;
+  const res = await gasCall('teacher.deletePronReport', { id });
+  if (!res.success) { toast(res.error || 'Could not delete', 'error'); return; }
+  _prData = _prData.filter(x => x.id !== id);
+  drawPronReports();
+}
+function exportPronReports() {
+  const blob = new Blob([JSON.stringify({ exported: new Date().toISOString(), reports: _prData }, null, 1)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'pron-reports-' + new Date().toISOString().slice(0, 10) + '.json';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+
 async function teacherTab(tab) {
   document.querySelectorAll('.sidenav-item').forEach((el,i) => {
-    const tabs = ['overview','classroom','homework','library','progress','studentArchive','classArchive','settings'];
+    const tabs = ['overview','classroom','homework','library','progress','pronReports','studentArchive','classArchive','settings'];
     el.classList.toggle('active', tabs[i] === tab);
   });
   const c = document.getElementById('teacher-content');
@@ -1938,6 +2013,7 @@ async function teacherTab(tab) {
     if (tab === 'homework')  await renderTeacherHomework(c);
     if (tab === 'library')   await renderLibrary(c);
     if (tab === 'progress')  { _progFilter=''; _progTopic='__NONE__'; _progTopic2='__NONE__'; _progTopic3='__NONE__'; _progMode=''; _progTaskType='homework'; _progTopicsFor=''; _progLoaded=false; _progReload=false; await renderTeacherProgress(c); }
+    if (tab === 'pronReports') await renderPronReports(c);
     if (tab === 'studentArchive') await renderStudentArchive(c);
     if (tab === 'classArchive')   await renderClassArchive(c);
     if (tab === 'settings')  await renderTeacherSettings(c);
@@ -6008,13 +6084,24 @@ async function gradeAnswers(answered, part, ctx) {
     return bad ? Math.min(n, CAP_BAND) : v;
   };
 
+  // Pronunciation ceiling from the phone-level check of this answer (see
+  // Pron.cap): applied straight away because these bands are for practice,
+  // not an official result.
+  const capPron = (v, r) => {
+    const c = window.Pron ? Pron.cap(r) : null;
+    r._pronCap = null;
+    const n = parseFloat(v);
+    if (!c || !n || n <= c.max) return v;
+    r._pronCap = c;
+    return c.max;
+  };
   parsed.qs.forEach((g, i) => {
     if (!g || !answered[i]) return;
     const sc = {
       fluency:      { score: capped(lift(g.fc || g.fluency), 'fc') },
       lexical:      { score: capEcho(lift(g.lr || g.lexical), answered[i]) },
       grammar:      { score: capped(lift(g.gr || g.grammar), 'gr') },
-      pronunciation:{ score: capped(lift(g.p  || g.pronunciation), 'p') }
+      pronunciation:{ score: capPron(capped(lift(g.p  || g.pronunciation), 'p'), answered[i]) }
     };
     answered[i].scores = sc;
     // Overall is the .5-rounded mean of the four whole-band criteria, the

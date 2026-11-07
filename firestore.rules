@@ -67,6 +67,14 @@ service cloud.firestore {
     match /classStats/{cid} {
       allow read, write: if isTeacher() || (signedIn() && myClass() == cid);
     }
+    // "Marked wrong but I said it right" reports on the pronunciation check.
+    // A student files their own; only the teacher rules on them or removes them.
+    match /pronReports/{id} {
+      allow read: if isTeacher() || (signedIn() && resource.data.uid == request.auth.uid);
+      allow create: if signedIn() && request.resource.data.uid == request.auth.uid
+                    && request.resource.data.status == 'new';
+      allow update, delete: if isTeacher();
+    }
     match /extensionRequests/{id} {
       allow read: if isTeacher() || (signedIn() && resource.data.uid == request.auth.uid);
       allow create: if signedIn() && request.resource.data.uid == request.auth.uid
