@@ -18,22 +18,49 @@
     onSilent: null
   };
 
-  // Best English voice on this device, British first.
-  let deviceVoice = null;
-  function pickDeviceVoice() {
-    const vs = (window.speechSynthesis && speechSynthesis.getVoices()) || [];
+  const ls = { get: k => { try { return localStorage.getItem(k); } catch (e) { return null; } },
+               set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} } };
+  const OK_KEY = 'speak_voice_ok';           // the voice that last played on this device
+  const START_MS = 3000;                      // a line that has not started by then failed
+  const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+  // Voices to try, best first: the one that worked here before, preferred
+  // British voices, the browser's default (null), then any local English
+  // voice. A voice that errors or stays silent is skipped for the rest of
+  // the visit, so one broken voice (an online voice without network, a
+  // macOS voice that is listed but not installed…) cannot silence the test.
+  const failed = new Set();
+  const nameOf = v => v ? v.name : 'browser default';
+  function candidates() {
+    const vs = ((window.speechSynthesis && speechSynthesis.getVoices()) || []).filter(v => /^en/i.test(v.lang));
     const pref = ['Google UK English Female', 'Google UK English Male', 'Serena', 'Daniel', 'Kate', 'Libby', 'Sonia', 'Martha', 'Arthur'];
-    deviceVoice = pref.map(n => vs.find(v => v.name.indexOf(n) >= 0)).find(Boolean)
-      || vs.find(v => /^en[-_]GB/i.test(v.lang)) || vs.find(v => /^en[-_]US/i.test(v.lang)) || vs.find(v => /^en/i.test(v.lang)) || null;
+    const okName = ls.get(OK_KEY);
+    const saved = okName === nameOf(null) ? null : vs.find(v => v.name === okName);
+    const gb = v => /^en[-_]GB/i.test(v.lang);
+    const local = vs.filter(v => v.localService);
+    const list = [saved].concat(pref.map(n => vs.find(v => v.name.indexOf(n) >= 0)), [null],
+      local.filter(gb), local.filter(v => !gb(v)), vs.filter(gb), vs);
+    const seen = new Set(), out = [];
+    list.forEach(v => { if (v === undefined) return; const n = nameOf(v); if (!seen.has(n) && !failed.has(n)) { seen.add(n); out.push(v); } });
+    return out;
   }
-  if (window.speechSynthesis) { try { speechSynthesis.addEventListener('voiceschanged', pickDeviceVoice); } catch (e) {} pickDeviceVoice(); }
+  // What happened, for the "Listen" check: voices seen, tries and results.
+  V.diag = { voices: 0, tries: [] };
+  function note(v, result) {
+    V.diag.voices = ((window.speechSynthesis && speechSynthesis.getVoices()) || []).length;
+    V.diag.tries.push(nameOf(v) + (v ? ' (' + v.lang + (v.localService ? '' : ', online') + ')' : '') + ': ' + result);
+    if (V.diag.tries.length > 8) V.diag.tries.shift();
+  }
+  if (window.speechSynthesis) { try { speechSynthesis.addEventListener('voiceschanged', () => {}); speechSynthesis.getVoices(); } catch (e) {} }
 
   let current = null;              // { done } of the line being read
   let turn = 0;                    // only the latest say() speaks
   const keep = new Set();          // utterances kept alive (Chrome drops events of collected ones)
   const busy = s => s && (s.speaking || s.pending);
 
+  // iOS only lets a page speak after speech has started inside a tap.
   V.unlock = function () {
+    if (!isIOS) return;
     try { if (window.speechSynthesis) { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); } } catch (e) {}
   };
   V.stop = function () {
@@ -49,37 +76,67 @@
       const synth = window.speechSynthesis;
       const parts = text.match(/[^.!?]+[.!?]*/g) || [text];
       if (!synth) { setTimeout(resolve, 800 + text.split(/\s+/).length * 380); return; }
-      if (!deviceVoice) pickDeviceVoice();
-      let i = 0, guard = null, stopped = false;
-      const fin = () => { clearTimeout(guard); if (current && current.done === stop) current = null; resolve(); };
+      let i = 0, timers = [], stopped = false;
+      const clear = () => { timers.forEach(clearTimeout); timers = []; };
+      const fin = () => { clear(); if (current && current.done === stop) current = null; resolve(); };
       const stop = () => { stopped = true; fin(); };
       current = { done: stop };
       const next = () => {
-        clearTimeout(guard);
+        clear();
         if (stopped) return;
         if (i >= parts.length) { fin(); return; }
         const s = parts[i++].trim();
         if (!s) { next(); return; }
-        const u = new SpeechSynthesisUtterance(s);
-        if (deviceVoice) u.voice = deviceVoice;
-        u.lang = (deviceVoice && deviceVoice.lang) || 'en-GB';
-        u.rate = 0.95;
-        let fired = false, started = false;
-        const go = () => { if (!fired) { fired = true; keep.delete(u); next(); } };
-        u.onstart = () => { started = true; V.heard = true; };
-        u.onend = go; u.onerror = go;
-        guard = setTimeout(() => { try { synth.cancel(); } catch (e) {} go(); }, 2500 + s.split(/\s+/).length * 550);
-        // Never started after 3 s: tell the caller once (muted tab, no voice…).
-        setTimeout(() => { if (!started && !fired && !V.heard && V.onSilent) { const f = V.onSilent; V.onSilent = null; f(); } }, 3000);
+        speakPart(s, 0);
+      };
+      const speakPart = (s, tries) => {
+        clear();
+        if (stopped) return;
+        const v = candidates()[0];
+        if (v === undefined || tries >= 4) {          // nothing left to try: the text stays on screen
+          if (!V.heard && V.onSilent) { const f = V.onSilent; V.onSilent = null; f(); }
+          next(); return;
+        }
+        let u;
+        try {
+          u = new SpeechSynthesisUtterance(s);
+          if (v) { u.voice = v; u.lang = v.lang; } else u.lang = 'en-GB';
+          u.rate = 0.95;
+        } catch (e) { failed.add(nameOf(v)); note(v, 'unusable'); speakPart(s, tries + 1); return; }
+        let done = false, started = false;
+        const end = () => { if (!done) { done = true; keep.delete(u); next(); } };
+        const fail = why => {
+          if (done) return;
+          done = true; keep.delete(u); clear();
+          failed.add(nameOf(v)); note(v, why);
+          if (ls.get(OK_KEY) === nameOf(v)) ls.set(OK_KEY, '');
+          try { synth.cancel(); } catch (e) {}
+          timers.push(setTimeout(() => speakPart(s, tries + 1), 150));
+        };
+        u.onstart = () => {
+          started = true;
+          if (!V.heard) note(v, 'playing');
+          V.heard = true;
+          if (ls.get(OK_KEY) !== nameOf(v)) ls.set(OK_KEY, nameOf(v));
+          clear();
+          timers.push(setTimeout(() => { try { synth.cancel(); } catch (e) {} end(); }, 2500 + s.split(/\s+/).length * 550));
+        };
+        u.onend = () => end();
+        u.onerror = e => {
+          const code = (e && e.error) || 'error';
+          if (code === 'interrupted' || code === 'canceled' || stopped) end();   // our own cancel()
+          else fail(code);
+        };
+        timers.push(setTimeout(() => { if (!started) fail('did not start'); }, START_MS));
         keep.add(u);
         try { synth.resume(); } catch (e) {}     // Chrome can sit "paused" after a tab switch
-        synth.speak(u);
+        try { synth.speak(u); } catch (e) { fail('refused'); }
       };
       // Safari and some Chrome builds drop a speak() issued straight after
       // cancel(): clear the queue only if something is in it, then wait a beat.
       let wasBusy = false;
       try { wasBusy = busy(synth); if (wasBusy) synth.cancel(); } catch (e) {}
-      setTimeout(next, wasBusy ? 120 : 0);
+      timers.push(setTimeout(next, wasBusy ? 150 : 0));
     });
   }
 

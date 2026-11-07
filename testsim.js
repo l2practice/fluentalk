@@ -249,16 +249,22 @@ function tsSleep(ms) {
 }
 function tsGuard() { if (TS.stopped) throw TS_STOP; }
 
-// Plays one line so the student can check the sound before the test.
+// Plays one line so the student can check the sound before the test, and
+// says which voice played (or what each voice tried answered) for support.
 function tsVoiceCheck() {
   const st = document.getElementById('ts-voice-st');
   const say = m => { if (st) st.innerHTML = m; };
   if (Voice.mode() === 'off') { say('<span style="color:var(--red-d)">This browser cannot read aloud — the questions will be shown as text. Try Chrome or Safari.<br><em>Trình duyệt này không đọc được — câu hỏi chỉ hiện chữ. Hãy dùng Chrome hoặc Safari.</em></span>'); return; }
   say('▶ Playing… · Đang phát…');
-  Voice.onSilent = () => say(TS_SILENT_MSG);
+  Voice.onSilent = null;
+  Voice.heard = false;
+  Voice.diag.tries = [];
   Voice.unlock();
   Voice.say('Hello! In this test, I will ask you some questions about yourself.').then(() => {
-    if (Voice.heard) say('<span style="color:var(--green-d)">✓ If you heard the examiner, you are ready. · Nếu nghe được giọng examiner là sẵn sàng.</span>');
+    const d = Voice.diag, log = `<div style="color:var(--g500);margin-top:4px">${d.voices} voices · ${d.tries.map(_h).join(' · ')}</div>`;
+    say(Voice.heard
+      ? `<span style="color:var(--green-d)">✓ The device played the voice. If you heard nothing, check the speaker / output device and volume. · Máy đã phát giọng; nếu không nghe thấy, kiểm tra loa / thiết bị phát và âm lượng.</span>${log}`
+      : TS_SILENT_MSG + log);
   });
 }
 const TS_SILENT_MSG = '<span style="color:var(--red-d)">The device did not play the voice. Turn the volume up, switch off silent mode, and check that this tab is not muted; or try Chrome. The questions are always shown on screen too.<br><em>Máy không phát giọng đọc. Tăng âm lượng, tắt chế độ im lặng, kiểm tra tab không bị tắt tiếng, hoặc thử Chrome. Câu hỏi vẫn luôn hiện trên màn hình.</em></span>';
