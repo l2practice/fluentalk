@@ -21,7 +21,7 @@
 (function () {
   // The Space URL, e.g. 'https://<user>-speaking-pronounce.hf.space'. A
   // per-browser override (localStorage 'speak_pron_url') is for testing.
-  const PRON_URL = '';
+  const PRON_URL = 'https://l2practice--speaking-pronounce-web.us-east.modal.run';
   const TIMEOUT = 180000;
 
   const ls = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
