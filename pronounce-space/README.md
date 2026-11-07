@@ -28,5 +28,14 @@ by Jean-François Lépine (MIT) and `facebook/wav2vec2-lv-60-espeak-cv-ft`.
 Results are a lower bound: a word that Whisper heard as a different word
 cannot be checked.
 
-Settings (Space → Settings → Variables): `ALLOWED_ORIGINS` (comma-separated,
+## Deploying
+
+**Modal** (used by the Speaking App): `pip install modal`, `modal setup`, then from
+this folder `modal deploy modal_app.py`. The URL printed at the end
+(`https://<workspace>--speaking-pronounce-web.modal.run`) is the service address.
+
+**Docker / Hugging Face Space** (needs a paid plan for Docker Spaces): the
+`Dockerfile` here builds the same service on port 7860.
+
+Settings (environment variables): `ALLOWED_ORIGINS` (comma-separated,
 default `https://l2practice.github.io`), `MAX_QUEUE` (default 12).
