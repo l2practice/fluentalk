@@ -402,7 +402,9 @@ textarea.form-input{resize:vertical;min-height:72px;line-height:1.6}
 .search-inp{padding:8px 13px;border:1.5px solid var(--g200);border-radius:var(--r);font-size:13px;outline:none;font-family:var(--f);background:var(--white)}
 .search-inp:focus{border-color:var(--blue-m)}
 .prog-q-card{padding:16px 18px;margin-bottom:16px;overflow-x:auto}
-.prog-q{display:grid;grid-template-columns:minmax(150px,1.15fr) repeat(3,minmax(130px,1fr)) minmax(130px,.9fr);gap:8px 10px;align-items:center;min-width:720px}
+.prog-q{display:grid;grid-template-columns:minmax(150px,1.15fr) repeat(3,minmax(130px,1fr)) minmax(130px,.9fr) 30px;gap:8px 10px;align-items:center;min-width:750px}
+.prog-q-x{width:30px;height:30px;border-radius:50%;border:1px solid var(--g200);background:var(--white);color:var(--g500);font-size:18px;line-height:1;cursor:pointer}
+.prog-q-x:hover{color:var(--red);border-color:var(--red)}
 .prog-q .search-inp{width:100%;max-width:none}
 .prog-q .search-inp:disabled{opacity:.5}
 .prog-q-h{font-size:11px;font-weight:700;color:var(--g500);text-transform:uppercase;letter-spacing:.05em}
@@ -2988,7 +2990,9 @@ let _progSessions = [], _progFilter = '', _progMode = '', _progLoaded = false, _
 // time range, so one table can show e.g. this week's homework, JAM and tests.
 const PROG_TYPES = [['homework', 'Homework'], ['jam', 'JAM'], ['test', 'Test Simulation'], ['free', 'Free Speaking']];
 const PROG_DAYS = [[6, 'Last 6 days'], [14, 'Last 14 days'], [30, 'Last 30 days'], [0, 'All results']];
-function progQDefault() { return [0, 1, 2].map(i => ({ type: i ? '' : 'homework', topics: ['', '', ''], days: 6 })); }
+const PROG_MAX_ROWS = 3;
+const progRow = type => ({ type: type || '', topics: ['', '', ''], days: 6 });
+function progQDefault() { return [progRow('homework')]; }   // one row; "Add row" adds up to three
 let _progQ = progQDefault(), _progTopicsBy = {};   // topic lists per mode, for the chosen class
 const progActive = () => _progQ.filter(q => q.type);
 // Only Test Simulation searched: its own per-student view, not the table.
@@ -7456,21 +7460,23 @@ function progSearchHtml() {
     const noTopics = !q.type || q.type === 'test';
     return `
       <select class="search-inp" aria-label="Mode ${i + 1}" onchange="progSetType(${i},this.value)">
-        ${opt('', i ? '— None —' : '— Choose a mode —', !q.type)}${PROG_TYPES.map(([v, t]) => opt(v, t, q.type === v)).join('')}
+        ${opt('', '— Choose a mode —', !q.type)}${PROG_TYPES.map(([v, t]) => opt(v, t, q.type === v)).join('')}
       </select>
       ${[0, 1, 2].map(k => `<select class="search-inp" aria-label="Row ${i + 1} topic ${k + 1}" ${noTopics ? 'disabled' : ''} onchange="_progQ[${i}].topics[${k}]=this.value">
         ${noTopics ? opt('', q.type === 'test' ? 'All tests' : '—', true) : opt('', 'None', !q.topics[k]) + topics.map(t => opt(t.topic, t.topic, q.topics[k] === t.topic)).join('')}
       </select>`).join('')}
       <select class="search-inp" aria-label="Row ${i + 1} time" ${q.type ? '' : 'disabled'} onchange="_progQ[${i}].days=parseInt(this.value)">
         ${PROG_DAYS.map(([d, t]) => opt(d, t, q.days === d)).join('')}
-      </select>`;
+      </select>
+      ${i ? `<button class="prog-q-x" title="Remove this row" aria-label="Remove row ${i + 1}" onclick="progRemoveRow(${i})">×</button>` : '<span></span>'}`;
   }).join('');
   return `<div class="prog-q">
-      ${lbl('Mode')}${lbl('Topic 1')}${lbl('Topic 2')}${lbl('Topic 3')}${lbl('Time')}
+      ${lbl('Mode')}${lbl('Topic 1')}${lbl('Topic 2')}${lbl('Topic 3')}${lbl('Time')}<span></span>
       ${rows}
     </div>
     <div style="display:flex;align-items:center;gap:12px;margin-top:12px;flex-wrap:wrap">
       <button class="btn btn-primary" onclick="loadProgressResults()">${ic('progress')}Load results</button>
+      ${_progQ.length < PROG_MAX_ROWS ? `<button class="btn btn-outline btn-sm" onclick="progAddRow()">+ Add row</button>` : ''}
       <span style="font-size:12px;color:var(--g500)">Topics left as None = all topics of that mode. · Để None = mọi topic của mode đó.</span>
     </div>`;
 }
@@ -7483,6 +7489,9 @@ async function progLoadTopics() {
     } catch (e) { _progTopicsBy[t] = []; }
   }));
 }
+function progRedrawSearch() { const box = document.getElementById('prog-q'); if (box) box.innerHTML = progSearchHtml(); }
+function progAddRow() { if (_progQ.length < PROG_MAX_ROWS) { _progQ.push(progRow()); progRedrawSearch(); } }
+function progRemoveRow(i) { if (i > 0) { _progQ.splice(i, 1); progRedrawSearch(); } }
 async function progSetType(i, type) {
   _progQ[i] = { type, topics: ['', '', ''], days: _progQ[i].days || 6 };
   await progLoadTopics();
