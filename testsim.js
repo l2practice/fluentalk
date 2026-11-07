@@ -209,6 +209,8 @@ function openTestSim() {
       <div class="ts-tip">Before you start: turn the sound on (headphones are best), allow the microphone,
         and sit somewhere quiet. Answer as you would to a real examiner — your words are not shown during the test.
         <br><em>Bật loa (nên dùng tai nghe), cho phép micro, ngồi chỗ yên tĩnh. Trong lúc thi, bài nói không hiện lên màn hình.</em></div>
+      <button class="btn btn-outline btn-sm" style="margin-top:10px" onclick="tsVoiceCheck()">${Voice.icon(16)} Listen to the examiner's voice · Nghe thử</button>
+      <div id="ts-voice-st" style="font-size:12px;margin-top:6px"></div>
     </div>
     <div id="ts-errors" class="ts-errors"></div>
     <button class="btn btn-primary" id="ts-start" style="width:100%;justify-content:center;padding:14px;font-size:1rem" onclick="tsStart()">${ic('rocket')}Start the test</button>`;
@@ -247,6 +249,20 @@ function tsSleep(ms) {
 }
 function tsGuard() { if (TS.stopped) throw TS_STOP; }
 
+// Plays one line so the student can check the sound before the test.
+function tsVoiceCheck() {
+  const st = document.getElementById('ts-voice-st');
+  const say = m => { if (st) st.innerHTML = m; };
+  if (Voice.mode() === 'off') { say('<span style="color:var(--red-d)">This browser cannot read aloud — the questions will be shown as text. Try Chrome or Safari.<br><em>Trình duyệt này không đọc được — câu hỏi chỉ hiện chữ. Hãy dùng Chrome hoặc Safari.</em></span>'); return; }
+  say('▶ Playing… · Đang phát…');
+  Voice.onSilent = () => say(TS_SILENT_MSG);
+  Voice.unlock();
+  Voice.say('Hello! In this test, I will ask you some questions about yourself.').then(() => {
+    if (Voice.heard) say('<span style="color:var(--green-d)">✓ If you heard the examiner, you are ready. · Nếu nghe được giọng examiner là sẵn sàng.</span>');
+  });
+}
+const TS_SILENT_MSG = '<span style="color:var(--red-d)">The device did not play the voice. Turn the volume up, switch off silent mode, and check that this tab is not muted; or try Chrome. The questions are always shown on screen too.<br><em>Máy không phát giọng đọc. Tăng âm lượng, tắt chế độ im lặng, kiểm tra tab không bị tắt tiếng, hoặc thử Chrome. Câu hỏi vẫn luôn hiện trên màn hình.</em></span>';
+
 async function tsStart() {
   const r = tsCheck();
   if (r.errors.length) { document.getElementById('ts-errors').innerHTML = r.errors.map(e => `<div>• ${_h(e)}</div>`).join(''); return; }
@@ -259,6 +275,7 @@ async function tsStart() {
   // full screen, unlocking speech on iOS, starting the audio context.
   try { const el = document.documentElement; (el.requestFullscreen || el.webkitRequestFullscreen)?.call(el)?.catch?.(() => {}); } catch (e) {}
   tsUnlockSpeech();
+  Voice.onSilent = () => { const a = document.getElementById('ts-alert'); if (a && !TS.keyBad) { a.style.display = 'block'; a.innerHTML = TS_SILENT_MSG; } };
   try { TS.ac = new (window.AudioContext || window.webkitAudioContext)(); TS.ac.resume?.(); } catch (e) { TS.ac = null; }
 
   Object.assign(TS, { on: true, stopped: false, recs: [], trq: Promise.resolve(), done: 0, waiters: [], keyBad: false, t0: new Date().toISOString(), grades: {}, reports: {} });
@@ -334,7 +351,7 @@ function tsSpokenTopic(t) {
 // ── EXAMINER VOICE ──────────────────────────
 // voice.js speaks with the device voice. With the voice
 // off, the script stays on screen for about the time it takes to read it.
-function tsUnlockSpeech() { Voice.unlock(); if (window.Pron) Pron.wake(); }
+function tsUnlockSpeech() { Voice.unlock(); }
 function tsSpeak(text) {
   if (Voice.mode() === 'off') return tsSleep(800 + String(text).split(/\s+/).length * 380);
   return Voice.say(text);
@@ -424,7 +441,9 @@ async function tsTranscribe(rec, blob, mime) {
     try {
       const tr = await transcribeGroq(blob, mime);
       rec.studentAnswer = tr.text || ''; rec._words = tr.words || []; rec._dur = tr.duration || 0; rec.err = '';
-      if (window.Pron && Pron.enabled()) Pron.start(rec, { blob, mime, text: tr.text, words: tr.words, vocab: [] });
+      // Checked when the part ends (tsQueueGrade), all at once: the
+      // pronunciation server then runs for a minute, not for the whole test.
+      if (window.Pron && Pron.enabled()) rec._pronIn = { blob, mime, text: tr.text, words: tr.words, vocab: [] };
       break;
     } catch (e) {
       rec.err = e.message || String(e);
@@ -692,7 +711,10 @@ async function tsFinish() {
 const TS_PART_NAME = { part1: 'Part 1', part2: 'Part 2', part3: 'Part 3' };
 function tsQueueGrade(part) {
   const transcribed = TS.trq;   // this part's answers are all queued before it
-  TS.grades[part] = transcribed.then(() => TS.stopped ? null : tsGradePart(part));
+  TS.grades[part] = transcribed.then(() => { if (TS.stopped) return null; tsPronPart(part); return tsGradePart(part); });
+}
+function tsPronPart(part) {
+  TS.recs.filter(r => r.part === part && r._pronIn).forEach(r => { const o = r._pronIn; delete r._pronIn; Pron.start(r, o); });
 }
 async function tsGradePart(part) {
   const list = TS.recs.filter(r => r.part === part && (r.studentAnswer || '').trim());
@@ -707,6 +729,9 @@ async function tsGradePart(part) {
   } catch (e) { console.warn('[test] part analysis', e); }
   // One try here; tsCollectGrades tries a failed part once more at the end,
   // minutes later, rather than hammering a grader that is overloaded now.
+  // Graded in the background while the student goes on, so the
+  // pronunciation evidence can be waited for (a cold server needs a moment).
+  if (window.Pron) await Pron.wait(list, 90000);
   try {
     const g = await gradeAnswers(list, 'test', ctx);
     TS.reports[part] = g.rpt;

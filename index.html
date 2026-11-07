@@ -4111,7 +4111,6 @@ function renderPracticeHome(c) {
       </div>
       <div style="font-size:11px;color:var(--g600);margin-top:6px">Free at <a href="https://console.groq.com/keys" target="_blank">console.groq.com/keys</a></div>
     </div>
-    ${Voice.settingsHtml()}
     <div class="mode-grid" style="margin-bottom:14px">
       <div class="mode-tile" onclick="openFreeChoice()">
         <div class="mode-icon">${ic('pen')}</div>
@@ -4256,7 +4255,7 @@ async function startHWPractice(assignId, title, part) {
 // Pick a Part 1 topic, speak for 60 seconds without stopping, then see the
 // vocabulary you reached for. No band score — this drills fluency, not accuracy.
 // ══════════════════════════════════════════
-let _jam = { topic: '', libId: '', blob: null, mime: '', audioUrl: '', runs: 0, seconds: 0, timer: null, startTs: 0 };
+let _jam = { topic: '', libId: '', blob: null, mime: '', audioUrl: '', runs: 0, prior: 0, seconds: 0, timer: null, startTs: 0 };
 
 async function openJAM() {
   if (gateBlocked()) return;
@@ -4282,7 +4281,15 @@ async function openJAM() {
 }
 
 async function startJAM(libId, title) {
+  if (_jam.topic !== title) _jam.runs = 0;
   _jam.topic = title; _jam.libId = libId; _jam.blob = null; _jam.seconds = 0;
+  // Runs of this topic saved before this sitting (run n of the sitting is
+  // prior + n): the pronunciation check runs on milestone runs only.
+  if (!_jam.runs) {
+    _jam.prior = 0;
+    gasCall('speak.findExisting', { topic: title, type: 'jam', part: 'jam' })
+      .then(r => { if (_jam.topic === title && !_jam.runs) _jam.prior = (r && r.success && r.exists && r.attemptCount) || 0; }).catch(() => {});
+  }
   const c = document.getElementById('student-content');
   c.innerHTML = `
     <div style="text-align:center;max-width:420px;margin:0 auto">
@@ -4356,7 +4363,7 @@ async function finishJAM() {
   const ans = { question: 'JAM — speak for one minute about: ' + _jam.topic, studentAnswer: text, keywords: [],
                 part: 'jam', topic: _jam.topic, _words: tr.words || [], _dur: tr.duration || 0, secs: 60 };
   A.mode = 'jam'; A.topic = _jam.topic; A.assignId = ''; A.t0 = startIso; A.lastSessionId = '';
-  if (pronWanted()) Pron.start(ans, { blob: rec.blob, mime: rec.mime, text, words: tr.words, vocab: [] });
+  if (window.Pron && Pron.enabled() && isMilestone(_jam.prior + _jam.runs)) Pron.start(ans, { blob: rec.blob, mime: rec.mime, text, words: tr.words, vocab: [] });
   _jam.ans = ans; _jam.rpt = null; _jam.gradeError = ''; _jam.sessionId = ''; _jam.docUrl = ''; _jam.saving = true;
   await prepareAnalysis([ans]);
   renderJAMResult(ans);
@@ -4828,9 +4835,11 @@ const MILESTONES = [3,5,8,10,13,15,18,20,23,25,28,30];
 function isMilestone(n) { return MILESTONES.includes(parseInt(n)); }
 function nextMilestone(n) { return MILESTONES.find(m => m > n) || null; }
 
-// The pronunciation check runs on the attempts the AI marks (milestones), JAM and the test.
+// The pronunciation check (a paid server) runs only where it is marked:
+// homework on its milestone attempts, JAM on its milestone runs (see
+// finishJAM) and every Test Simulation. Free practice has none.
 function pronWanted() {
-  return !!(window.Pron && Pron.enabled() && (A.mode === 'jam' || isMilestone((A.retryCount || 0) + 1) || A.pendingMilestone));
+  return !!(window.Pron && Pron.enabled() && A.mode !== 'jam' && A.assignId && (isMilestone((A.retryCount || 0) + 1) || A.pendingMilestone));
 }
 
 async function launch(mode, qs, retryCount) {
@@ -4851,7 +4860,6 @@ async function launch(mode, qs, retryCount) {
   } catch(e) { A.retryCount = retryCount || 0; A.pendingMilestone = false; }
 
   A.mode = mode;
-  if (pronWanted()) Pron.wake();   // a sleeping Space needs a minute; wake it now
   if (!A.assignId && mode !== 'part2' && qs.length > 1 && randomOrderOn()) qs = shuffled(qs);
   A.qs   = qs;
   A.recs = qs.map(q => ({ question: q.question, studentAnswer: '' }));

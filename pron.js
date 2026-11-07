@@ -28,19 +28,12 @@
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
   let seq = 0;
+  let queue = Promise.resolve();
   const live = {};                 // id → rec, while its slot may be on screen
 
   const P = {
     url() { return (ls('speak_pron_url') || PRON_URL || '').replace(/\/+$/, ''); },
     enabled() { return !!this.url(); },
-
-    // A sleeping Space takes a minute or two to start: wake it when a graded
-    // session begins, so it is up by the time the first answer arrives.
-    wake() {
-      if (!this.enabled() || this._woke) return;
-      this._woke = true;
-      fetch(this.url() + '/health', { mode: 'cors' }).catch(() => {});
-    },
 
     start(rec, o) {
       if (!this.enabled() || !rec || !o || !o.blob || o.blob.size < 1500) return null;
@@ -49,7 +42,10 @@
       rec._pron = null; rec._pronErr = '';
       rec._pronAudio = o.blob;          // kept for this session only, for "▶ You"
       live[rec._pronId] = rec;
-      const p = check(this.url(), o).then(r => { rec._pron = r; return r; },
+      // One request at a time from this browser: the server keeps a single
+      // container busy instead of starting a second one for a burst.
+      const url = this.url();
+      const p = (queue = queue.catch(() => {}).then(() => check(url, o))).then(r => { rec._pron = r; return r; },
         e => { rec._pronErr = String((e && e.message) || e); console.warn('[pron]', rec._pronErr); return null; });
       rec._pronP = p;
       p.then(() => { if (rec._pronP === p) fill(rec); });

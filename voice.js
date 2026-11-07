@@ -8,24 +8,14 @@
 //   Voice.unlock()   → call inside a tap: lets iOS speak later
 // ════════════════════════════════════════════
 (function () {
-  const PREF_KEY = 'speak_voice';
-  const VOICES = {
-    device: 'Device voice',
-    off:    'Off — show the text only'
-  };
-  const ls = { get: k => { try { return localStorage.getItem(k); } catch (e) { return null; } },
-               set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} } };
-
+  // Always the device voice; there is no setting. A browser without speech
+  // (mode 'off') shows the text for about the time it takes to read it.
   const V = {
-    VOICES,
-    // An older choice of a downloadable voice falls back to the device voice.
-    pref() { const p = ls.get(PREF_KEY); return VOICES[p] ? p : 'device'; },
-    setPref(p) { if (VOICES[p]) { ls.set(PREF_KEY, p); this.stop(); } },
-    mode() { return this.pref(); },
-    statusText() {
-      return this.mode() === 'off' ? 'The examiner\'s lines are shown, not read aloud.'
-        : window.speechSynthesis ? 'Uses this device\'s built-in English voice.' : 'This browser cannot read aloud — the text is shown.';
-    }
+    mode() { return window.speechSynthesis ? 'device' : 'off'; },
+    // Whether any line has actually started playing on this device.
+    heard: false,
+    // Set by the caller: called once if a line was sent but never started.
+    onSilent: null
   };
 
   // Best English voice on this device, British first.
@@ -40,13 +30,15 @@
 
   let current = null;              // { done } of the line being read
   let turn = 0;                    // only the latest say() speaks
+  const keep = new Set();          // utterances kept alive (Chrome drops events of collected ones)
+  const busy = s => s && (s.speaking || s.pending);
 
   V.unlock = function () {
     try { if (window.speechSynthesis) { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); } } catch (e) {}
   };
   V.stop = function () {
     turn++;
-    try { window.speechSynthesis && speechSynthesis.cancel(); } catch (e) {}
+    try { busy(window.speechSynthesis) && speechSynthesis.cancel(); } catch (e) {}
     if (current) { const c = current; current = null; c.done(); }
   };
 
@@ -72,14 +64,22 @@
         if (deviceVoice) u.voice = deviceVoice;
         u.lang = (deviceVoice && deviceVoice.lang) || 'en-GB';
         u.rate = 0.95;
-        let fired = false;
-        const go = () => { if (!fired) { fired = true; next(); } };
+        let fired = false, started = false;
+        const go = () => { if (!fired) { fired = true; keep.delete(u); next(); } };
+        u.onstart = () => { started = true; V.heard = true; };
         u.onend = go; u.onerror = go;
         guard = setTimeout(() => { try { synth.cancel(); } catch (e) {} go(); }, 2500 + s.split(/\s+/).length * 550);
+        // Never started after 3 s: tell the caller once (muted tab, no voice…).
+        setTimeout(() => { if (!started && !fired && !V.heard && V.onSilent) { const f = V.onSilent; V.onSilent = null; f(); } }, 3000);
+        keep.add(u);
+        try { synth.resume(); } catch (e) {}     // Chrome can sit "paused" after a tab switch
         synth.speak(u);
       };
-      try { synth.cancel(); } catch (e) {}
-      next();
+      // Safari and some Chrome builds drop a speak() issued straight after
+      // cancel(): clear the queue only if something is in it, then wait a beat.
+      let wasBusy = false;
+      try { wasBusy = busy(synth); if (wasBusy) synth.cancel(); } catch (e) {}
+      setTimeout(next, wasBusy ? 120 : 0);
     });
   }
 
@@ -91,7 +91,8 @@
     text = String(text || '').replace(/^\[[^\]]*\]\s*/, '').replace(/\s+/g, ' ').trim();
     this.stop();
     const my = ++turn;
-    if (!text || this.mode() === 'off') return Promise.resolve();
+    if (!text) return Promise.resolve();
+    if (this.mode() === 'off') return new Promise(r => setTimeout(r, 800 + text.split(/\s+/).length * 380));
     speaking(1);
     return (my === turn ? sayDevice(text) : Promise.resolve()).finally(() => speaking(-1));
   };
@@ -106,20 +107,6 @@
         <path class="w w2" d="M19.23 7.53a5.8 5.8 0 0 1 0 8.94"/>
         <path class="w w3" d="M21.03 5.38a8.6 8.6 0 0 1 0 13.24"/>
       </g></svg>`;
-  };
-
-  // The settings card (Practice page).
-  V.settingsHtml = function () {
-    return `<div class="key-wrap" id="voice-card">
-      <div class="key-title"><span class="key-ic">${this.icon(18)}</span>Examiner voice <small style="font-weight:400;color:var(--g600)">(Test Simulation)</small></div>
-      <div class="key-row" style="flex-wrap:wrap">
-        <select class="form-input" id="voice-sel" style="flex:1;min-width:200px" onchange="Voice.setPref(this.value);document.getElementById('voice-status').textContent=Voice.statusText()">
-          ${Object.keys(VOICES).map(k => `<option value="${k}" ${k === this.pref() ? 'selected' : ''}>${VOICES[k]}</option>`).join('')}
-        </select>
-        <button class="btn btn-outline btn-sm" onclick="Voice.unlock();Voice.say('Hello! Now, I would like to ask you some questions about yourself.')">▶ Listen</button>
-      </div>
-      <div style="font-size:11px;color:var(--g600);margin-top:6px" id="voice-status">${this.statusText()}</div>
-    </div>`;
   };
 
   window.Voice = V;
