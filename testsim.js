@@ -334,7 +334,7 @@ function tsSpokenTopic(t) {
 // ── EXAMINER VOICE ──────────────────────────
 // voice.js speaks (natural Kokoro voice, or the device voice). With the voice
 // off, the script stays on screen for about the time it takes to read it.
-function tsUnlockSpeech() { Voice.unlock(); Voice.warm(); }
+function tsUnlockSpeech() { Voice.unlock(); Voice.warm(); if (window.Pron) Pron.wake(); }
 function tsSpeak(text) {
   if (Voice.mode() === 'off') return tsSleep(800 + String(text).split(/\s+/).length * 380);
   return Voice.say(text);
@@ -426,6 +426,7 @@ async function tsTranscribe(rec, blob, mime) {
     try {
       const tr = await transcribeGroq(blob, mime);
       rec.studentAnswer = tr.text || ''; rec._words = tr.words || []; rec._dur = tr.duration || 0; rec.err = '';
+      if (window.Pron && Pron.enabled()) Pron.start(rec, { blob, mime, text: tr.text, words: tr.words, vocab: [] });
       break;
     } catch (e) {
       rec.err = e.message || String(e);

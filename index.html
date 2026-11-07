@@ -1461,6 +1461,7 @@ svg{flex-shrink:0}
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="fbdata.js"></script>
 <script src="voice.js"></script>
+<script src="pron.js"></script>
 <script src="testsim.js"></script>
 <script>
 // Line icons (same drawing style as ArticuWrite's aw-common.js)
@@ -4288,6 +4289,7 @@ async function finishJAM() {
   const ans = { question: 'JAM — speak for one minute about: ' + _jam.topic, studentAnswer: text, keywords: [],
                 part: 'jam', topic: _jam.topic, _words: tr.words || [], _dur: tr.duration || 0, secs: 60 };
   A.mode = 'jam'; A.topic = _jam.topic; A.assignId = ''; A.t0 = startIso; A.lastSessionId = '';
+  if (pronWanted()) Pron.start(ans, { blob: rec.blob, mime: rec.mime, text, words: tr.words, vocab: [] });
   _jam.ans = ans; _jam.rpt = null; _jam.gradeError = ''; _jam.sessionId = ''; _jam.docUrl = ''; _jam.saving = true;
   await prepareAnalysis([ans]);
   renderJAMResult(ans);
@@ -4312,7 +4314,8 @@ async function finishJAM() {
     overall, fc: g ? fc : '', lr: g ? lr : '', gr: g ? gr : '', p: g ? p : '',
     questionsJSON: [{ question: ans.question, keywords: [] }],
     resultsJSON: [{ question: ans.question, part: 'jam', text, studentAnswer: text, overall: ans.overall || '', scores: ans.scores || null,
-      errors: ans.errors || [], suggestion: ans.suggestion || '', natural: ans.natural || '', logic: ans.logic || null }],
+      errors: ans.errors || [], suggestion: ans.suggestion || '', natural: ans.natural || '', logic: ans.logic || null,
+      pron: window.Pron ? Pron.compact(ans) : null }],
     reportText: buildReport([ans], _jam.rpt, !!g, _jam.runs),
     analysis: Object.assign({ cefr: lex ? lex.pct : null }, buildAnalysisPayload() || {}),
     docPayload: tsDocPayload([ans], _jam.rpt, { overall, fc, lr, gr, p, graded: !!g, gradedBy: g ? g.gradedBy : '', gradeError: _jam.gradeError },
@@ -4372,6 +4375,7 @@ function renderJAMResult(ans) {
     </div>
 
     <div id="jam-ai">${jamFeedbackHtml()}</div>
+    ${window.Pron && ans._pronId ? `<div class="card">${Pron.slot(ans)}</div>` : ''}
 
     ${(() => { const b = renderLexBlock(text, _jam.topic); return b ? `<div class="card"><div class="card-title" style="margin-bottom:4px">Collocations &amp; topic vocabulary</div>
       <div style="font-size:11px;color:var(--g400);margin-bottom:12px">From the CEFR word list, a collocation dictionary and the IELTS vocabulary list, with Vietnamese meanings. Hover a green collocation to see its meaning.</div>${b}</div>` : ''; })()}
@@ -4757,6 +4761,11 @@ const MILESTONES = [3,5,8,10,13,15,18,20,23,25,28,30];
 function isMilestone(n) { return MILESTONES.includes(parseInt(n)); }
 function nextMilestone(n) { return MILESTONES.find(m => m > n) || null; }
 
+// The pronunciation check runs on the attempts the AI marks (milestones), JAM and the test.
+function pronWanted() {
+  return !!(window.Pron && Pron.enabled() && (A.mode === 'jam' || isMilestone((A.retryCount || 0) + 1) || A.pendingMilestone));
+}
+
 async function launch(mode, qs, retryCount) {
   Voice.unlock();                                   // inside the tap, before any await (iOS)
   Voice.prefetch((qs || []).map(q => q.question));  // natural-voice clips get ready while the session sets up
@@ -4777,6 +4786,7 @@ async function launch(mode, qs, retryCount) {
   } catch(e) { A.retryCount = retryCount || 0; A.pendingMilestone = false; }
 
   A.mode = mode;
+  if (pronWanted()) Pron.wake();   // a sleeping Space needs a minute; wake it now
   if (!A.assignId && mode !== 'part2' && qs.length > 1 && randomOrderOn()) qs = shuffled(qs);
   A.qs   = qs;
   A.recs = qs.map(q => ({ question: q.question, studentAnswer: '' }));
@@ -5091,7 +5101,7 @@ function stopPlayback() {
 }
 function retryRec() {
   const rec = A.recs[A.idx];
-  if (rec) { rec.studentAnswer = ''; rec._audioBlob = null; rec._audioMime = null; }
+  if (rec) { rec.studentAnswer = ''; rec._audioBlob = null; rec._audioMime = null; rec._pronP = null; rec._pron = null; }
   A.curAnswer = '';
   setInterim('');
   document.getElementById('rec-play-wrap').style.display = 'none';
@@ -5147,6 +5157,10 @@ async function stopCaptureAndTranscribe() {
     if (A.recs[A.idx]) {
       A.recs[A.idx]._words = (A.recs[A.idx]._words || []).concat(tr.words || []);
       A.recs[A.idx]._dur   = (A.recs[A.idx]._dur || 0) + (tr.duration || 0);
+      // Pronunciation check of this recording, in the background. A re-recording
+      // replaces it (the blob kept is always the latest one).
+      if (pronWanted()) Pron.start(A.recs[A.idx], { blob: rec.blob, mime: rec.mime, text: tr.text, words: tr.words,
+                                                   vocab: (A.qs[A.idx] && A.qs[A.idx].keywords) || [] });
     }
     const txt = tr.text;
     const shownBefore = A.curAnswer;
@@ -5945,7 +5959,8 @@ async function gradeAnswers(answered, part, ctx) {
       const ot = (r.overtimeSec > 0)
         ? `\n[TIMING: candidate spoke ~${Math.round((120 + r.overtimeSec))}s — ${r.overtimeSec}s OVER the 2-minute Part 2 limit]`
         : '';
-      return `Q${i+1}: "${r.question}"\nA${i+1}: "${r.studentAnswer}"${kw ? '\nKeywords: ' + kw : ''}${ot}`;
+      const pe = window.Pron ? Pron.evidence(r) : '';
+      return `Q${i+1}: "${r.question}"\nA${i+1}: "${r.studentAnswer}"${kw ? '\nKeywords: ' + kw : ''}${ot}${pe}`;
     }).join('\n\n');
     const prompt = buildGradePrompt(qaBlock, list.length, EVIDENCE, part);
     const want = list.length;
@@ -5965,6 +5980,10 @@ async function gradeAnswers(answered, part, ctx) {
     return parsed;
   }
 
+  if (window.Pron && answered.some(r => r._pronP && !r._pron && !r._pronErr)) {
+    setGradingStatus('Finishing the pronunciation check…');
+    await Pron.wait(answered, 12000);
+  }
   const chunks = gradeChunks(answered, part), marks = [], reports = [];
   for (let c = 0; c < chunks.length; c++) {
     const list = chunks[c].map(i => answered[i]);
@@ -6107,7 +6126,7 @@ async function finishSession() {
         studentAnswer: r.studentAnswer, overall: r.overall || '',
         scores: r.scores || null, errors: r.errors || [],
         suggestion: r.suggestion || '', natural: r.natural || '', logic: r.logic || null,
-        overtimeSec: r.overtimeSec || 0
+        overtimeSec: r.overtimeSec || 0, pron: window.Pron ? Pron.compact(r) : null
       })),
       reportText: buildReport(answered, rpt, shouldGrade, attemptNo),
       type: A.assignId ? 'homework' : 'free',
@@ -6347,6 +6366,7 @@ function renderResults(answered, rpt, isMilestone, attemptNo, overall, fc, lr, g
             ${r.errors?.length ? `
               <div class="qs-lbl" style="margin-top:10px">Errors to fix</div>
               ${r.errors.map(e=>`<div style="font-size:12px;margin-bottom:4px">❌ <s style="color:var(--red)">${e.wrong}</s> → ✅ <strong>${e.correct}</strong>${e.reason?' — '+e.reason:''}</div>`).join('')}` : ''}
+            ${window.Pron ? Pron.slot(r) : ''}
           </div>
           <div>
             <div class="qs-lbl">Scores</div>
