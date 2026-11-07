@@ -339,11 +339,15 @@ function tsSpeak(text) {
   if (Voice.mode() === 'off') return tsSleep(800 + String(text).split(/\s+/).length * 380);
   return Voice.say(text);
 }
-async function tsSay(text) {
+// The examiner's own lines show in the examiner box; a question is shown once,
+// large, below it (tsShowQ), so the box is hidden while a question is read.
+async function tsSay(text, isQuestion) {
   tsGuard();
   tsRecUI(false);
   const sc = document.getElementById('ts-script');
-  if (sc) { sc.textContent = text; sc.parentElement.classList.add('speaking'); }
+  const box = sc && sc.closest('.ts-examiner');
+  if (box) box.style.display = isQuestion ? 'none' : '';
+  if (sc) { sc.textContent = isQuestion ? '' : text; sc.parentElement.classList.add('speaking'); }
   await tsSpeak(text);
   if (sc) sc.parentElement.classList.remove('speaking');
   tsGuard();
@@ -355,7 +359,7 @@ async function tsAsk(q, label) {
   TS.step++;
   tsProgress(label);
   tsShowQ(q);
-  await tsSay(q);
+  await tsSay(q, true);
 }
 
 // ── RECORDING ───────────────────────────────
