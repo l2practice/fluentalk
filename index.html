@@ -401,6 +401,11 @@ textarea.form-input{resize:vertical;min-height:72px;line-height:1.6}
 .search-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;align-items:center}
 .search-inp{padding:8px 13px;border:1.5px solid var(--g200);border-radius:var(--r);font-size:13px;outline:none;font-family:var(--f);background:var(--white)}
 .search-inp:focus{border-color:var(--blue-m)}
+.prog-q-card{padding:16px 18px;margin-bottom:16px;overflow-x:auto}
+.prog-q{display:grid;grid-template-columns:minmax(150px,1.15fr) repeat(3,minmax(130px,1fr)) minmax(130px,.9fr);gap:8px 10px;align-items:center;min-width:720px}
+.prog-q .search-inp{width:100%;max-width:none}
+.prog-q .search-inp:disabled{opacity:.5}
+.prog-q-h{font-size:11px;font-weight:700;color:var(--g500);text-transform:uppercase;letter-spacing:.05em}
 
 /* ── PEER COMPARISON ── */
 .peer-row{display:grid;grid-template-columns:auto 1fr auto auto;gap:14px;align-items:center;padding:12px 0;border-bottom:1px solid var(--g100)}
@@ -2012,7 +2017,7 @@ async function teacherTab(tab) {
     if (tab === 'classroom') await renderTeacherClassroom(c);
     if (tab === 'homework')  await renderTeacherHomework(c);
     if (tab === 'library')   await renderLibrary(c);
-    if (tab === 'progress')  { _progFilter=''; _progTopic='__NONE__'; _progTopic2='__NONE__'; _progTopic3='__NONE__'; _progMode=''; _progTaskType='homework'; _progTopicsFor=''; _progLoaded=false; _progReload=false; await renderTeacherProgress(c); }
+    if (tab === 'progress')  { _progFilter=''; _progQ=progQDefault(); _progTopicsBy={}; _progMode=''; _progLoaded=false; _progReload=false; await renderTeacherProgress(c); }
     if (tab === 'pronReports') await renderPronReports(c);
     if (tab === 'studentArchive') await renderStudentArchive(c);
     if (tab === 'classArchive')   await renderClassArchive(c);
@@ -2978,8 +2983,17 @@ async function deleteAsn(assignId, title) {
 }
 
 // ── STUDY PROGRESS ───────────────────────────
-let _progSessions = [], _progFilter = '', _progMode = '', _progDays = 6, _progTopic = '__NONE__', _progTopic2 = '__NONE__', _progTopic3 = '__NONE__', _progLoaded = false, _progTopics = [], _progTopicsFor = '', _progReload = false;
-let _simFromDate = '', _simToDate = '', _simSelectedStudent = '', _simCompareIds = [], _simSearchQuery = '', _simCompareSearchQuery = '', _simDatesInitialized = false;
+let _progSessions = [], _progFilter = '', _progMode = '', _progLoaded = false, _progReload = false;
+// The search: up to three rows, each a mode with up to three topics and a
+// time range, so one table can show e.g. this week's homework, JAM and tests.
+const PROG_TYPES = [['homework', 'Homework'], ['jam', 'JAM'], ['test', 'Test Simulation'], ['free', 'Free Speaking']];
+const PROG_DAYS = [[6, 'Last 6 days'], [14, 'Last 14 days'], [30, 'Last 30 days'], [0, 'All results']];
+function progQDefault() { return [0, 1, 2].map(i => ({ type: i ? '' : 'homework', topics: ['', '', ''], days: 6 })); }
+let _progQ = progQDefault(), _progTopicsBy = {};   // topic lists per mode, for the chosen class
+const progActive = () => _progQ.filter(q => q.type);
+// Only Test Simulation searched: its own per-student view, not the table.
+const progTestOnly = () => { const a = progActive(); return a.length > 0 && a.every(q => q.type === 'test'); };
+let _simFromDate = '', _simToDate = '', _simSelectedStudent = '', _simCompareIds = [], _simSearchQuery = '', _simCompareSearchQuery = '';
 let _simSortCol = 'StudentName', _simSortDir = 1;
 
 function localDateInputValue(date) {
@@ -3168,10 +3182,7 @@ function filterProgressByClass(classId) {
 
 function renderProgressUI(c, classes) {
   // Group sessions by StudentID+Topic → rows
-  const selectedTopics = selectedProgressTopics();
-  const rows = buildProgressRows(_progSessions, _progFilter).filter(r =>
-    !selectedTopics.length || selectedTopics.includes(String(r.Topic || '').toLowerCase())
-  );
+  const rows = buildProgressRows(_progSessions, _progFilter);
   const MILESTONES = [3,5,8,10];
   c.innerHTML = `
     <div class="search-row">
@@ -3248,7 +3259,7 @@ function renderProgressRows(rows) {
     const scoreStr = latestBatch.length
       ? latestBatch.map(m => `<span style="color:${scoreColor(m.Overall)};font-weight:700">${m.Overall}</span>`).join(' · ')
       : '<span style="color:var(--g400);font-style:italic;font-size:12px">not graded</span>';
-    const isTest = String(r.Type) === 'test';
+    const isTest = String(r.Type) === 'test', isJam = String(r.Type) === 'jam' || String(r.Part) === 'jam';
     // A test is graded every time; practice only on milestone attempts.
     const hasUngraded = r.sessions.some(s => {
       const an = parseInt(s.AttemptNo) || 0;
@@ -3260,9 +3271,9 @@ function renderProgressRows(rows) {
       <td style="font-family:var(--fm);font-size:12px">${r.StudentID}</td>
       <td style="font-weight:600">${r.StudentName||'—'}</td>
       <td>${r.ClassID ? `<div style="font-weight:600;font-size:12px">${r.ClassName || classNameOf(r.ClassID)}</div><div style="font-size:10px;color:var(--g400);font-family:var(--fm)">${r.ClassID}</div>` : '—'}</td>
-      <td>${isTest ? '<span class="badge badge-blue" title="Full Part 1–2–3 mock test">' + ic('exam') + 'Test Sim</span>' : `<span class="badge badge-blue">${r.Part||'—'}</span>`}${
-        isTest ? '' : (String(r.Type)==='jam'||String(r.Part)==='jam')
-          ? ' <span class="badge" title="JAM — one-minute fluency drill" style="background:var(--gold-l);color:var(--gold-d)">' + ic('clock') + 'JAM</span>'
+      <td>${isTest ? '<span class="badge badge-blue" title="Full Part 1–2–3 mock test">' + ic('exam') + 'Test Sim</span>' : isJam ? '' : `<span class="badge badge-blue">${r.Part||'—'}</span>`}${
+        isTest ? '' : isJam
+          ? '<span class="badge" title="JAM — one-minute fluency drill" style="background:var(--gold-l);color:var(--gold-d)">' + ic('clock') + 'JAM</span>'
           : (r.Type==='free' ? ' <span class="badge" title="Student practised this on their own, not assigned homework" style="background:var(--purple-l);color:var(--purple)">Free</span>' : '')
       }</td>
       <td style="font-weight:600;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.Topic||''}">${r.Topic||'—'}</td>
@@ -3298,22 +3309,14 @@ function sortProg(col) {
 function filterProgressTable() {
   const q = (document.getElementById('prog-search')?.value || '').toLowerCase();
   const modeOf = r => (String(r.Type)==='jam'||String(r.Part)==='jam') ? 'jam' : String(r.Type)==='test' ? 'test' : (r.Type==='free' ? 'free' : 'homework');
-  const selectedTopics = selectedProgressTopics();
   const filtered = _progRows.filter(r =>
     (!_progMode || modeOf(r) === _progMode) &&
-    (!selectedTopics.length || selectedTopics.includes(String(r.Topic||'').toLowerCase())) &&
     (!q || String(r.StudentName||'').toLowerCase().includes(q) ||
      String(r.StudentID||'').toLowerCase().includes(q) ||
      String(r.Topic||'').toLowerCase().includes(q))
   );
   const tb = document.getElementById('prog-tbody');
   if (tb) tb.innerHTML = renderProgressRows(filtered);
-}
-
-function selectedProgressTopics() {
-  return [_progTopic, _progTopic2, _progTopic3]
-    .filter(t => t && t !== '__NONE__' && t !== '__ALL__')
-    .map(t => t.toLowerCase());
 }
 
 function showProgressDetail(rowIdx) {
@@ -3400,11 +3403,17 @@ async function exportSessions() {
   if (!table.rows.length) { toast('Nothing to export — load results first.', 'info'); return; }
   showOverlay('Building your export sheet…');
   try {
-    const topics = [_progTopic, _progTopic2, _progTopic3].filter(t => t && t !== '__NONE__' && t !== '__ALL__');
-    // The filters go too: Apps Script adds, for each homework in the export,
-    // the full report (whole roster, status, scores, improvement, Doc links).
-    const res = await gasCall('teacher.exportSessions', { classId: _progFilter || '', table, taskType: _progTaskType, topics, sinceDays: _progDays,
-      title: [classNameOf(_progFilter) || _progFilter || 'All classes', topics.length ? topics.join(', ') : ({ homework: 'Homework', jam: 'JAM', free: 'Free', test: 'Test Simulation', all: 'All types' }[_progTaskType] || '')].filter(Boolean).join(' · ') });
+    // The search rows go too: Apps Script adds, for each homework in the
+    // export, the full report (whole roster, status, scores, improvement, Doc
+    // links). taskType/topics/sinceDays are the rows merged, for an older Code.gs.
+    const queries = progActive().map(q => ({ taskType: q.type, topics: q.type === 'test' ? [] : q.topics.filter(Boolean), sinceDays: q.days }));
+    const types = [...new Set(queries.map(q => q.taskType))];
+    const topics = [...new Set(queries.flatMap(q => q.topics))];
+    const label = Object.fromEntries(PROG_TYPES);
+    const res = await gasCall('teacher.exportSessions', { classId: _progFilter || '', table, queries,
+      taskType: types.length === 1 ? types[0] : 'all', topics, sinceDays: queries.some(q => !q.sinceDays) ? 0 : Math.max(...queries.map(q => q.sinceDays)),
+      title: [classNameOf(_progFilter) || _progFilter || 'All classes',
+        queries.map(q => label[q.taskType] + (q.topics.length ? ': ' + q.topics.join(', ') : '')).join(' + ')].filter(Boolean).join(' · ') });
     hideOverlay();
     if (!res.success) { toast('Export failed: ' + (res.error || 'unknown error'), 'error', 8000); return; }
     // An older Code.gs ignores the table and lists every attempt instead.
@@ -7358,7 +7367,7 @@ async function renderTeacherProgress(c) {
       <p style="font-size:13px;color:var(--g600);margin-bottom:20px">Choose a class to view its results.</p>
       <div class="class-card-grid">
         ${stats.map(cl => `
-          <div class="class-card" onclick="_progFilter='${cl.classId}';_progTopic='__NONE__';_progTopic2='__NONE__';_progTopic3='__NONE__';_progTaskType='homework';_progTopicsFor='';_progLoaded=false;_progReload=false;renderTeacherProgress(document.getElementById('teacher-content'))">
+          <div class="class-card" onclick="_progFilter='${cl.classId}';_progQ=progQDefault();_progTopicsBy={};_progLoaded=false;_progReload=false;renderTeacherProgress(document.getElementById('teacher-content'))">
             <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px">
               <div>
                 <div style="font-weight:800;font-size:1.05rem;color:var(--black);letter-spacing:-.02em">${cl.className || cl.classId}</div>
@@ -7394,62 +7403,21 @@ async function renderTeacherProgress(c) {
   // heavy — results load only when Load results is pressed.
   const clsName = classNameOf(_progFilter) || _progFilter;
 
-  // When a task type is set we fetch its topic list (light). Wrapped so a flaky
-  // GAS response can't blank the whole page — worst case the topic list is just
-  // "All topics".
-  if (_progTaskType && _progTaskType !== 'test' && !_progTopicsFor) {
-    try {
-      const tRes = await gasCall('teacher.getClassTopics', { classId: _progFilter, taskType: _progTaskType });
-      _progTopics = (tRes && tRes.success) ? (tRes.data || []) : [];
-    } catch(e) { _progTopics = []; }
-    _progTopicsFor = _progTaskType;   // remember which type these topics are for
-  }
-  if (_progTaskType === 'test' && !_simDatesInitialized) {
-    const today = new Date(), start = new Date(today);
-    start.setDate(start.getDate() - 13);
-    _simFromDate = localDateInputValue(start);
-    _simToDate = localDateInputValue(today);
-    _simDatesInitialized = true;
-  }
+  // Topic lists (light) for the modes in the search, once per class.
+  await progLoadTopics();
 
   const toolbar = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
       <h2 style="font-size:1.3rem;display:flex;align-items:center;gap:12px;flex-wrap:wrap"><span class="h-ic" style="margin:0">${ic('progress')}</span>Study Progress ${classSelect('progress')}</h2>
       <div style="display:flex;gap:8px">
-        ${_progLoaded && _progTaskType!=='test' ? '<button class="btn btn-outline btn-sm" onclick="exportSessions()">' + ic('download') + 'Export to Sheet</button>' : ''}
-        ${_progTaskType==='test' ? '' : `<button class="btn btn-sm" style="background:var(--red);color:#fff" onclick="deleteClassData()">${ic('trash')}Xóa Data Lớp</button>`}
+        ${_progLoaded && !progTestOnly() ? '<button class="btn btn-outline btn-sm" onclick="exportSessions()">' + ic('download') + 'Export to Sheet</button>' : ''}
+        <button class="btn btn-sm" style="background:var(--red);color:#fff" onclick="deleteClassData()">${ic('trash')}Xóa Data Lớp</button>
       </div>
     </div>
-    <div class="search-row" style="align-items:flex-end">
-      <div>
-        <label style="font-size:11px;font-weight:700;color:var(--g500);text-transform:uppercase;display:block;margin-bottom:4px">Task type</label>
-        <select class="search-inp" style="max-width:160px" onchange="_progTaskType=this.value;_simDatesInitialized=false;_progTopic='__NONE__';_progTopic2='__NONE__';_progTopic3='__NONE__';_progTopicsFor='';_progLoaded=false;renderTeacherProgress(document.getElementById('teacher-content'))">
-          <option value="all" ${_progTaskType==='all'?'selected':''}>All types</option>
-          <option value="homework" ${_progTaskType==='homework'?'selected':''}>Homework</option>
-          <option value="jam" ${_progTaskType==='jam'?'selected':''}>JAM</option>
-          <option value="free" ${_progTaskType==='free'?'selected':''}>Free Speaking</option>
-          <option value="test" ${_progTaskType==='test'?'selected':''}>Test Simulation</option>
-        </select>
-      </div>
-      ${_progTaskType === 'test' ? `
-      <div><label style="font-size:11px;font-weight:700;color:var(--g500);text-transform:uppercase;display:block;margin-bottom:4px">From date</label><input type="date" id="sim-from-date" class="search-inp" value="${_h(_simFromDate)}"></div>
-      <div><label style="font-size:11px;font-weight:700;color:var(--g500);text-transform:uppercase;display:block;margin-bottom:4px">To date</label><input type="date" id="sim-to-date" class="search-inp" value="${_h(_simToDate)}"></div>
-      <div><label style="font-size:11px;font-weight:700;color:var(--g500);text-transform:uppercase;display:block;margin-bottom:4px">Results</label><select class="search-inp" style="max-width:160px"><option>All results</option></select></div>` : `
-      ${[_progTopic, _progTopic2, _progTopic3].map((selected, i) => `
-      <div>
-        <label style="font-size:11px;font-weight:700;color:var(--g500);text-transform:uppercase;display:block;margin-bottom:4px">Topic ${i + 1}</label>
-        <select id="prog-topic-sel-${i + 1}" class="search-inp" style="max-width:220px" onchange="${i===0?"_progTopic=this.value":i===1?"_progTopic2=this.value":"_progTopic3=this.value"}">
-          <option value="__NONE__" ${!selected||selected==='__NONE__'?'selected':''}>None</option>
-          ${_progTopics.map(t => `<option value="${String(t.topic).replace(/"/g,'&quot;')}" ${selected===t.topic?'selected':''}>${t.topic}</option>`).join('')}
-        </select>
-      </div>`).join('')}
-      `}
-      ${_progTaskType==='test' ? '' : `<div><label style="font-size:11px;font-weight:700;color:var(--g500);text-transform:uppercase;display:block;margin-bottom:4px">Date range</label><select id="prog-days-sel" class="search-inp" style="max-width:150px" onchange="_progDays=parseInt(this.value)"><option value="6" ${_progDays===6?'selected':''}>Last 6 days</option><option value="14" ${_progDays===14?'selected':''}>Last 14 days</option><option value="0" ${_progDays===0?'selected':''}>All results</option></select></div>`}
-      <button class="btn btn-primary" onclick="loadProgressResults()">${ic('progress')}Load results</button>
-    </div>`;
+    <div class="card prog-q-card" id="prog-q">${progSearchHtml()}</div>`;
 
   if (!_progLoaded) {
-    c.innerHTML = toolbar + '<div class="empty" style="padding:50px">Choose a task type, up to three topics and a date range, then press <strong>Load results</strong>.</div>';
+    c.innerHTML = toolbar + '<div class="empty" style="padding:50px">Choose up to three modes, their topics and a time range, then press <strong>Load results</strong>.<br><em>Chọn tối đa 3 mode, topic và thời gian rồi bấm Load results.</em></div>';
     return;
   }
 
@@ -7459,10 +7427,7 @@ async function renderTeacherProgress(c) {
     _progReload = false;
     c.innerHTML = toolbar + '<div class="empty" style="padding:50px">Loading results…</div>';
     try {
-      const sessRes = await gasCall('teacher.getAllSessions', _progTaskType === 'test'
-        ? { classId: _progFilter, taskType: 'test', sinceDays: 0 }
-        : { classId: _progFilter, taskType: _progTaskType, sinceDays: _progDays });
-      _progSessions = sessRes.data || [];
+      _progSessions = await progFetchSessions();
     } catch(e) {
       c.innerHTML = toolbar + '<div class="empty" style="padding:50px;color:var(--red-d)">Could not load — the server may be busy. Press Load results again.</div>';
       return;
@@ -7470,29 +7435,92 @@ async function renderTeacherProgress(c) {
     if (!_teacherClasses.length) {
       try { const clsRes = await gasCall('teacher.getClasses'); _teacherClasses = (clsRes.data||[]).filter(cl=>cl.Status!=='Archived'); } catch(e) {}
     }
-    if (_progTaskType === 'test') {
+    if (progTestOnly()) {
       try { const stuRes = await gasCall('teacher.getStudents', {}); if (stuRes.success) _teacherStudents = stuRes.data || []; } catch(e) {}
     }
     _progRows = buildProgressRows(_progSessions, _progFilter);
   }
   c.innerHTML = toolbar;
   const wrap = document.createElement('div');
-  if (_progTaskType === 'test') { wrap.id='sim-progress-wrap'; renderSimulationProgress(wrap); }
+  if (progTestOnly()) { wrap.id='sim-progress-wrap'; renderSimulationProgress(wrap); }
   else renderProgressUI(wrap, _teacherClasses);
   c.appendChild(wrap);
 }
 
+// The search grid: one row per mode — Mode | Topic 1 | Topic 2 | Topic 3 | Time.
+function progSearchHtml() {
+  const lbl = t => `<div class="prog-q-h">${t}</div>`;
+  const opt = (v, text, sel) => `<option value="${_h(v)}" ${sel ? 'selected' : ''}>${_h(text)}</option>`;
+  const rows = _progQ.map((q, i) => {
+    const topics = _progTopicsBy[q.type] || [];
+    const noTopics = !q.type || q.type === 'test';
+    return `
+      <select class="search-inp" aria-label="Mode ${i + 1}" onchange="progSetType(${i},this.value)">
+        ${opt('', i ? '— None —' : '— Choose a mode —', !q.type)}${PROG_TYPES.map(([v, t]) => opt(v, t, q.type === v)).join('')}
+      </select>
+      ${[0, 1, 2].map(k => `<select class="search-inp" aria-label="Row ${i + 1} topic ${k + 1}" ${noTopics ? 'disabled' : ''} onchange="_progQ[${i}].topics[${k}]=this.value">
+        ${noTopics ? opt('', q.type === 'test' ? 'All tests' : '—', true) : opt('', 'None', !q.topics[k]) + topics.map(t => opt(t.topic, t.topic, q.topics[k] === t.topic)).join('')}
+      </select>`).join('')}
+      <select class="search-inp" aria-label="Row ${i + 1} time" ${q.type ? '' : 'disabled'} onchange="_progQ[${i}].days=parseInt(this.value)">
+        ${PROG_DAYS.map(([d, t]) => opt(d, t, q.days === d)).join('')}
+      </select>`;
+  }).join('');
+  return `<div class="prog-q">
+      ${lbl('Mode')}${lbl('Topic 1')}${lbl('Topic 2')}${lbl('Topic 3')}${lbl('Time')}
+      ${rows}
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;margin-top:12px;flex-wrap:wrap">
+      <button class="btn btn-primary" onclick="loadProgressResults()">${ic('progress')}Load results</button>
+      <span style="font-size:12px;color:var(--g500)">Topics left as None = all topics of that mode. · Để None = mọi topic của mode đó.</span>
+    </div>`;
+}
+async function progLoadTopics() {
+  const need = [...new Set(progActive().map(q => q.type))].filter(t => t !== 'test' && !_progTopicsBy[t]);
+  await Promise.all(need.map(async t => {
+    try {
+      const r = await gasCall('teacher.getClassTopics', { classId: _progFilter, taskType: t });
+      _progTopicsBy[t] = (r && r.success) ? (r.data || []) : [];
+    } catch (e) { _progTopicsBy[t] = []; }
+  }));
+}
+async function progSetType(i, type) {
+  _progQ[i] = { type, topics: ['', '', ''], days: _progQ[i].days || 6 };
+  await progLoadTopics();
+  const box = document.getElementById('prog-q');
+  if (box) box.innerHTML = progSearchHtml();
+}
+// One request per mode and time range; each row keeps its own topics; an
+// attempt matched by two rows is listed once.
+async function progFetchSessions() {
+  const act = progActive(), byKey = {};
+  act.forEach(q => { byKey[q.type + '|' + q.days] = { taskType: q.type, sinceDays: q.days }; });
+  const keys = Object.keys(byKey);
+  const res = await Promise.all(keys.map(k => gasCall('teacher.getAllSessions', Object.assign({ classId: _progFilter }, byKey[k]))));
+  res.forEach(r => { if (!r || r.success === false) throw new Error((r && r.error) || 'load failed'); });
+  const seen = new Set(), out = [];
+  act.forEach(q => {
+    const rows = res[keys.indexOf(q.type + '|' + q.days)].data || [];
+    const topics = q.type === 'test' ? [] : q.topics.filter(Boolean).map(t => t.toLowerCase());
+    rows.forEach(s => {
+      if (topics.length && !topics.includes(String(s.Topic || '').toLowerCase())) return;
+      const id = s.SessionID || (s.StudentID + '|' + s.StartTime + '|' + s.Topic);
+      if (seen.has(id)) return;
+      seen.add(id); out.push(s);
+    });
+  });
+  return out.sort((a, b) => String(b.StartTime || '').localeCompare(String(a.StartTime || '')));
+}
+
 function loadProgressResults() {
-  if (_progTaskType === 'test') {
-    _simFromDate = document.getElementById('sim-from-date')?.value || '';
-    _simToDate = document.getElementById('sim-to-date')?.value || '';
-    if (_simFromDate && _simToDate && _simFromDate > _simToDate) { toast('From date must be on or before To date.', 'error'); return; }
+  if (!progActive().length) { toast('Choose at least one mode.', 'error'); return; }
+  if (progTestOnly()) {
+    // The test view filters by dates: the row's time range, up to today.
+    const days = Math.max(...progActive().map(q => q.days)), all = progActive().some(q => !q.days);
+    const today = new Date(), start = new Date(today);
+    start.setDate(start.getDate() - days);
+    _simFromDate = all ? '' : localDateInputValue(start);
+    _simToDate = localDateInputValue(today);
     _simSelectedStudent = ''; _simCompareIds = []; _simCompareOpen = false;
-  } else {
-    _progTopic=document.getElementById('prog-topic-sel-1').value;
-    _progTopic2=document.getElementById('prog-topic-sel-2').value;
-    _progTopic3=document.getElementById('prog-topic-sel-3').value;
-    _progDays=parseInt(document.getElementById('prog-days-sel').value);
   }
   _progMode=''; _progLoaded=true; _progReload=true;
   renderTeacherProgress(document.getElementById('teacher-content'));
