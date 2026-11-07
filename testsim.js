@@ -209,12 +209,17 @@ function openTestSim() {
       <div class="ts-tip">Before you start: turn the sound on (headphones are best), allow the microphone,
         and sit somewhere quiet. Answer as you would to a real examiner — your words are not shown during the test.
         <br><em>Bật loa (nên dùng tai nghe), cho phép micro, ngồi chỗ yên tĩnh. Trong lúc thi, bài nói không hiện lên màn hình.</em></div>
-      <button class="btn btn-outline btn-sm" style="margin-top:10px" onclick="tsVoiceCheck()">${Voice.icon(16)} Listen to the examiner's voice · Nghe thử</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px">
+        <select id="ts-voice-sel" class="form-input" style="flex:1;min-width:200px;max-width:360px;padding:7px 10px;font-size:13px" onchange="Voice.pick(this.value);tsVoiceCheck()" aria-label="Examiner voice"></select>
+        <button class="btn btn-outline btn-sm" onclick="tsVoiceCheck()">${Voice.icon(16)} Listen · Nghe thử</button>
+      </div>
       <div id="ts-voice-st" style="font-size:12px;margin-top:6px"></div>
     </div>
     <div id="ts-errors" class="ts-errors"></div>
     <button class="btn btn-primary" id="ts-start" style="width:100%;justify-content:center;padding:14px;font-size:1rem" onclick="tsStart()">${ic('rocket')}Start the test</button>`;
   tsOnInput(true);
+  tsVoiceMenu();
+  Voice.onVoices = tsVoiceMenu;
 }
 
 let _tsInputTm = null;
@@ -249,6 +254,16 @@ function tsSleep(ms) {
 }
 function tsGuard() { if (TS.stopped) throw TS_STOP; }
 
+// The examiner voice menu: "Automatic" (the most natural voice that works
+// here) or one of this device's English voices, natural ones marked ★.
+function tsVoiceMenu() {
+  const sel = document.getElementById('ts-voice-sel');
+  if (!sel) return;
+  const list = Voice.voiceList(), picked = Voice.picked();
+  sel.innerHTML = `<option value="">Automatic — most natural voice${list.length ? ' (' + _h(Voice.current()) + ')' : ''}</option>` +
+    list.map(v => `<option value="${_h(v.name)}" ${v.name === picked ? 'selected' : ''}>${v.natural ? '★ ' : ''}${_h(v.name)} · ${_h(v.lang)}</option>`).join('');
+  sel.style.display = list.length ? '' : 'none';
+}
 // Plays one line so the student can check the sound before the test, and
 // says which voice played (or what each voice tried answered) for support.
 function tsVoiceCheck() {

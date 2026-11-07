@@ -20,30 +20,61 @@
 
   const ls = { get: k => { try { return localStorage.getItem(k); } catch (e) { return null; } },
                set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} } };
-  const OK_KEY = 'speak_voice_ok';           // the voice that last played on this device
+  const PICK_KEY = 'speak_voice_pick';       // a voice the student chose on this device
+  const BAD_KEY = 'speak_voice_bad';         // voices that failed here: { name: time }
+  const BAD_DAYS = 3;
   const START_MS = 3000;                      // a line that has not started by then failed
   const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
-  // Voices to try, best first: the one that worked here before, preferred
-  // British voices, the browser's default (null), then any local English
-  // voice. A voice that errors or stays silent is skipped for the rest of
-  // the visit, so one broken voice (an online voice without network, a
-  // macOS voice that is listed but not installed…) cannot silence the test.
+  // How natural an English voice sounds, best first. Neural voices (Edge's
+  // "Online (Natural)", Chrome's Google voices, Apple's Premium/Enhanced)
+  // sound human; macOS novelty and old formant voices sound robotic.
+  const ROBOT = /\b(Albert|Bad News|Bahh|Bells|Boing|Bubbles|Cellos|Good News|Jester|Organ|Superstar|Trinoids|Whisper|Wobble|Zarvox|Junior|Ralph|Fred|Kathy|Grandma|Grandpa|Eddy|Flo|Reed|Rocko|Sandy|Shelley|eSpeak)\b/i;
+  function quality(v) {
+    const n = v.name;
+    let q = 0;
+    if (/Natural|Neural/i.test(n)) q = 100;
+    else if (/^Google/i.test(n)) q = 90;
+    else if (/Premium/i.test(n)) q = 85;
+    else if (/Enhanced/i.test(n)) q = 80;
+    else if (/^Microsoft/i.test(n)) q = 45;
+    else if (/^(Daniel|Serena|Kate|Martha|Arthur|Oliver|Stephanie|Samantha|Karen|Moira|Tessa|Rishi|Veena|Ava|Allison|Susan|Tom|Evan|Nathan|Joelle|Zoe|Nicky|Aaron)\b/.test(n)) q = 50;
+    else q = 30;
+    if (ROBOT.test(n)) q = -100;
+    if (/^en[-_]GB/i.test(v.lang)) q += 6; else if (/^en[-_]US/i.test(v.lang)) q += 3;
+    if (/Sonia|UK English Female/i.test(n)) q += 3;                       // clear British examiner voices
+    else if (/Libby|Maisie|Ryan|Thomas/i.test(n)) q += 2;
+    return q;
+  }
+
+  // Voices to try, best first: the student's choice, then by quality, the
+  // browser's default (null) after every decent voice. A voice that errors
+  // or stays silent is skipped (for a few days), so one broken voice — an
+  // online voice without network, a voice listed but not installed — cannot
+  // silence the test.
   const failed = new Set();
   const nameOf = v => v ? v.name : 'browser default';
-  function candidates() {
-    const vs = ((window.speechSynthesis && speechSynthesis.getVoices()) || []).filter(v => /^en/i.test(v.lang));
-    const pref = ['Google UK English Female', 'Google UK English Male', 'Serena', 'Daniel', 'Kate', 'Libby', 'Sonia', 'Martha', 'Arthur'];
-    const okName = ls.get(OK_KEY);
-    const saved = okName === nameOf(null) ? null : vs.find(v => v.name === okName);
-    const gb = v => /^en[-_]GB/i.test(v.lang);
-    const local = vs.filter(v => v.localService);
-    const list = [saved].concat(pref.map(n => vs.find(v => v.name.indexOf(n) >= 0)), [null],
-      local.filter(gb), local.filter(v => !gb(v)), vs.filter(gb), vs);
+  const bad = () => { try { return JSON.parse(ls.get(BAD_KEY) || '{}'); } catch (e) { return {}; } };
+  const isBad = n => { const t = bad()[n]; return !!t && Date.now() - t < BAD_DAYS * 86400000; };
+  function markBad(n, on) { const b = bad(); if (on) b[n] = Date.now(); else delete b[n]; ls.set(BAD_KEY, JSON.stringify(b)); }
+  function englishVoices() {
+    return ((window.speechSynthesis && speechSynthesis.getVoices()) || []).filter(v => /^en/i.test(v.lang))
+      .map(v => ({ v, q: quality(v) })).sort((a, b) => b.q - a.q);
+  }
+  function candidates(auto) {
+    const ranked = englishVoices();
+    const pick = !auto && ranked.find(x => x.v.name === ls.get(PICK_KEY));
+    const good = ranked.filter(x => x.q > 0 && !isBad(x.v.name)).map(x => x.v);
+    const list = [pick ? pick.v : undefined].concat(good, [null], ranked.filter(x => x.q > 0).map(x => x.v));
     const seen = new Set(), out = [];
     list.forEach(v => { if (v === undefined) return; const n = nameOf(v); if (!seen.has(n) && !failed.has(n)) { seen.add(n); out.push(v); } });
     return out;
   }
+  // For a voice menu: the decent English voices here, best first.
+  V.voiceList = () => englishVoices().filter(x => x.q > 0).map(x => ({ name: x.v.name, lang: x.v.lang, natural: x.q >= 80 }));
+  V.picked = () => ls.get(PICK_KEY) || '';
+  V.pick = name => { ls.set(PICK_KEY, name || ''); if (name) { failed.delete(name); markBad(name, false); } };
+  V.current = () => nameOf(candidates(true)[0]);     // what "Automatic" plays
   // What happened, for the "Listen" check: voices seen, tries and results.
   V.diag = { voices: 0, tries: [] };
   function note(v, result) {
@@ -51,7 +82,8 @@
     V.diag.tries.push(nameOf(v) + (v ? ' (' + v.lang + (v.localService ? '' : ', online') + ')' : '') + ': ' + result);
     if (V.diag.tries.length > 8) V.diag.tries.shift();
   }
-  if (window.speechSynthesis) { try { speechSynthesis.addEventListener('voiceschanged', () => {}); speechSynthesis.getVoices(); } catch (e) {} }
+  // Voices load late in Chrome/Edge; tell a voice menu when they arrive.
+  if (window.speechSynthesis) { try { speechSynthesis.addEventListener('voiceschanged', () => { if (V.onVoices) V.onVoices(); }); speechSynthesis.getVoices(); } catch (e) {} }
 
   let current = null;              // { done } of the line being read
   let turn = 0;                    // only the latest say() speaks
@@ -109,7 +141,7 @@
           if (done) return;
           done = true; keep.delete(u); clear();
           failed.add(nameOf(v)); note(v, why);
-          if (ls.get(OK_KEY) === nameOf(v)) ls.set(OK_KEY, '');
+          if (v) markBad(v.name, true);
           try { synth.cancel(); } catch (e) {}
           timers.push(setTimeout(() => speakPart(s, tries + 1), 150));
         };
@@ -117,7 +149,7 @@
           started = true;
           if (!V.heard) note(v, 'playing');
           V.heard = true;
-          if (ls.get(OK_KEY) !== nameOf(v)) ls.set(OK_KEY, nameOf(v));
+          if (v && isBad(v.name)) markBad(v.name, false);
           clear();
           timers.push(setTimeout(() => { try { synth.cancel(); } catch (e) {} end(); }, 2500 + s.split(/\s+/).length * 550));
         };
