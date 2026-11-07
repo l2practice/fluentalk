@@ -246,7 +246,15 @@
   // Only the latest say() speaks: one started while an earlier one was still
   // waiting for its clip makes that earlier one return silently.
   let turn = 0;
-  V.say = async function (text) {
+  // While a line is being read, <html> carries .voice-on so the speaking-head
+  // icons animate their sound waves.
+  let speakingN = 0;
+  function speaking(d) { speakingN = Math.max(0, speakingN + d); document.documentElement.classList.toggle('voice-on', speakingN > 0); }
+  V.say = function (text) {
+    speaking(1);
+    return sayInner.call(this, text).finally(() => speaking(-1));
+  };
+  async function sayInner(text) {
     text = clean(text);
     this.stop();
     const my = ++turn;
@@ -264,17 +272,29 @@
       } catch (e) { console.warn('[voice]', e); return my === turn ? sayDevice(text) : undefined; }
     }
     return sayDevice(text);
+  }
+
+  // Speaking-head icon: the head in the deep accent, sound waves in the accent.
+  V.icon = function (size) {
+    const z = size || 18;
+    return `<svg class="vo-ic" width="${Math.round(z * 26 / 24)}" height="${z}" viewBox="0 0 26 24" aria-hidden="true">
+      <path fill="var(--blue-d)" transform="translate(.6 1.6) scale(.84)" d="M4.6 21v-4.6C3 15.1 2.2 13.2 2.2 11.1 2.2 6.6 5.6 3.2 9.9 3.2c3.5 0 6 2.3 6.4 5.5l1.5 2.7c.25.45-.05.95-.55.95h-.95v1.7c0 1-.8 1.75-1.75 1.75h-1.9V21z"/>
+      <g fill="none" stroke="var(--blue)" stroke-width="1.9" stroke-linecap="round">
+        <path class="w w1" d="M17.43 9.7a3 3 0 0 1 0 4.6"/>
+        <path class="w w2" d="M19.23 7.53a5.8 5.8 0 0 1 0 8.94"/>
+        <path class="w w3" d="M21.03 5.38a8.6 8.6 0 0 1 0 13.24"/>
+      </g></svg>`;
   };
 
   // ── the settings card (Practice page) ──
   V.settingsHtml = function () {
     return `<div class="key-wrap" id="voice-card">
-      <div class="key-title"><span class="key-ic">🔊</span>Question voice <small style="font-weight:400;color:var(--g600)">(reads questions aloud in every mode)</small></div>
+      <div class="key-title"><span class="key-ic">${this.icon(18)}</span>Question voice <small style="font-weight:400;color:var(--g600)">(reads questions aloud in every mode)</small></div>
       <div class="key-row" style="flex-wrap:wrap">
         <select class="form-input" id="voice-sel" style="flex:1;min-width:220px" onchange="Voice.setPref(this.value)">
           ${Object.keys(VOICES).map(k => `<option value="${k}" ${k === this.pref() ? 'selected' : ''}>${VOICES[k]}</option>`).join('')}
         </select>
-        <button class="btn btn-outline btn-sm" onclick="Voice.unlock();Voice.say('Hello! Now, I would like to ask you some questions about yourself.')">▶ Test</button>
+        <button class="btn btn-outline btn-sm" onclick="Voice.unlock();Voice.say('Hello! Now, I would like to ask you some questions about yourself.')">▶ Listen</button>
       </div>
       <div style="font-size:11px;color:var(--g600);margin-top:6px" id="voice-status">${this.statusText()}</div>
     </div>`;
@@ -282,4 +302,6 @@
   V.onChange(() => { const el = document.getElementById('voice-status'); if (el) el.textContent = V.statusText(); });
 
   window.Voice = V;
+  // Fill the icon placeholders already in the page (e.g. the replay button).
+  document.querySelectorAll('[data-vo-ic]').forEach(el => { el.innerHTML = V.icon(+el.dataset.voIc || 18); });
 })();

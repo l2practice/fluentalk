@@ -311,8 +311,14 @@ textarea.form-input{resize:vertical;min-height:72px;line-height:1.6}
 /* Question box */
 .q-box{background:linear-gradient(135deg,var(--surf2),var(--raise));border-radius:var(--rx);padding:22px 20px;margin-bottom:16px;position:relative;border:1px solid rgba(var(--fg-rgb),.06)}
 .q-box-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:rgba(var(--fg-rgb),.3);margin-bottom:8px}
-.q-say{position:absolute;top:9px;right:58px;width:30px;height:30px;border-radius:50%;border:1px solid var(--line,rgba(0,0,0,.1));background:var(--surf,#fff);font-size:16px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:.8}
-.q-say:hover{opacity:1}
+.q-say{position:absolute;top:8px;right:56px;width:36px;height:36px;border-radius:50%;border:1px solid rgba(var(--acc-rgb),.25);background:var(--blue-l);cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
+.vo-ic{display:inline-block;vertical-align:-4px}
+.voice-on .vo-ic .w1{animation:vo-w 1s ease-in-out infinite}
+.voice-on .vo-ic .w2{animation:vo-w 1s ease-in-out .2s infinite}
+.voice-on .vo-ic .w3{animation:vo-w 1s ease-in-out .4s infinite}
+@keyframes vo-w{0%,100%{opacity:.25}50%{opacity:1}}
+@media (prefers-reduced-motion:reduce){.voice-on .vo-ic .w{animation:none}}
+.q-say:hover{background:rgba(var(--acc-rgb),.2)}
 .q-box-txt{font-size:1.1rem;color:var(--ink-strong);font-weight:500;line-height:1.75}
 .q-num{position:absolute;top:14px;right:14px;background:var(--blue);color:var(--ink-on-accent);font-size:10px;font-weight:700;padding:3px 10px;border-radius:99px}
 
@@ -970,7 +976,7 @@ svg{flex-shrink:0}
     </div>
     <div class="q-box">
       <div class="q-box-lbl" id="q-lbl">QUESTION</div>
-      <button class="q-say" id="q-say" onclick="Voice.unlock();Voice.say(A.qs[A.idx] && A.qs[A.idx].question)" title="Listen to the question again" aria-label="Listen to the question again">🔊</button>
+      <button class="q-say" id="q-say" onclick="Voice.unlock();Voice.say(A.qs[A.idx] && A.qs[A.idx].question)" title="Listen to the question again" aria-label="Listen to the question again" data-vo-ic="20"></button>
       <div class="q-box-txt" id="q-txt">Loading…</div>
       <div class="q-num" id="q-num">1</div>
     </div>
@@ -4219,7 +4225,7 @@ async function startJAM(libId, title) {
   Voice.unlock();
   const run = _jam.run = {};
   if (Voice.mode() !== 'off') {
-    document.getElementById('jam-status').textContent = '🔊 Listen to your topic…';
+    document.getElementById('jam-status').innerHTML = Voice.icon(20) + ' Listen to your topic…';
     await Voice.say('Your topic is: ' + title + '. You have one minute.');
   }
   if (_jam.run !== run || !document.getElementById('jam-status')) return;   // cancelled meanwhile
