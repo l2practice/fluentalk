@@ -340,16 +340,16 @@ function tsSpeak(text) {
   return Voice.say(text);
 }
 // The examiner's own lines show in the examiner box; a question is shown once,
-// large, below it (tsShowQ), so the box is hidden while a question is read.
+// large, below it (tsShowQ), and the box only carries a short cue meanwhile.
 async function tsSay(text, isQuestion) {
   tsGuard();
-  tsRecUI(false);
+  tsRecUI(isQuestion ? 'idle' : false);
   const sc = document.getElementById('ts-script');
   const box = sc && sc.closest('.ts-examiner');
-  if (box) box.style.display = isQuestion ? 'none' : '';
-  if (sc) { sc.textContent = isQuestion ? '' : text; sc.parentElement.classList.add('speaking'); }
+  if (isQuestion) tsCue('Listen to the question.'); else if (sc) sc.textContent = text;
+  if (box) box.classList.add('speaking');
   await tsSpeak(text);
-  if (sc) sc.parentElement.classList.remove('speaking');
+  if (box) box.classList.remove('speaking');
   tsGuard();
   await tsSleep(350);
   tsGuard();
@@ -381,7 +381,8 @@ async function tsAnswer(item) {
   const stopped = new Promise(res => { mr.onstop = res; });
   mr.start(250);
   const t0 = Date.now();
-  tsRecUI(true, item.part === 'part2' ? 'I have finished' : 'Finish answer');
+  tsRecUI(true, item.part === 'part2' ? 'I have finished' : 'Finish answer', item.max);
+  if (item.part !== 'part2') tsCue('Your turn — answer now.');
   if (item.ring) tsRingShow('Speaking time');
 
   await new Promise(res => {
@@ -391,7 +392,7 @@ async function tsAnswer(item) {
     const tick = () => {
       const el = Math.floor((Date.now() - t0) / 1000);
       const tEl = document.getElementById('ts-rec-time');
-      if (tEl) tEl.textContent = Math.floor(el / 60) + ':' + String(el % 60).padStart(2, '0');
+      if (tEl) tEl.textContent = tsClock(Math.min(el, item.max));
       if (item.ring) tsRingSet(Math.max(0, item.max - el), item.max);
       if (btn && Date.now() >= enableAt) btn.disabled = false;
       if (el >= item.max || TS.stopped) finish();
@@ -449,15 +450,19 @@ function tsOpenStage() {
   st = document.createElement('div');
   st.id = 'ts-stage';
   st.innerHTML = `
-    <div class="ts-top">
-      <div><div class="ts-part" id="ts-part">Test Simulation</div><div class="ts-part-sub" id="ts-part-sub"></div></div>
-      <div class="ts-prog"><div class="ts-prog-txt" id="ts-prog-txt"></div><div class="ts-prog-bar"><div id="ts-prog-fill"></div></div></div>
-      <button class="ts-exit" onclick="tsExit()">Exit test</button>
-    </div>
+    <div class="ts-top"><div class="ts-top-in">
+      <div class="ts-brand"><span class="ts-brand-ic">${ic('mic')}</span>
+        <div><div class="ts-brand-t">Speaking Test</div><div class="ts-brand-s">IELTS-style Practice</div></div></div>
+      <button class="ts-exit" onclick="tsExit()">${ic('logout')}<span>Exit test</span></button>
+    </div></div>
     <div class="ts-body">
+      <div class="ts-head">
+        <div class="ts-head-row"><span class="ts-part" id="ts-part">Test</span><span class="ts-part-sub" id="ts-part-sub"></span><span class="ts-prog-txt" id="ts-prog-txt"></span></div>
+        <div class="ts-prog-bar"><div id="ts-prog-fill"></div></div>
+      </div>
       <div class="ts-alert" id="ts-alert" style="display:none"></div>
-      <div class="ts-examiner"><span class="ts-ex-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/></svg></span>
-        <div><div class="ts-ex-lbl">Examiner</div><div class="ts-script" id="ts-script"></div></div></div>
+      <div class="ts-examiner"><span class="ts-ex-ic">${Voice.icon(28)}</span>
+        <div class="ts-ex-txt"><div class="ts-ex-lbl">Examiner</div><div class="ts-script" id="ts-script"></div></div></div>
       <div class="ts-q" id="ts-q" style="display:none"></div>
       <div class="ts-mid">
         <div class="ts-ring" id="ts-ring" style="display:none">
@@ -468,13 +473,18 @@ function tsOpenStage() {
           ${[1, 2, 4, 3].map(n => `<label class="ts-note"><span>${n}</span><textarea aria-label="Note ${n}"></textarea></label>`).join('')}
         </div>
       </div>
-      <div class="ts-rec" id="ts-rec" style="display:none">
-        <span class="ts-dot"></span><span>Recording</span><span id="ts-rec-time" class="ts-time">0:00</span>
-        <div class="ts-meter"><div id="ts-meter-fill"></div></div>
+      <div class="ts-recwrap" id="ts-recwrap" style="display:none">
+        <div class="ts-div"><span>${ic('mic')}</span></div>
+        <div class="ts-rec" id="ts-rec">
+          <div class="ts-rec-row"><span class="ts-rec-on"><span class="ts-dot"></span>Recording</span>
+            <span class="ts-time"><b id="ts-rec-time">0:00</b> / <span id="ts-rec-max">1:00</span></span></div>
+          <div class="ts-wave" id="ts-wave">${'<i></i>'.repeat(TS_WAVE_BARS)}</div>
+        </div>
+        <button class="ts-mic" id="ts-done" onclick="tsDone()" aria-label="Stop recording and finish the answer">${ic('stop')}</button>
+        <div class="ts-mic-lbl" id="ts-done-lbl">Finish answer</div>
+        <div class="ts-hint" id="ts-hint"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9.5"/><path d="M12 11v6M12 7.5v.01"/></svg>
+          <span class="ts-hint-key">Click the stop button or press <b>SPACE</b> when you have finished · Bấm nút dừng hoặc SPACE khi trả lời xong</span><span class="ts-hint-touch">Tap the stop button when you have finished · Chạm nút dừng khi trả lời xong</span></div>
       </div>
-      <button class="ts-mic" id="ts-done" style="display:none" onclick="tsDone()" aria-label="Finish answer">${ic('mic')}</button>
-      <div class="ts-mic-lbl" id="ts-done-lbl" style="display:none">Finish answer</div>
-      <div class="ts-hint" id="ts-hint" style="display:none"><span class="ts-hint-key">Click the microphone or press <b>SPACE</b> when you have finished · Bấm micro hoặc SPACE khi trả lời xong</span><span class="ts-hint-touch">Tap the microphone when you have finished · Chạm vào micro khi trả lời xong</span></div>
     </div>
     <div class="ts-count" id="ts-count"></div>
     <canvas class="ts-confetti" id="ts-confetti"></canvas>
@@ -496,7 +506,7 @@ function tsPart(name, sub) {
 }
 function tsProgress(label) {
   const t = document.getElementById('ts-prog-txt'), f = document.getElementById('ts-prog-fill');
-  if (t) t.textContent = label + ' · ' + TS.step + ' / ' + TS.steps;
+  if (t) { t.textContent = TS.step + ' / ' + TS.steps; t.title = label; }
   if (f) f.style.width = Math.round(TS.step / TS.steps * 100) + '%';
 }
 function tsShowQ(q) {
@@ -536,22 +546,45 @@ function tsToggleCard() {
   const el = document.getElementById('ts-q');
   if (el) tsHideCard(!el.classList.contains('ts-card-hidden'));
 }
-function tsRecUI(on, label) {
-  const r = document.getElementById('ts-rec'), b = document.getElementById('ts-done'), h = document.getElementById('ts-hint'), l = document.getElementById('ts-done-lbl');
-  if (r) r.style.display = on ? '' : 'none';
-  if (b) b.style.display = on ? '' : 'none';
-  if (l) { l.style.display = on ? '' : 'none'; if (label) l.textContent = label; }
-  if (h) h.style.display = on ? '' : 'none';
+// on: true = recording (red stop square), 'idle' = a question is being read
+// (grey microphone, not yet recording), false = hidden.
+function tsRecUI(on, label, max) {
+  const w = document.getElementById('ts-recwrap'), l = document.getElementById('ts-done-lbl'), m = document.getElementById('ts-rec-max'),
+    b = document.getElementById('ts-done');
+  if (w) { w.style.display = on ? '' : 'none'; w.classList.toggle('idle', on === 'idle'); }
+  if (b && on) {
+    const rec = on === true;
+    b.innerHTML = ic(rec ? 'stop' : 'mic');
+    b.setAttribute('aria-label', rec ? 'Stop recording and finish the answer' : 'Recording starts after the question');
+    if (!rec) b.disabled = true;
+  }
+  if (l) l.textContent = on === 'idle' ? 'Recording starts after the question' : (label || l.textContent);
+  if (m && max) m.textContent = tsClock(max);
+  if (on) { const t = document.getElementById('ts-rec-time'); if (t) t.textContent = '0:00'; tsWave.fill(0); }
 }
+function tsClock(sec) { return Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0'); }
+// The examiner box while a question is read or answered: a short cue, never
+// the question itself (that is shown once, large, below).
+function tsCue(text) {
+  const sc = document.getElementById('ts-script');
+  if (sc) sc.innerHTML = '<span class="ts-cue">' + _h(text) + '</span>';
+}
+// Waveform: the loudness of the last TS_WAVE_BARS moments, newest on the right.
+const TS_WAVE_BARS = 36;
+const tsWave = new Array(TS_WAVE_BARS).fill(0);
 function tsMeterLoop() {
-  const buf = new Uint8Array(256);
-  const step = () => {
+  const buf = new Uint8Array(512);
+  let last = 0;
+  const step = now => {
     if (!document.getElementById('ts-stage')) return;
-    const f = document.getElementById('ts-meter-fill');
-    if (f && TS.analyser) {
+    const wrap = document.getElementById('ts-recwrap');
+    if (TS.analyser && wrap && wrap.style.display !== 'none' && now - last > 70) {
+      last = now;
       TS.analyser.getByteTimeDomainData(buf);
-      let peak = 0; for (let i = 0; i < buf.length; i++) peak = Math.max(peak, Math.abs(buf[i] - 128));
-      f.style.width = Math.min(100, Math.round(peak / 64 * 100)) + '%';
+      let sum = 0; for (let i = 0; i < buf.length; i++) { const v = (buf[i] - 128) / 128; sum += v * v; }
+      tsWave.shift(); tsWave.push(Math.min(1, Math.sqrt(sum / buf.length) * 5));
+      const bars = document.getElementById('ts-wave').children;
+      for (let i = 0; i < bars.length; i++) bars[i].style.transform = 'scaleY(' + Math.max(0.12, tsWave[i]).toFixed(2) + ')';
     }
     requestAnimationFrame(step);
   };
@@ -969,26 +1002,36 @@ function tsInjectStyles() {
 .ts-warn{color:var(--gold-d);font-weight:500}
 .ts-tip{font-size:13px;color:var(--g700);line-height:1.7}
 body.ts-lock{overflow:hidden}
-#ts-stage{position:fixed;inset:0;z-index:9000;background:var(--bg);color:var(--ink-strong);display:flex;flex-direction:column;overflow-y:auto}
-.ts-top{display:flex;align-items:center;gap:16px;padding:14px 22px;border-bottom:1px solid var(--line)}
-.ts-part{font-weight:800;font-size:1.1rem;color:var(--blue)}
-.ts-part-sub{font-size:12px;color:var(--g500)}
-.ts-prog{flex:1;max-width:420px;margin-left:auto}
-.ts-prog-txt{font-size:12px;color:var(--g500);text-align:right;margin-bottom:4px}
-.ts-prog-bar{height:6px;background:var(--g100);border-radius:4px;overflow:hidden}
-.ts-prog-bar>div{height:100%;width:0;background:var(--blue);transition:width .4s}
-.ts-exit{background:none;border:1px solid var(--line2);color:var(--g600);border-radius:10px;padding:7px 12px;font:inherit;font-size:12px;cursor:pointer}
+#ts-stage{position:fixed;inset:0;z-index:9000;color:var(--ink-strong);display:flex;flex-direction:column;overflow-y:auto;
+  background:radial-gradient(120% 55% at 50% 0%,rgba(var(--acc-rgb),.10),transparent 70%),radial-gradient(90% 45% at 50% 100%,rgba(var(--acc-rgb),.08),transparent 70%),var(--bg)}
+.ts-top{border-bottom:1px solid var(--line);background:rgba(var(--acc-rgb),.03)}
+.ts-top-in{max-width:760px;margin:0 auto;display:flex;align-items:center;gap:12px;padding:14px 20px}
+.ts-brand{display:flex;align-items:center;gap:12px;min-width:0}
+.ts-brand-ic{flex-shrink:0;width:44px;height:44px;border-radius:14px;background:var(--blue);color:var(--ink-on-accent);display:flex;align-items:center;justify-content:center;box-shadow:0 6px 16px rgba(var(--acc-rgb),.3)}
+.ts-brand-ic svg{width:22px;height:22px}
+.ts-brand-t{font-weight:800;font-size:1.1rem;line-height:1.2;color:var(--ink-strong)}
+.ts-brand-s{font-size:12px;color:var(--g500)}
+.ts-exit{margin-left:auto;display:flex;align-items:center;gap:7px;background:var(--white);border:1px solid var(--line2);color:var(--g700);border-radius:12px;padding:9px 14px;font:inherit;font-size:13px;font-weight:600;cursor:pointer}
+.ts-exit svg{width:16px;height:16px}
 .ts-exit:hover{color:var(--red);border-color:var(--red)}
-.ts-body{flex:1;width:100%;max-width:820px;margin:0 auto;padding:28px 20px 40px;display:flex;flex-direction:column;align-items:center;gap:20px}
+.ts-body{flex:1;width:100%;max-width:760px;margin:0 auto;padding:22px 20px 40px;display:flex;flex-direction:column;align-items:center;gap:22px}
+.ts-head{width:100%}
+.ts-head-row{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.ts-part{flex-shrink:0;background:var(--blue);color:var(--ink-on-accent);font-weight:800;font-size:14px;border-radius:999px;padding:5px 14px}
+.ts-part-sub{font-size:14px;font-weight:600;color:var(--g700);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ts-prog-txt{margin-left:auto;font-size:14px;font-weight:700;color:var(--g600);font-variant-numeric:tabular-nums;white-space:nowrap}
+.ts-prog-bar{height:8px;background:rgba(var(--acc-rgb),.14);border-radius:6px;overflow:hidden}
+.ts-prog-bar>div{height:100%;width:0;background:var(--blue);border-radius:6px;transition:width .4s}
 .ts-alert{width:100%;background:var(--red-l);border:1px solid var(--red);color:var(--red-d);border-radius:12px;padding:12px 16px;font-size:13px;line-height:1.6}
-.ts-examiner{width:100%;display:flex;gap:14px;align-items:flex-start;background:var(--white);border:1px solid var(--line);border-radius:16px;padding:16px 18px}
-.ts-ex-ic{flex-shrink:0;width:40px;height:40px;border-radius:50%;background:var(--blue-l);color:var(--blue);display:flex;align-items:center;justify-content:center}
-.ts-ex-ic svg{width:20px;height:20px}
+.ts-examiner{width:100%;display:flex;gap:16px;align-items:center;background:var(--white);border:1px solid var(--line);border-radius:22px;padding:20px 22px;box-shadow:0 12px 32px rgba(0,0,0,.08)}
+.ts-ex-ic{flex-shrink:0;width:58px;height:58px;border-radius:50%;background:var(--blue-l);display:flex;align-items:center;justify-content:center}
 .ts-examiner.speaking .ts-ex-ic{animation:tsPulse 1s ease-in-out infinite}
-.ts-ex-lbl{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--g500);margin-bottom:4px}
-.ts-script{font-size:15px;line-height:1.7;color:var(--g700);min-height:24px}
-.ts-q{width:100%;font-family:var(--fs);font-size:clamp(1.3rem,3.2vw,1.9rem);line-height:1.45;color:var(--ink-strong);text-align:center;padding:10px 6px}
-.ts-card{font-family:var(--f);text-align:left;background:var(--white);border:2px solid var(--blue-m);border-radius:18px;padding:22px 24px;font-size:1rem}
+.ts-ex-txt{min-width:0}
+.ts-ex-lbl{font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--blue);margin-bottom:4px}
+.ts-script{font-size:16px;line-height:1.65;color:var(--g700);min-height:24px}
+.ts-cue{color:var(--g500);font-style:italic}
+.ts-q{width:100%;font-family:var(--f);font-weight:800;font-size:clamp(1.5rem,5.6vw,2.2rem);line-height:1.3;letter-spacing:-.01em;color:var(--ink-strong);text-align:center;padding:4px 6px}
+.ts-card{font-family:var(--f);font-weight:400;letter-spacing:0;text-align:left;background:var(--white);border:2px solid var(--blue-m);border-radius:18px;padding:22px 24px;font-size:1rem}
 .ts-card-lbl{font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--blue);margin-bottom:8px}
 .ts-card-cue{font-family:var(--fs);font-size:clamp(1.2rem,2.8vw,1.6rem);font-weight:600;line-height:1.4;margin-bottom:10px}
 .ts-card-pts{font-size:15px;line-height:1.8;color:var(--g700)}
@@ -1012,17 +1055,30 @@ body.ts-lock{overflow:hidden}
 .ts-card-btn{background:none;border:1px solid var(--line2);border-radius:999px;padding:4px 12px;font:inherit;font-size:12px;color:var(--g600);cursor:pointer}
 .ts-card-gone{display:none;font-size:14px;color:var(--g500);font-style:italic}
 .ts-card-hidden .ts-card-body{display:none}.ts-card-hidden .ts-card-gone{display:block}
-.ts-rec{display:flex;align-items:center;gap:10px;font-weight:700;color:var(--red-d);background:var(--red-l);border-radius:999px;padding:8px 16px}
+.ts-recwrap{width:100%;display:flex;flex-direction:column;align-items:center;gap:18px}
+.ts-div{width:100%;display:flex;align-items:center;gap:14px;color:var(--g500)}
+.ts-div::before,.ts-div::after{content:"";flex:1;height:1px;background:var(--line2)}
+.ts-div span{width:34px;height:34px;border-radius:50%;border:1px solid var(--line2);background:var(--white);display:flex;align-items:center;justify-content:center}
+.ts-div svg{width:16px;height:16px}
+.ts-rec{width:100%;max-width:440px;background:var(--white);border:1px solid var(--line);border-radius:20px;padding:14px 18px 16px;box-shadow:0 10px 28px rgba(0,0,0,.07)}
+.ts-rec-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.ts-rec-on{display:flex;align-items:center;gap:8px;font-weight:700;color:var(--red)}
 .ts-dot{width:10px;height:10px;border-radius:50%;background:var(--red);animation:tsBlink 1s infinite}
-.ts-time{font-variant-numeric:tabular-nums;color:var(--ink-strong)}
-.ts-meter{width:90px;height:6px;background:rgba(var(--fg-rgb),.12);border-radius:4px;overflow:hidden}
-.ts-meter>div{height:100%;width:0;background:var(--green);transition:width .08s}
-.ts-mic{width:92px;height:92px;border-radius:50%;border:none;background:var(--red);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;animation:tsRing 1.6s ease-out infinite;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
-.ts-mic svg{width:40px;height:40px}
+.ts-time{font-variant-numeric:tabular-nums;color:var(--g500);font-size:15px}
+.ts-time b{color:var(--ink-strong)}
+.ts-wave{height:44px;display:flex;align-items:center;gap:3px}
+.ts-wave i{flex:1;height:100%;border-radius:3px;background:var(--red);opacity:.85;transform:scaleY(.12);transition:transform .07s linear}
+.ts-mic{margin-top:10px;width:112px;height:112px;border-radius:50%;border:none;background:var(--red);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;
+  box-shadow:0 0 0 12px rgba(226,93,116,.16),0 0 0 26px rgba(226,93,116,.07);animation:tsRing 1.8s ease-out infinite;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+.ts-mic svg{width:44px;height:44px}
 .ts-mic:disabled{opacity:.55;cursor:default}
+.ts-recwrap.idle .ts-rec,.ts-recwrap.idle .ts-hint{display:none}
+.ts-recwrap.idle .ts-mic{background:var(--g100);color:var(--g500);opacity:1;animation:none;box-shadow:0 0 0 12px rgba(var(--acc-rgb),.06)}
+.ts-recwrap.idle .ts-mic-lbl{font-weight:600;font-size:14px;color:var(--g500)}
 .ts-mic:not(:disabled):active{transform:scale(.94)}
-.ts-mic-lbl{font-weight:700;color:var(--ink-strong);margin-top:-8px}
-.ts-hint{font-size:12px;color:var(--g500);text-align:center}
+.ts-mic-lbl{font-weight:800;font-size:1.1rem;color:var(--ink-strong);margin-top:6px}
+.ts-hint{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--g600);background:var(--white);border:1px solid var(--line);border-radius:999px;padding:9px 16px;max-width:100%;line-height:1.45}
+.ts-hint svg{flex-shrink:0;width:17px;height:17px;color:var(--blue)}
 .ts-hint-touch{display:none}
 @media (pointer:coarse){.ts-hint-key{display:none}.ts-hint-touch{display:inline}}
 .ts-count{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.72);z-index:5}
@@ -1038,9 +1094,14 @@ body.ts-lock{overflow:hidden}
 .ts-proc{font-size:12px;color:var(--g500);margin-top:14px}
 @keyframes tsPop{0%{transform:scale(.4);opacity:0}25%{transform:scale(1.12);opacity:1}70%{transform:scale(1);opacity:1}100%{transform:scale(.9);opacity:0}}
 @keyframes tsBlink{50%{opacity:.25}}
-@keyframes tsRing{0%{box-shadow:0 0 0 0 rgba(220,60,80,.45)}100%{box-shadow:0 0 0 22px rgba(220,60,80,0)}}
+@keyframes tsRing{0%{box-shadow:0 0 0 0 rgba(226,93,116,.40),0 0 0 12px rgba(226,93,116,.16),0 0 0 26px rgba(226,93,116,.07)}100%{box-shadow:0 0 0 34px rgba(226,93,116,0),0 0 0 12px rgba(226,93,116,.16),0 0 0 26px rgba(226,93,116,.07)}}
 @keyframes tsPulse{50%{box-shadow:0 0 0 8px rgba(var(--acc-rgb),.18)}}
-@media (max-width:600px){.ts-top{padding:10px 14px;gap:10px;flex-wrap:wrap}.ts-exit{margin-left:auto}.ts-prog{order:3;max-width:none;flex-basis:100%}.ts-body{padding:18px 16px 30px;gap:16px}.ts-ring{width:120px;height:120px}}
+@media (max-width:600px){.ts-top-in{padding:10px 16px}.ts-brand-ic{width:38px;height:38px;border-radius:12px}.ts-brand-ic svg{width:19px;height:19px}.ts-brand-t{font-size:1rem}.ts-exit{padding:8px 11px}
+  .ts-body{padding:14px 16px 24px;gap:14px}.ts-head-row{margin-bottom:8px}.ts-examiner{padding:12px 14px;gap:12px;border-radius:18px}.ts-ex-ic{width:46px;height:46px}.ts-ex-ic svg{transform:scale(.85)}
+  .ts-script{font-size:15px}.ts-part-sub{font-size:13px}.ts-ring{width:120px;height:120px}
+  .ts-recwrap{gap:12px}.ts-rec{padding:12px 14px}.ts-rec-row{margin-bottom:8px}.ts-wave{height:34px}
+  .ts-mic{margin-top:8px;width:96px;height:96px}.ts-mic svg{width:38px;height:38px}.ts-mic-lbl{margin-top:4px;font-size:1rem}.ts-hint{font-size:12px;padding:8px 14px}}
+@media (max-width:600px) and (max-height:700px){.ts-div{display:none}}
 `;
   document.head.appendChild(s);
 }
