@@ -1040,7 +1040,7 @@ body.ts-lock{overflow:hidden}
 @keyframes tsBlink{50%{opacity:.25}}
 @keyframes tsRing{0%{box-shadow:0 0 0 0 rgba(220,60,80,.45)}100%{box-shadow:0 0 0 22px rgba(220,60,80,0)}}
 @keyframes tsPulse{50%{box-shadow:0 0 0 8px rgba(var(--acc-rgb),.18)}}
-@media (max-width:600px){.ts-top{padding:10px 14px;gap:10px;flex-wrap:wrap}.ts-prog{order:3;max-width:none;flex-basis:100%}.ts-body{padding:18px 16px 30px;gap:16px}.ts-ring{width:120px;height:120px}}
+@media (max-width:600px){.ts-top{padding:10px 14px;gap:10px;flex-wrap:wrap}.ts-exit{margin-left:auto}.ts-prog{order:3;max-width:none;flex-basis:100%}.ts-body{padding:18px 16px 30px;gap:16px}.ts-ring{width:120px;height:120px}}
 `;
   document.head.appendChild(s);
 }
