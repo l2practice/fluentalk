@@ -401,6 +401,10 @@ textarea.form-input{resize:vertical;min-height:72px;line-height:1.6}
 .search-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;align-items:center}
 .search-inp{padding:8px 13px;border:1.5px solid var(--g200);border-radius:var(--r);font-size:13px;outline:none;font-family:var(--f);background:var(--white)}
 .search-inp:focus{border-color:var(--blue-m)}
+.pron-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:6px 14px}
+.pron-opt{display:flex;align-items:flex-start;gap:8px;font-size:13px;line-height:1.45;padding:6px 8px;border-radius:8px;cursor:pointer}
+.pron-opt:hover{background:var(--g50,rgba(0,0,0,.03))}
+.pron-opt input{margin-top:3px;accent-color:var(--blue)}
 .prog-q-card{padding:16px 18px;margin-bottom:16px;overflow-x:auto}
 .prog-q{display:grid;grid-template-columns:minmax(150px,1.15fr) repeat(3,minmax(130px,1fr)) minmax(130px,.9fr) 30px;gap:8px 10px;align-items:center;min-width:750px}
 .prog-q-x{width:30px;height:30px;border-radius:50%;border:1px solid var(--g200);background:var(--white);color:var(--g500);font-size:18px;line-height:1;cursor:pointer}
@@ -3602,8 +3606,9 @@ async function restoreClass(classId, className) {
 }
 
 async function renderTeacherSettings(c) {
-  const res = await gasCall('teacher.getSettings');
+  const [res, clsRes] = await Promise.all([gasCall('teacher.getSettings'), gasCall('teacher.getClasses').catch(() => null)]);
   const s   = res.data || {};
+  const classes = ((clsRes && clsRes.data) || []).filter(cl => cl.Status !== 'Archived');
   c.innerHTML = `
     <h2 style="margin-bottom:20px"><span class="h-ic">${ic('settings')}</span>Settings</h2>
     <div class="card">
@@ -3637,7 +3642,53 @@ async function renderTeacherSettings(c) {
         <div class="form-hint">Where exported feedback docs are filed. Each student gets one document per topic, shared as view-only by link.</div>
       </div>
       <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
+    </div>
+    ${pronSettingsHtml(s.PronModal, classes)}`;
+}
+
+// Who gets the paid pronunciation check (Modal). Classes or modes left
+// unticked are marked from the Whisper transcript alone — fine for daily
+// practice, where the count of attempts is what matters; tick a class
+// before exam preparation for an accurate P band.
+const PRON_MODE_LABELS = [
+  ['homework', 'Homework', 'milestone attempts only (3, 5, 8, 10…)'],
+  ['jam', 'JAM', 'milestone runs only (3, 5, 8, 10…)'],
+  ['test', 'Test Simulation', 'every test']];
+function pronSettingsHtml(cfg, classes) {
+  const set = cfg && Array.isArray(cfg.classes);
+  const on = new Set(set ? cfg.classes.map(x => String(x).toUpperCase()) : classes.map(cl => String(cl.ClassID).toUpperCase()));
+  const modes = new Set(set ? (cfg.modes || []) : PRON_MODE_LABELS.map(m => m[0]));
+  const box = (name, val, checked, label, sub) => `<label class="pron-opt"><input type="checkbox" name="${name}" value="${_h(val)}" ${checked ? 'checked' : ''}>
+      <span><b>${_h(label)}</b>${sub ? ` <span style="color:var(--g500)">· ${_h(sub)}</span>` : ''}</span></label>`;
+  return `<div class="card" style="margin-top:16px" id="pron-card">
+      <div class="card-title" style="margin-bottom:6px">Pronunciation check (Modal)</div>
+      <div class="form-hint" style="margin-bottom:14px">The phone-level check behind the P band runs on a paid server. Unticked classes and modes are marked from the Whisper transcript only — enough for daily practice; turn it on for a class when it prepares for the exam. Free practice never uses it.
+        <br><em>Lớp/mode không tick chỉ chấm theo bản ghi của Whisper (không tốn phí Modal). Free practice không bao giờ dùng Modal.</em>
+        ${set ? '' : '<br><strong style="color:var(--gold-d)">Not set yet: every class gets it now. Save to apply your choice.</strong>'}</div>
+      <div class="form-label" style="display:flex;align-items:center;gap:10px">Classes
+        <button class="btn btn-outline btn-sm" type="button" onclick="pronTickAll(true)">All</button>
+        <button class="btn btn-outline btn-sm" type="button" onclick="pronTickAll(false)">None</button></div>
+      <div class="pron-grid">${classes.map(cl => box('pron-class', cl.ClassID, on.has(String(cl.ClassID).toUpperCase()), cl.ClassName || cl.ClassID,
+        (cl.StudentCount != null ? cl.StudentCount + ' students' : ''))).join('') || '<div class="empty">No classes yet.</div>'}</div>
+      <div class="form-label" style="margin-top:14px">Modes</div>
+      <div class="pron-grid">${PRON_MODE_LABELS.map(([v, l, sub]) => box('pron-mode', v, modes.has(v), l, sub)).join('')}</div>
+      <div style="display:flex;align-items:center;gap:12px;margin-top:14px">
+        <button class="btn btn-primary" onclick="savePronModal()">Save pronunciation settings</button>
+        <span id="pron-save-st" style="font-size:12px;color:var(--g500)"></span>
+      </div>
     </div>`;
+}
+function pronTickAll(on) { document.querySelectorAll('#pron-card input[name="pron-class"]').forEach(x => { x.checked = on; }); }
+async function savePronModal() {
+  const vals = n => [...document.querySelectorAll(`#pron-card input[name="${n}"]:checked`)].map(x => x.value);
+  const value = { classes: vals('pron-class'), modes: vals('pron-mode') };
+  const st = document.getElementById('pron-save-st');
+  try {
+    const r = await gasCall('teacher.saveSetting', { key: 'PronModal', value });
+    if (r && r.success === false) throw new Error(r.error || 'not saved');
+    if (st) st.textContent = '✓ Saved — ' + value.classes.length + ' class(es), ' + (value.modes.length ? value.modes.join(', ') : 'no modes') + '. Applies from each student\'s next session.';
+    toast('Pronunciation settings saved', 'success');
+  } catch (e) { toast(e.message, 'error'); }
 }
 
 async function saveSettings() {
@@ -4300,6 +4351,7 @@ async function startJAM(libId, title) {
   // prior + n): the pronunciation check runs on milestone runs only.
   if (!_jam.runs) {
     _jam.prior = 0;
+    loadPronPolicy();
     gasCall('speak.findExisting', { topic: title, type: 'jam', part: 'jam' })
       .then(r => { if (_jam.topic === title && !_jam.runs) _jam.prior = (r && r.success && r.exists && r.attemptCount) || 0; }).catch(() => {});
   }
@@ -4376,7 +4428,7 @@ async function finishJAM() {
   const ans = { question: 'JAM — speak for one minute about: ' + _jam.topic, studentAnswer: text, keywords: [],
                 part: 'jam', topic: _jam.topic, _words: tr.words || [], _dur: tr.duration || 0, secs: 60 };
   A.mode = 'jam'; A.topic = _jam.topic; A.assignId = ''; A.t0 = startIso; A.lastSessionId = '';
-  if (window.Pron && Pron.enabled() && isMilestone(_jam.prior + _jam.runs)) Pron.start(ans, { blob: rec.blob, mime: rec.mime, text, words: tr.words, vocab: [] });
+  if (pronMode('jam') && isMilestone(_jam.prior + _jam.runs)) Pron.start(ans, { blob: rec.blob, mime: rec.mime, text, words: tr.words, vocab: [] });
   _jam.ans = ans; _jam.rpt = null; _jam.gradeError = ''; _jam.sessionId = ''; _jam.docUrl = ''; _jam.saving = true;
   await prepareAnalysis([ans]);
   renderJAMResult(ans);
@@ -4850,9 +4902,17 @@ function nextMilestone(n) { return MILESTONES.find(m => m > n) || null; }
 
 // The pronunciation check (a paid server) runs only where it is marked:
 // homework on its milestone attempts, JAM on its milestone runs (see
-// finishJAM) and every Test Simulation. Free practice has none.
+// finishJAM) and every Test Simulation. Free practice has none. On top of
+// that, the teacher chooses in Settings which classes and modes get it; the
+// others are marked from the Whisper transcript alone.
+async function loadPronPolicy() {
+  try { const r = await gasCall('speak.pronPolicy'); A.pronModes = new Set((r && r.success && r.modes) || []); }
+  catch (e) { A.pronModes = new Set(); }        // unknown: no paid check
+  return A.pronModes;
+}
+function pronMode(mode) { return !!(window.Pron && Pron.enabled() && A.pronModes && A.pronModes.has(mode)); }
 function pronWanted() {
-  return !!(window.Pron && Pron.enabled() && A.mode !== 'jam' && A.assignId && (isMilestone((A.retryCount || 0) + 1) || A.pendingMilestone));
+  return pronMode('homework') && A.mode !== 'jam' && !!A.assignId && (isMilestone((A.retryCount || 0) + 1) || !!A.pendingMilestone);
 }
 
 async function launch(mode, qs, retryCount) {
@@ -4873,6 +4933,7 @@ async function launch(mode, qs, retryCount) {
   } catch(e) { A.retryCount = retryCount || 0; A.pendingMilestone = false; }
 
   A.mode = mode;
+  if (A.assignId) await loadPronPolicy();
   if (!A.assignId && mode !== 'part2' && qs.length > 1 && randomOrderOn()) qs = shuffled(qs);
   A.qs   = qs;
   A.recs = qs.map(q => ({ question: q.question, studentAnswer: '' }));

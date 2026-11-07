@@ -14,7 +14,9 @@
 //   assignments/{AssignID} Title, Part, Questions(JSON), Deadline(ISO), AssignedClasses, classes[], Status,
 //                          ext: { classes: {ClassID: ISO}, students: {uid: ISO} }
 //   library/{LibID}        Title, Part, Questions(JSON), Tags, CreatedAt, UsedCount
-//   settings/public        ScoreAdjust                      settings/teacher  TeacherEmail, …
+//   settings/public        ScoreAdjust, PronModal           settings/teacher  TeacherEmail, …
+//     PronModal = { classes: [ClassID…], modes: ['homework','jam','test'] } — who gets
+//     the paid pronunciation check; missing = every class, every mode.
 //   progress/{uid}         StudentID, StudentName, ClassID, items: { SessionID: light row }
 //   sessions/{SessionID}   full attempt (same fields as the old Sessions sheet) + uid
 //   classStats/{ClassID}   topics: { key: { topic, part, total, last, students: { uid: {name,count,last} } } }
@@ -660,8 +662,18 @@ async function getSettings() {
   const [a, b] = await Promise.all([fs.doc('settings/public').get(), fs.doc('settings/teacher').get()]);
   return ok({ data: Object.assign({}, b.exists ? b.data() : {}, a.exists ? a.data() : {}) });
 }
+const PRON_MODES = ['homework', 'jam', 'test'];
+// The modes in which this student's class gets the pronunciation check.
+async function pronPolicy() {
+  const u = await me();
+  const pub = await fs.doc('settings/public').get();
+  const cfg = pub.exists ? pub.data().PronModal : null;
+  if (!cfg || !Array.isArray(cfg.classes)) return ok({ modes: PRON_MODES, configured: false });
+  const mine = cfg.classes.map(up).indexOf(up(u.classId)) >= 0;
+  return ok({ modes: mine ? (cfg.modes || []).filter(m => PRON_MODES.indexOf(m) >= 0) : [], configured: true });
+}
 async function saveSetting(p) {
-  const doc = p.key === 'ScoreAdjust' ? 'settings/public' : 'settings/teacher';
+  const doc = (p.key === 'ScoreAdjust' || p.key === 'PronModal') ? 'settings/public' : 'settings/teacher';
   await fs.doc(doc).set({ [p.key]: p.value }, { merge: true });
   return ok();
 }
@@ -853,7 +865,7 @@ const ACTIONS = {
   'student.getPeerComparison': getPeerComparison, 'student.getJamTopics': getJamTopics,
   'student.requestExtension': selfExtend, 'student.selfExtend': selfExtend,
   'speak.findExisting': findExisting, 'speak.saveResult': saveResult, 'speak.regradeTest': regradeTest,
-  'speak.reportPron': reportPron,
+  'speak.reportPron': reportPron, 'speak.pronPolicy': pronPolicy,
   'teacher.getPronReports': getPronReports, 'teacher.setPronReport': setPronReport, 'teacher.deletePronReport': deletePronReport,
   'teacher.getClasses': getClasses, 'teacher.createClass': createClass,
   'teacher.setClassStatus': setClassStatus, 'teacher.archiveClass': p => setClassStatus({ classId: p.classId, status: 'Archived' }),

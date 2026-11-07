@@ -304,6 +304,7 @@ async function tsStart() {
   // full screen, unlocking speech on iOS, starting the audio context.
   try { const el = document.documentElement; (el.requestFullscreen || el.webkitRequestFullscreen)?.call(el)?.catch?.(() => {}); } catch (e) {}
   tsUnlockSpeech();
+  loadPronPolicy();          // settles long before the first part is checked
   Voice.onSilent = () => { const a = document.getElementById('ts-alert'); if (a && !TS.keyBad) { a.style.display = 'block'; a.innerHTML = TS_SILENT_MSG; } };
   try { TS.ac = new (window.AudioContext || window.webkitAudioContext)(); TS.ac.resume?.(); } catch (e) { TS.ac = null; }
 
@@ -472,7 +473,7 @@ async function tsTranscribe(rec, blob, mime) {
       rec.studentAnswer = tr.text || ''; rec._words = tr.words || []; rec._dur = tr.duration || 0; rec.err = '';
       // Checked when the part ends (tsQueueGrade), all at once: the
       // pronunciation server then runs for a minute, not for the whole test.
-      if (window.Pron && Pron.enabled()) rec._pronIn = { blob, mime, text: tr.text, words: tr.words, vocab: [] };
+      if (pronMode('test')) rec._pronIn = { blob, mime, text: tr.text, words: tr.words, vocab: [] };
       break;
     } catch (e) {
       rec.err = e.message || String(e);
