@@ -211,7 +211,7 @@ function openTestSim() {
         <br><em>Bật loa (nên dùng tai nghe), cho phép micro, ngồi chỗ yên tĩnh. Trong lúc thi, bài nói không hiện lên màn hình.</em></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px">
         <select id="ts-voice-sel" class="form-input" style="flex:1;min-width:200px;max-width:360px;padding:7px 10px;font-size:13px" onchange="Voice.pick(this.value);tsVoiceCheck()" aria-label="Examiner voice"></select>
-        <button class="btn btn-outline btn-sm" onclick="tsVoiceCheck()">${Voice.icon(16)} Listen · Nghe thử</button>
+        <button class="btn btn-outline btn-sm" id="ts-voice-btn" onclick="tsVoiceCheck()">${Voice.icon(16)} Listen · Nghe thử</button>
       </div>
       <div id="ts-voice-st" style="font-size:12px;margin-top:6px"></div>
     </div>
@@ -263,6 +263,7 @@ function tsVoiceMenu() {
   sel.innerHTML = `<option value="">Automatic — most natural voice${list.length ? ' (' + _h(Voice.current()) + ')' : ''}</option>` +
     list.map(v => `<option value="${_h(v.name)}" ${v.name === picked ? 'selected' : ''}>${v.natural ? '★ ' : ''}${_h(v.name)} · ${_h(v.lang)}</option>`).join('');
   sel.style.display = list.length ? '' : 'none';
+  if (document.getElementById('ts-voice-btn')?.disabled) sel.hidden = true;   // a line is playing
 }
 // Plays one line so the student can check the sound before the test, and
 // says which voice played (or what each voice tried answered) for support.
@@ -270,12 +271,19 @@ function tsVoiceCheck() {
   const st = document.getElementById('ts-voice-st');
   const say = m => { if (st) st.innerHTML = m; };
   if (Voice.mode() === 'off') { say('<span style="color:var(--red-d)">This browser cannot read aloud — the questions will be shown as text. Try Chrome or Safari.<br><em>Trình duyệt này không đọc được — câu hỏi chỉ hiện chữ. Hãy dùng Chrome hoặc Safari.</em></span>'); return; }
-  say('▶ Playing… · Đang phát…');
+  // While the line plays, the voice menu is put away and Listen is off, so
+  // nobody can switch voices half-way; both come back when it ends.
+  const sel = document.getElementById('ts-voice-sel'), btn = document.getElementById('ts-voice-btn');
+  const busy = on => { if (sel) sel.hidden = on; if (btn) btn.disabled = on; };
+  busy(true);
+  say('▶ Playing ' + _h(Voice.picked() || Voice.current()) + '… · Đang phát…');
   Voice.onSilent = null;
   Voice.heard = false;
   Voice.diag.tries = [];
   Voice.unlock();
   Voice.say('Hello! In this test, I will ask you some questions about yourself.').then(() => {
+    busy(false);
+    tsVoiceMenu();
     const d = Voice.diag, log = `<div style="color:var(--g500);margin-top:4px">${d.voices} voices · ${d.tries.map(_h).join(' · ')}</div>`;
     say(Voice.heard
       ? `<span style="color:var(--green-d)">✓ The device played the voice. If you heard nothing, check the speaker / output device and volume. · Máy đã phát giọng; nếu không nghe thấy, kiểm tra loa / thiết bị phát và âm lượng.</span>${log}`
