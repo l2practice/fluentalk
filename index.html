@@ -311,6 +311,8 @@ textarea.form-input{resize:vertical;min-height:72px;line-height:1.6}
 /* Question box */
 .q-box{background:linear-gradient(135deg,var(--surf2),var(--raise));border-radius:var(--rx);padding:22px 20px;margin-bottom:16px;position:relative;border:1px solid rgba(var(--fg-rgb),.06)}
 .q-box-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:rgba(var(--fg-rgb),.3);margin-bottom:8px}
+.q-say{position:absolute;top:9px;right:58px;width:30px;height:30px;border-radius:50%;border:1px solid var(--line,rgba(0,0,0,.1));background:var(--surf,#fff);font-size:16px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:.8}
+.q-say:hover{opacity:1}
 .q-box-txt{font-size:1.1rem;color:var(--ink-strong);font-weight:500;line-height:1.75}
 .q-num{position:absolute;top:14px;right:14px;background:var(--blue);color:var(--ink-on-accent);font-size:10px;font-weight:700;padding:3px 10px;border-radius:99px}
 
@@ -968,6 +970,7 @@ svg{flex-shrink:0}
     </div>
     <div class="q-box">
       <div class="q-box-lbl" id="q-lbl">QUESTION</div>
+      <button class="q-say" id="q-say" onclick="Voice.unlock();Voice.say(A.qs[A.idx] && A.qs[A.idx].question)" title="Listen to the question again" aria-label="Listen to the question again">🔊</button>
       <div class="q-box-txt" id="q-txt">Loading…</div>
       <div class="q-num" id="q-num">1</div>
     </div>
@@ -1451,6 +1454,7 @@ svg{flex-shrink:0}
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="fbdata.js"></script>
+<script src="voice.js"></script>
 <script src="testsim.js"></script>
 <script>
 // Line icons (same drawing style as ArticuWrite's aw-common.js)
@@ -1515,6 +1519,7 @@ function SS(id) {
   });
   const el = document.getElementById(id);
   if (el) { el.classList.add('active'); el.style.display = 'flex'; }
+  if (id !== 'S-session' && window.Voice) Voice.stop();
   // Update topbar user labels
   if (id === 'S-session') {
     document.getElementById('u-sess').textContent = A.user?.fullName || '';
@@ -4026,6 +4031,7 @@ function renderPracticeHome(c) {
       </div>
       <div style="font-size:11px;color:var(--g600);margin-top:6px">Free at <a href="https://console.groq.com/keys" target="_blank">console.groq.com/keys</a></div>
     </div>
+    ${Voice.settingsHtml()}
     <div class="mode-grid" style="margin-bottom:14px">
       <div class="mode-tile" onclick="openFreeChoice()">
         <div class="mode-icon">${ic('pen')}</div>
@@ -4209,11 +4215,20 @@ async function startJAM(libId, title) {
       <div style="font-size:12px;color:var(--g500);margin-top:14px;line-height:1.7">Keep talking for the whole minute. Don't stop, don't repeat, stay on topic.<br><span style="font-style:italic">Nói liên tục cả phút. Đừng dừng, đừng lặp lại, bám sát chủ đề.</span></div>
       <button class="btn btn-outline btn-sm" style="margin-top:20px" onclick="cancelJAM()">Cancel</button>
     </div>`;
-  // brief countdown so they can gather themselves
+  // The topic is read out, then a brief countdown so they can gather themselves.
+  Voice.unlock();
+  const run = _jam.run = {};
+  if (Voice.mode() !== 'off') {
+    document.getElementById('jam-status').textContent = '🔊 Listen to your topic…';
+    await Voice.say('Your topic is: ' + title + '. You have one minute.');
+  }
+  if (_jam.run !== run || !document.getElementById('jam-status')) return;   // cancelled meanwhile
   let pre = 3;
-  const preTick = setInterval(() => {
-    document.getElementById('jam-status').textContent = 'Starting in ' + pre + '…';
-    if (--pre < 0) { clearInterval(preTick); jamGo(); }
+  _jam.preTick = setInterval(() => {
+    const st = document.getElementById('jam-status');
+    if (_jam.run !== run || !st) { clearInterval(_jam.preTick); return; }
+    st.textContent = 'Starting in ' + pre + '…';
+    if (--pre < 0) { clearInterval(_jam.preTick); jamGo(); }
   }, 700);
 }
 
@@ -4238,6 +4253,8 @@ async function jamGo() {
 }
 
 function cancelJAM() {
+  _jam.run = null; Voice.stop();
+  if (_jam.preTick) clearInterval(_jam.preTick);
   if (_jam.timer) clearInterval(_jam.timer);
   try { if (A.mr && A.mr.state !== 'inactive') A.mr.stop(); } catch(_) {}
   studentTab('practice');
@@ -4735,6 +4752,8 @@ function isMilestone(n) { return MILESTONES.includes(parseInt(n)); }
 function nextMilestone(n) { return MILESTONES.find(m => m > n) || null; }
 
 async function launch(mode, qs, retryCount) {
+  Voice.unlock();                                   // inside the tap, before any await (iOS)
+  Voice.prefetch((qs || []).map(q => q.question));  // natural-voice clips get ready while the session sets up
   showOverlay('Setting up your session…');
   // Send any attempt still waiting on this device first, so the count below
   // includes it.
@@ -4822,7 +4841,14 @@ function loadQ(idx) {
     A._p2Waiting = true;  // flag: timer not started yet
   } else {
     A._p2Waiting = false;
-    startQCountdown(A.qSeconds);
+    if (A.qSeconds) startQCountdown(0);   // hidden while the examiner reads
+    else startQCountdown(A.qSeconds);
+  }
+  // Read the question aloud (not when coming back to one already answered).
+  // A timed question's clock starts when the reading ends, as in the exam.
+  const read = prev?.studentAnswer ? Promise.resolve() : Voice.say(qo.question);
+  if (A.mode !== 'part2' && A.qSeconds) {
+    read.then(() => { if (A.idx === idx && document.getElementById('S-session').classList.contains('active')) startQCountdown(A.qSeconds); });
   }
 }
 
@@ -4963,6 +4989,7 @@ function toggleTalk() { if (A.talkBusy) return; if (A.talking) stopTalk(); else 
 async function startTalk() {
   if (A.talking || A.talkBusy) return;
   if (!A.groqKey) { toast('Groq API key required — go to Practice to add it', 'error'); return; }
+  Voice.stop();   // never record the examiner's voice
   // Part 2: start the speaking timer NOW (was waiting for student to press record)
   if (A._p2Waiting) {
     A._p2Waiting = false;

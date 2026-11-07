@@ -263,6 +263,7 @@ async function tsStart() {
 
   Object.assign(TS, { on: true, stopped: false, recs: [], trq: Promise.resolve(), done: 0, waiters: [], keyBad: false, t0: new Date().toISOString(), grades: {}, reports: {} });
   TS.plan = tsBuildPlan(r.p1, r.cards, r.pool);
+  Voice.prefetch(tsScriptLines(TS.plan));
   TS.steps = TS.plan.part1.reduce((n, t) => n + t.qs.length, 0) + 1 + TS.plan.part3.length;
   TS.step = 0;
   tsOpenStage();
@@ -331,43 +332,19 @@ function tsSpokenTopic(t) {
 }
 
 // ── EXAMINER VOICE ──────────────────────────
-function tsPickVoice() {
-  const vs = (window.speechSynthesis && speechSynthesis.getVoices()) || [];
-  const pref = ['Google UK English Female', 'Google UK English Male', 'Serena', 'Daniel', 'Kate', 'Libby', 'Sonia', 'Martha', 'Arthur'];
-  TS.voice = pref.map(n => vs.find(v => v.name.indexOf(n) >= 0)).find(Boolean)
-          || vs.find(v => /^en[-_]GB/i.test(v.lang)) || vs.find(v => /^en[-_]US/i.test(v.lang)) || vs.find(v => /^en/i.test(v.lang)) || null;
-}
-if (window.speechSynthesis) { try { speechSynthesis.addEventListener('voiceschanged', tsPickVoice); } catch (e) {} }
-// iOS only lets a page speak after speech has started inside a tap.
-function tsUnlockSpeech() {
-  try { if (!window.speechSynthesis) return; tsPickVoice(); const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); } catch (e) {}
-}
-// Speaks sentence by sentence (Chrome cuts long utterances off) and always
-// resolves: each sentence has its own time limit in case the end event never comes.
+// voice.js speaks (natural Kokoro voice, or the device voice). With the voice
+// off, the script stays on screen for about the time it takes to read it.
+function tsUnlockSpeech() { Voice.unlock(); Voice.warm(); }
 function tsSpeak(text) {
-  return new Promise(resolve => {
-    const synth = window.speechSynthesis;
-    const parts = String(text).match(/[^.!?]+[.!?]*/g) || [String(text)];
-    if (!synth) { tsSleep(800 + String(text).split(/\s+/).length * 380).then(resolve); return; }
-    let i = 0, guard = null;
-    const next = () => {
-      clearTimeout(guard);
-      if (TS.stopped || i >= parts.length) { resolve(); return; }
-      const s = parts[i++].trim();
-      if (!s) { next(); return; }
-      const u = new SpeechSynthesisUtterance(s);
-      if (TS.voice) u.voice = TS.voice;
-      u.lang = TS.voice?.lang || 'en-GB';
-      u.rate = 0.95;
-      let fired = false;
-      const go = () => { if (!fired) { fired = true; next(); } };
-      u.onend = go; u.onerror = go;
-      guard = setTimeout(() => { try { synth.cancel(); } catch (e) {} go(); }, 2500 + s.split(/\s+/).length * 550);
-      synth.speak(u);
-    };
-    try { synth.cancel(); } catch (e) {}
-    next();
-  });
+  if (Voice.mode() === 'off') return tsSleep(800 + String(text).split(/\s+/).length * 380);
+  return Voice.say(text);
+}
+// Everything the examiner will say, in order, so each clip is ready in time.
+function tsScriptLines(P) {
+  const lines = [];
+  P.part1.forEach((tp, ti) => { const n = tsSpokenTopic(tp.topic); lines.push(ti === 0 ? TS_SCRIPT.p1First(n) : TS_SCRIPT.p1Next(n)); lines.push(...tp.qs); });
+  lines.push(TS_SCRIPT.p2Intro, TS_SCRIPT.p2Go, TS_SCRIPT.p2End, TS_SCRIPT.p3Intro, ...P.part3, TS_SCRIPT.end);
+  return lines;
 }
 async function tsSay(text) {
   tsGuard();
@@ -955,7 +932,7 @@ function tsResultsSummary(answered) {
 
 function tsTeardown() {
   TS.on = false;
-  try { window.speechSynthesis?.cancel(); } catch (e) {}
+  Voice.stop();
   try { TS.stream?.getTracks().forEach(t => t.stop()); } catch (e) {}
   try { TS.ac?.close(); } catch (e) {}
   TS.analyser = null; TS.ac = null;
