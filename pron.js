@@ -47,6 +47,7 @@
       if (String(o.text || '').trim().split(/\s+/).length < 3) return null;
       rec._pronId = rec._pronId || ('pr' + (++seq));
       rec._pron = null; rec._pronErr = '';
+      rec._pronAudio = o.blob;          // kept for this session only, for "▶ You"
       live[rec._pronId] = rec;
       const p = check(this.url(), o).then(r => { rec._pron = r; return r; },
         e => { rec._pronErr = String((e && e.message) || e); console.warn('[pron]', rec._pronErr); return null; });
@@ -91,6 +92,25 @@
     slot(rec) {
       if (!rec || !rec._pronId) return '';
       return `<div class="pron-slot" data-pron-id="${rec._pronId}">${render(rec)}</div>`;
+    },
+
+    // ▶ You: the student's own word, cut from this session's recording.
+    playMine(id, start, end) {
+      const rec = live[id];
+      if (!rec || !rec._pronAudio) return;
+      if (window.Voice) Voice.stop();
+      const a = P._a || (P._a = new Audio());
+      if (P._url) URL.revokeObjectURL(P._url);
+      P._url = URL.createObjectURL(rec._pronAudio);
+      a.src = P._url;
+      const from = Math.max(0, start - 0.12), to = end + 0.15;
+      a.onloadedmetadata = () => { a.currentTime = from; a.play().catch(() => {}); };
+      a.ontimeupdate = () => { if (a.currentTime >= to) a.pause(); };
+    },
+    // ▶ Model: the word in the natural voice when it is on this device, else the device voice.
+    playModel(word) {
+      if (P._a) P._a.pause();
+      if (window.Voice) { Voice.unlock(); Voice.say(word); }
     }
   };
 
@@ -142,9 +162,16 @@
     const words = (r.issues || []).filter(w => w.flagged || (w.patterns || []).some(k => pats.some(p => p.key === k))).slice(0, 10);
     if (!words.length) return head + `<div style="font-size:12px;color:var(--green-d)">✓ No clear pronunciation problem found.</div>`;
     return head + `
-      <div style="display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12.5px">${words.map(w => `
-        <span><strong>${esc(w.word)}</strong> <span style="font-family:var(--fm,monospace);color:var(--g600)">/${esc(w.expected)}/</span>
-        <span style="color:var(--red)">→ /${esc(w.heard || '—')}/</span></span>`).join('')}</div>
+      <div style="display:flex;flex-direction:column;gap:4px;font-size:12.5px">${words.map(w => `
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <strong style="min-width:70px">${esc(w.word)}</strong>
+          <span style="font-family:var(--fm,monospace);color:var(--g600)">/${esc(w.expected)}/</span>
+          <span style="color:var(--red)">→ /${esc(w.heard || '—')}/</span>
+          <span style="margin-left:auto;white-space:nowrap">
+            ${rec._pronAudio && w.start != null ? `<button class="btn btn-outline btn-sm" style="padding:2px 8px" onclick="Pron.playMine('${rec._pronId}',${w.start},${w.end})">▶ You</button>` : ''}
+            <button class="btn btn-outline btn-sm" style="padding:2px 8px" onclick="Pron.playModel('${esc(w.word).replace(/'/g, '&#39;')}')">▶ Model</button>
+          </span>
+        </div>`).join('')}</div>
       ${pats.length ? `<div style="font-size:11.5px;color:var(--gold-d);margin-top:6px">Lặp lại nhiều: ${pats.map(p => esc(p.vi) + ' ×' + p.count).join(' · ')}</div>` : ''}`;
   }
 

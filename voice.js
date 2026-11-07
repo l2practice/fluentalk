@@ -145,11 +145,25 @@
       };
     } catch (e) {}
   }
+  // Fixed examiner lines (Part 2/3 introductions, the closing line) are made
+  // in advance with the same voices and served as files (voice/manifest.json):
+  // they play at once, with no model and nothing to generate.
+  let manifest = null;
+  function staticClips() {
+    if (!manifest) manifest = fetch('voice/manifest.json').then(r => r.ok ? r.json() : {}).then(j => j.clips || {}, () => ({}));
+    return manifest;
+  }
+  async function staticUrl(text) {
+    const clips = await staticClips();
+    return (clips[V.kokoroVoice()] || {})[text] || null;
+  }
   function clean(text) { return String(text || '').replace(/^\[[^\]]*\]\s*/, '').replace(/\s+/g, ' ').trim(); }
   function clip(text) {
     const voice = V.kokoroVoice(), key = voice + '|' + text;
     if (!mem.has(key)) {
       const p = (async () => {
+        const url = await staticUrl(text);
+        if (url) { const r = await fetch(url); if (r.ok) return await r.blob(); }
         const hit = await idbGet(key);
         if (hit) return hit;
         const blob = await generate(text, voice, key);
@@ -161,7 +175,9 @@
     }
     return mem.get(key);
   }
-  async function cached(text) { return !!(mem.has(V.kokoroVoice() + '|' + text) || await idbGet(V.kokoroVoice() + '|' + text)); }
+  async function cached(text) {
+    return !!(mem.has(V.kokoroVoice() + '|' + text) || await staticUrl(text) || await idbGet(V.kokoroVoice() + '|' + text));
+  }
 
   V.prefetch = function (texts) {
     if (this.mode() !== 'kokoro' || this.state === 'failed') return;
@@ -259,6 +275,10 @@
     this.stop();
     const my = ++turn;
     if (!text || this.mode() === 'off') return;
+    if (this.mode() === 'kokoro' && await staticUrl(text)) {        // a ready-made file: no model needed
+      try { const blob = await clip(text); if (my !== turn) return; return await playBlob(blob); }
+      catch (e) { console.warn('[voice] static clip', e); }
+    }
     if (this.mode() === 'kokoro' && this.supported() && this.state !== 'failed') {
       // Not downloaded yet and nothing cached: speak now with the device
       // voice rather than keep the student waiting.
