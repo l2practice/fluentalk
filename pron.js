@@ -47,7 +47,6 @@
       if (String(o.text || '').trim().split(/\s+/).length < 3) return null;
       rec._pronId = rec._pronId || ('pr' + (++seq));
       rec._pron = null; rec._pronErr = '';
-      rec._pronAudio = o.blob;
       live[rec._pronId] = rec;
       const p = check(this.url(), o).then(r => { rec._pron = r; return r; },
         e => { rec._pronErr = String((e && e.message) || e); console.warn('[pron]', rec._pronErr); return null; });
@@ -92,22 +91,7 @@
     slot(rec) {
       if (!rec || !rec._pronId) return '';
       return `<div class="pron-slot" data-pron-id="${rec._pronId}">${render(rec)}</div>`;
-    },
-
-    // ▶ the student's own voice for one word (cut from this session's recording)
-    playMine(id, start, end) {
-      const rec = live[id];
-      if (!rec || !rec._pronAudio) return;
-      if (window.Voice) Voice.stop();
-      const a = P._a || (P._a = new Audio());
-      if (P._url) URL.revokeObjectURL(P._url);
-      P._url = URL.createObjectURL(rec._pronAudio);
-      a.src = P._url;
-      const from = Math.max(0, start - 0.12), to = end + 0.15;
-      a.onloadedmetadata = () => { a.currentTime = from; a.play().catch(() => {}); };
-      a.ontimeupdate = () => { if (a.currentTime >= to) a.pause(); };
-    },
-    playModel(word) { if (window.Voice) { Voice.unlock(); Voice.say(word); } }
+    }
   };
 
   async function check(url, o) {
@@ -145,35 +129,23 @@
     document.querySelectorAll(`.pron-slot[data-pron-id="${rec._pronId}"]`).forEach(el => { el.innerHTML = render(rec); });
   }
 
+  // Only the words to work on: each mispronounced word with the dictionary
+  // pronunciation and what was heard, plus one line naming any recurring pattern.
   function render(rec) {
     const r = rec._pron;
-    const head = `<div class="qs-lbl" style="margin-top:12px">🗣️ Pronunciation check <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--g500)">· Kiểm tra phát âm</span></div>`;
+    const head = `<div class="qs-lbl" style="margin-top:12px">🗣️ Pronunciation <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--g500)">· Từ phát âm chưa đúng</span></div>`;
     if (!r) {
-      if (rec._pronErr) return head + `<div style="font-size:12px;color:var(--g500)">The pronunciation check could not run this time (${esc(rec._pronErr)}).</div>`;
-      return head + `<div style="font-size:12px;color:var(--g500);display:flex;align-items:center;gap:8px"><span class="spinner" style="width:14px;height:14px;border-width:2px;margin:0"></span>Listening to your recording sound by sound… (this can take a minute)</div>`;
+      if (rec._pronErr) return head + `<div style="font-size:12px;color:var(--g500)">The pronunciation check could not run this time.</div>`;
+      return head + `<div style="font-size:12px;color:var(--g500);display:flex;align-items:center;gap:8px"><span class="spinner" style="width:14px;height:14px;border-width:2px;margin:0"></span>Checking your pronunciation…</div>`;
     }
-    if (!r.phones_checked) return head + `<div style="font-size:12px;color:var(--g500)">Not enough clear speech to check.</div>`;
-    const acc = r.accuracy != null ? Math.round(r.accuracy * 100) : null;
     const pats = (r.patterns || []).filter(p => p.count >= 2);
-    const words = (r.issues || []).filter(w => w.flagged || (w.patterns || []).some(k => pats.some(p => p.key === k))).slice(0, 8);
-    const canPlay = !!rec._pronAudio;
+    const words = (r.issues || []).filter(w => w.flagged || (w.patterns || []).some(k => pats.some(p => p.key === k))).slice(0, 10);
+    if (!words.length) return head + `<div style="font-size:12px;color:var(--green-d)">✓ No clear pronunciation problem found.</div>`;
     return head + `
-      <div style="font-size:12.5px;color:var(--g700);margin-bottom:6px">${acc != null ? `<strong>${acc}%</strong> of the sounds in your own words were heard as expected` : ''}${r.flagged ? ` · <strong>${r.flagged}</strong> word${r.flagged > 1 ? 's' : ''} to check` : ''}.</div>
-      ${pats.length ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">${pats.map(p => `
-        <span style="font-size:11.5px;padding:4px 9px;border-radius:99px;background:var(--gold-l,rgba(200,150,50,.12));color:var(--gold-d)" title="${esc(p.words.join(', '))}">
-          ${esc(p.label)} ×${p.count}<br><em style="font-size:10.5px">${esc(p.vi)}</em></span>`).join('')}</div>` : ''}
-      ${words.length ? `<table style="width:100%;font-size:12px;border-collapse:collapse">${words.map(w => `
-        <tr style="border-top:1px solid var(--line,rgba(0,0,0,.08))">
-          <td style="padding:5px 4px;font-weight:700">${esc(w.word)}</td>
-          <td style="padding:5px 4px;font-family:var(--fm,monospace)">/${esc(w.expected)}/ <span style="color:var(--g500)">→ heard</span> /${esc(w.heard || '—')}/</td>
-          <td style="padding:5px 4px;white-space:nowrap;text-align:right">
-            ${canPlay && w.start != null ? `<button class="btn btn-outline btn-sm" style="padding:2px 8px" onclick="Pron.playMine('${rec._pronId}',${w.start},${w.end})">▶ You</button>` : ''}
-            <button class="btn btn-outline btn-sm" style="padding:2px 8px" onclick="Pron.playModel('${esc(w.word).replace(/'/g, '&#39;')}')">▶ Model</button>
-          </td></tr>`).join('')}</table>` : `<div style="font-size:12px;color:var(--green-d)">✓ No clear pronunciation problem found in the words checked.</div>`}
-      ${(r.vocab || []).length ? `<div style="font-size:11.5px;color:var(--g600);margin-top:6px">Target vocabulary: ${r.vocab.map(v => v.used
-          ? `<span style="color:${v.flagged ? 'var(--gold-d)' : 'var(--green-d)'}">${esc(v.item)} ${v.flagged ? '⚠' : '✓'}</span>`
-          : `<span style="color:var(--g400)">${esc(v.item)} (not used)</span>`).join(' · ')}</div>` : ''}
-      <div style="font-size:10.5px;color:var(--g400);margin-top:6px">Checked against your own transcript, UK and US pronunciations accepted. A word the transcript already got wrong cannot be checked, so this is a minimum, not a full list.</div>`;
+      <div style="display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12.5px">${words.map(w => `
+        <span><strong>${esc(w.word)}</strong> <span style="font-family:var(--fm,monospace);color:var(--g600)">/${esc(w.expected)}/</span>
+        <span style="color:var(--red)">→ /${esc(w.heard || '—')}/</span></span>`).join('')}</div>
+      ${pats.length ? `<div style="font-size:11.5px;color:var(--gold-d);margin-top:6px">Lặp lại nhiều: ${pats.map(p => esc(p.vi) + ' ×' + p.count).join(' · ')}</div>` : ''}`;
   }
 
   window.Pron = P;

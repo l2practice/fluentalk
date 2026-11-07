@@ -277,6 +277,31 @@ async function tsStart() {
   TS.mime = pickMime();
   try { if (TS.ac) { TS.analyser = TS.ac.createAnalyser(); TS.analyser.fftSize = 512; TS.ac.createMediaStreamSource(TS.stream).connect(TS.analyser); } } catch (e) { TS.analyser = null; }
 
+  // Wait for the examiner's first lines, so the voice starts with the text
+  // instead of a moment after it. The first time the voice is downloaded
+  // (~90 MB) the wait is longer and shows progress; if it takes too long the
+  // test starts with the device voice and switches once the clips are ready.
+  if (Voice.mode() === 'kokoro' && Voice.supported() && Voice.state !== 'failed') {
+    // Everything up to the 6th Part 1 question (topic introductions included);
+    // the rest is already queued and is made while the student speaks.
+    const first = [];
+    let nq = 0;
+    for (const tp of TS.plan.part1) {
+      first.push(first.length ? TS_SCRIPT.p1Next(tsSpokenTopic(tp.topic)) : TS_SCRIPT.p1First(tsSpokenTopic(tp.topic)));
+      for (const q of tp.qs) { if (nq >= 6) break; first.push(q); nq++; }
+      if (nq >= 6) break;
+    }
+    const msg = () => Voice.state === 'loading' && !Voice.downloadedBefore()
+      ? "Downloading the examiner's voice… " + Voice.progress + '% (first time only)'
+      : "Preparing the examiner's voice for Part 1…";
+    showOverlay(msg());
+    const tick = setInterval(() => { const el = document.getElementById('busy-msg'); if (el) el.textContent = msg(); }, 500);
+    await Voice.ready(first, Voice.downloadedBefore() ? 45000 : 120000);
+    clearInterval(tick);
+    hideOverlay();
+    if (TS.stopped) return;
+  }
+
   try { await tsRun(); }
   catch (e) {
     if (e !== TS_STOP) { console.error('[test]', e); toast('The test stopped: ' + e.message, 'error', 8000); tsTeardown(); studentTab('practice'); }

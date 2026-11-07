@@ -311,14 +311,12 @@ textarea.form-input{resize:vertical;min-height:72px;line-height:1.6}
 /* Question box */
 .q-box{background:linear-gradient(135deg,var(--surf2),var(--raise));border-radius:var(--rx);padding:22px 20px;margin-bottom:16px;position:relative;border:1px solid rgba(var(--fg-rgb),.06)}
 .q-box-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:rgba(var(--fg-rgb),.3);margin-bottom:8px}
-.q-say{position:absolute;top:8px;right:56px;width:36px;height:36px;border-radius:50%;border:1px solid rgba(var(--acc-rgb),.25);background:var(--blue-l);cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
 .vo-ic{display:inline-block;vertical-align:-4px}
 .voice-on .vo-ic .w1{animation:vo-w 1s ease-in-out infinite}
 .voice-on .vo-ic .w2{animation:vo-w 1s ease-in-out .2s infinite}
 .voice-on .vo-ic .w3{animation:vo-w 1s ease-in-out .4s infinite}
 @keyframes vo-w{0%,100%{opacity:.25}50%{opacity:1}}
 @media (prefers-reduced-motion:reduce){.voice-on .vo-ic .w{animation:none}}
-.q-say:hover{background:rgba(var(--acc-rgb),.2)}
 .q-box-txt{font-size:1.1rem;color:var(--ink-strong);font-weight:500;line-height:1.75}
 .q-num{position:absolute;top:14px;right:14px;background:var(--blue);color:var(--ink-on-accent);font-size:10px;font-weight:700;padding:3px 10px;border-radius:99px}
 
@@ -976,7 +974,6 @@ svg{flex-shrink:0}
     </div>
     <div class="q-box">
       <div class="q-box-lbl" id="q-lbl">QUESTION</div>
-      <button class="q-say" id="q-say" onclick="Voice.unlock();Voice.say(A.qs[A.idx] && A.qs[A.idx].question)" title="Listen to the question again" aria-label="Listen to the question again" data-vo-ic="20"></button>
       <div class="q-box-txt" id="q-txt">Loading…</div>
       <div class="q-num" id="q-num">1</div>
     </div>
@@ -4222,14 +4219,8 @@ async function startJAM(libId, title) {
       <div style="font-size:12px;color:var(--g500);margin-top:14px;line-height:1.7">Keep talking for the whole minute. Don't stop, don't repeat, stay on topic.<br><span style="font-style:italic">Nói liên tục cả phút. Đừng dừng, đừng lặp lại, bám sát chủ đề.</span></div>
       <button class="btn btn-outline btn-sm" style="margin-top:20px" onclick="cancelJAM()">Cancel</button>
     </div>`;
-  // The topic is read out, then a brief countdown so they can gather themselves.
-  Voice.unlock();
+  // brief countdown so they can gather themselves
   const run = _jam.run = {};
-  if (Voice.mode() !== 'off') {
-    document.getElementById('jam-status').innerHTML = Voice.icon(20) + ' Listen to your topic…';
-    await Voice.say('Your topic is: ' + title + '. You have one minute.');
-  }
-  if (_jam.run !== run || !document.getElementById('jam-status')) return;   // cancelled meanwhile
   let pre = 3;
   _jam.preTick = setInterval(() => {
     const st = document.getElementById('jam-status');
@@ -4260,7 +4251,7 @@ async function jamGo() {
 }
 
 function cancelJAM() {
-  _jam.run = null; Voice.stop();
+  _jam.run = null;
   if (_jam.preTick) clearInterval(_jam.preTick);
   if (_jam.timer) clearInterval(_jam.timer);
   try { if (A.mr && A.mr.state !== 'inactive') A.mr.stop(); } catch(_) {}
@@ -4767,8 +4758,6 @@ function pronWanted() {
 }
 
 async function launch(mode, qs, retryCount) {
-  Voice.unlock();                                   // inside the tap, before any await (iOS)
-  Voice.prefetch((qs || []).map(q => q.question));  // natural-voice clips get ready while the session sets up
   showOverlay('Setting up your session…');
   // Send any attempt still waiting on this device first, so the count below
   // includes it.
@@ -4857,14 +4846,7 @@ function loadQ(idx) {
     A._p2Waiting = true;  // flag: timer not started yet
   } else {
     A._p2Waiting = false;
-    if (A.qSeconds) startQCountdown(0);   // hidden while the examiner reads
-    else startQCountdown(A.qSeconds);
-  }
-  // Read the question aloud (not when coming back to one already answered).
-  // A timed question's clock starts when the reading ends, as in the exam.
-  const read = prev?.studentAnswer ? Promise.resolve() : Voice.say(qo.question);
-  if (A.mode !== 'part2' && A.qSeconds) {
-    read.then(() => { if (A.idx === idx && document.getElementById('S-session').classList.contains('active')) startQCountdown(A.qSeconds); });
+    startQCountdown(A.qSeconds);
   }
 }
 
@@ -5005,7 +4987,6 @@ function toggleTalk() { if (A.talkBusy) return; if (A.talking) stopTalk(); else 
 async function startTalk() {
   if (A.talking || A.talkBusy) return;
   if (!A.groqKey) { toast('Groq API key required — go to Practice to add it', 'error'); return; }
-  Voice.stop();   // never record the examiner's voice
   // Part 2: start the speaking timer NOW (was waiting for student to press record)
   if (A._p2Waiting) {
     A._p2Waiting = false;
@@ -5982,7 +5963,7 @@ async function gradeAnswers(answered, part, ctx) {
 
   if (window.Pron && answered.some(r => r._pronP && !r._pron && !r._pronErr)) {
     setGradingStatus('Finishing the pronunciation check…');
-    await Pron.wait(answered, 12000);
+    await Pron.wait(answered, 6000);
   }
   const chunks = gradeChunks(answered, part), marks = [], reports = [];
   for (let c = 0; c < chunks.length; c++) {

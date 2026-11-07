@@ -1,5 +1,5 @@
 // ════════════════════════════════════════════
-// VOICE — reads questions and the examiner's lines aloud, in every mode.
+// VOICE — reads the examiner's lines and questions aloud in Test Simulation.
 //
 // Natural voice: Kokoro-82M (voice-worker.js), run in the browser. The model
 // (~90 MB) is downloaded once and kept by the browser; every clip it makes is
@@ -286,10 +286,21 @@
       </g></svg>`;
   };
 
+  // Resolves when the clips for ``texts`` are ready (or after ``ms``), so the
+  // examiner can start speaking at once instead of after a pause.
+  V.ready = async function (texts, ms) {
+    if (this.mode() !== 'kokoro' || !this.supported() || this.state === 'failed') return;
+    const list = [].concat(texts || []).map(clean).filter(Boolean);
+    if (!list.length) return;
+    this.warm();
+    const all = Promise.all(list.map(t => clip(t).catch(() => {})));
+    await Promise.race([all, new Promise(r => setTimeout(r, ms || 20000))]);
+  };
+
   // ── the settings card (Practice page) ──
   V.settingsHtml = function () {
     return `<div class="key-wrap" id="voice-card">
-      <div class="key-title"><span class="key-ic">${this.icon(18)}</span>Question voice <small style="font-weight:400;color:var(--g600)">(reads questions aloud in every mode)</small></div>
+      <div class="key-title"><span class="key-ic">${this.icon(18)}</span>Examiner voice <small style="font-weight:400;color:var(--g600)">(Test Simulation)</small></div>
       <div class="key-row" style="flex-wrap:wrap">
         <select class="form-input" id="voice-sel" style="flex:1;min-width:220px" onchange="Voice.setPref(this.value)">
           ${Object.keys(VOICES).map(k => `<option value="${k}" ${k === this.pref() ? 'selected' : ''}>${VOICES[k]}</option>`).join('')}

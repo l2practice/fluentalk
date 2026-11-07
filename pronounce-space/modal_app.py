@@ -25,7 +25,7 @@ image = (
     .apt_install("ffmpeg", "espeak-ng")
     .pip_install("torch==2.5.1", index_url="https://download.pytorch.org/whl/cpu")
     .pip_install(*PINS)
-    .env({"HF_HOME": "/models", "TORCH_THREADS": "2", "PYTHONPATH": "/root"})
+    .env({"HF_HOME": "/models", "TORCH_THREADS": "4", "PYTHONPATH": "/root"})
     .add_local_dir("openpronounce", "/root/openpronounce", copy=True)
     .run_commands("cd /root && python -c 'from openpronounce.phones import _load_model; _load_model()'")
     .add_local_file("assess.py", "/root/assess.py")
@@ -35,9 +35,20 @@ image = (
 app = modal.App("speaking-pronounce", image=image)
 
 
-@app.function(cpu=2.0, memory=3072, timeout=600, scaledown_window=SCALEDOWN, max_containers=2)
+# Memory snapshot: the model is loaded once, the container's memory is saved,
+# and later cold starts restore it instead of loading 1.2 GB again.
+# 4 cores halve the analysis time; billing is per core-second, so the cost
+# per answer stays about the same.
+@app.cls(cpu=4.0, memory=3072, timeout=600, scaledown_window=SCALEDOWN, max_containers=2,
+         enable_memory_snapshot=True)
 @modal.concurrent(max_inputs=8)      # requests queue inside the container; one analysis runs at a time
-@modal.asgi_app()
-def web():
-    import app as service            # app.py: the FastAPI service (also used by the Docker image)
-    return service.app
+class Service:
+    @modal.enter(snap=True)
+    def load(self):
+        import app as service        # app.py: the FastAPI service (also used by the Docker image)
+        service.model()
+        self.service = service
+
+    @modal.asgi_app(label="speaking-pronounce-web")
+    def web(self):
+        return self.service.app
