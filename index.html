@@ -407,6 +407,8 @@ textarea.form-input{resize:vertical;min-height:72px;line-height:1.6}
 .pron-opt input{margin-top:3px;accent-color:var(--blue)}
 .prog-q-card{padding:16px 18px;margin-bottom:16px;overflow-x:auto}
 .prog-q{display:grid;grid-template-columns:minmax(150px,1.15fr) repeat(3,minmax(130px,1fr)) minmax(130px,.9fr) 30px;gap:8px 10px;align-items:center;min-width:750px}
+.prog-q-date{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:var(--g500);text-transform:uppercase}
+.prog-q-date .search-inp{flex:1;min-width:0}
 .prog-q-x{width:30px;height:30px;border-radius:50%;border:1px solid var(--g200);background:var(--white);color:var(--g500);font-size:18px;line-height:1;cursor:pointer}
 .prog-q-x:hover{color:var(--red);border-color:var(--red)}
 .prog-q .search-inp{width:100%;max-width:none}
@@ -2995,7 +2997,13 @@ let _progSessions = [], _progFilter = '', _progMode = '', _progLoaded = false, _
 const PROG_TYPES = [['homework', 'Homework'], ['jam', 'JAM'], ['test', 'Test Simulation'], ['free', 'Free Speaking']];
 const PROG_DAYS = [[6, 'Last 6 days'], [14, 'Last 14 days'], [30, 'Last 30 days'], [0, 'All results']];
 const PROG_MAX_ROWS = 3;
-const progRow = type => ({ type: type || '', topics: ['', '', ''], days: 6 });
+// A Test Simulation row has no topics or deadline: it is a From–To date
+// range (default: the last two weeks), counting the tests done in it.
+function progRow(type, days) {
+  const to = new Date(), from = new Date(to);
+  from.setDate(from.getDate() - 13);
+  return { type: type || '', topics: ['', '', ''], days: days || 6, from: localDateInputValue(from), to: localDateInputValue(to) };
+}
 function progQDefault() { return [progRow('homework')]; }   // one row; "Add row" adds up to three
 let _progQ = progQDefault(), _progTopicsBy = {};   // topic lists per mode, for the chosen class
 const progActive = () => _progQ.filter(q => q.type);
@@ -3060,9 +3068,9 @@ function simResultRows() {
   });
   return rows;
 }
+// Tests done in the chosen date range — a plain count, no target.
 function simAttemptCountMarkup(count) {
-  const color = count >= 3 ? 'var(--red-d)' : count === 2 ? 'var(--gold-d)' : 'var(--g500)';
-  return `<span style="font-family:var(--fm);font-weight:${count >= 3 ? 800 : 600};color:${color}">${count}/3</span>`;
+  return `<span class="badge ${count ? 'badge-blue' : 'badge-grey'}" title="Tests done between the chosen dates">${count}x</span>`;
 }
 function simStudentScores(row) {
   return row.sessions.slice().sort((a,b) => String(a.StartTime||'').localeCompare(String(b.StartTime||'')))
@@ -3143,7 +3151,7 @@ function renderSimulationProgress(c) {
       <td>${r.ClassID?`<div style="font-weight:600;font-size:12px">${_h(r.ClassName||classNameOf(r.ClassID))}</div><div style="font-size:10px;color:var(--g400);font-family:var(--fm)">${_h(r.ClassID)}</div>`:'—'}</td>
       <td><span class="badge badge-blue" title="Full Part 1–2–3 mock test">${ic('exam')}Test Sim</span></td>
       <td style="font-weight:600;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Test Simulation</td>
-      <td style="font-size:12px">${_simFromDate||'—'}</td><td style="font-size:12px">${_simToDate||'—'}</td>
+      <td style="font-size:12px;white-space:nowrap">${_simFromDate||'—'}</td><td style="font-size:12px;white-space:nowrap">${_simToDate||'—'}</td>
       <td style="font-size:12px">${last?.DurationMin?`${_h(last.DurationMin)}m`:'—'}</td>
       <td style="text-align:center">${simAttemptCountMarkup(ordered.length)}</td>
       <td>${scoreStr}${backupGraded?' <span class="badge badge-gold" title="At least one attempt was marked by a backup model">backup</span>':''}</td>
@@ -3160,10 +3168,10 @@ function renderSimulationProgress(c) {
   const sortHead=(key,label)=>`<th onclick="sortSimulationProgress('${key}')" title="Sort by ${label}" style="cursor:pointer;user-select:none">${label} ${_simSortCol===key?(_simSortDir===1?'↑':'↓'):'↕'}</th>`;
   const colorList=['#E0895F','#6E8DEB','#3FAE6A','#A99BE6','#D9A441','#E25D74','#36A7A2','#D879C2'];
   c.innerHTML=`<div class="search-row"><input class="search-inp" placeholder="Filter by name / ID…" id="prog-search" value="${_h(_simSearchQuery)}" oninput="_simSearchQuery=this.value;renderSimulationProgress(document.getElementById('sim-progress-wrap'))" style="max-width:260px"><span style="font-size:12px;color:var(--g600)">${filtered.length} results</span></div>
-    <div class="tbl-wrap"><table class="tbl"><thead><tr>${sortHead('StudentID','Student ID')}${sortHead('StudentName','Full Name')}${sortHead('ClassID','Class')}${sortHead('Type','Mode')}${sortHead('Topic','Topic')}${sortHead('FromDate','From date')}${sortHead('ToDate','To date')}${sortHead('Duration','Duration')}${sortHead('Attempts','Attempts / 3')}${sortHead('MilestoneScores','Milestone Scores')}${sortHead('Warning','⚠')}<th></th></tr></thead><tbody>${tableRows}</tbody></table></div>
+    <div class="tbl-wrap"><table class="tbl"><thead><tr>${sortHead('StudentID','Student ID')}${sortHead('StudentName','Full Name')}${sortHead('ClassID','Class')}${sortHead('Type','Mode')}${sortHead('Topic','Topic')}${sortHead('FromDate','From date')}${sortHead('ToDate','To date')}${sortHead('Duration','Duration')}${sortHead('Attempts','Attempts')}${sortHead('MilestoneScores','Milestone Scores')}${sortHead('Warning','⚠')}<th></th></tr></thead><tbody>${tableRows}</tbody></table></div>
     <div class="sim-progress-charts">
       <section class="card"><div class="card-header"><div><div class="card-title">Student score progress</div><div style="font-size:12px;color:var(--g500)">${selected?_h(selected.StudentName):'Select one student from the table to view their attempts.'}</div></div></div>${selected?simChartSvg(primarySeries,'sim-primary',true):'<div class="empty" style="padding:28px">No students selected</div>'}</section>
-      <section class="card"><div class="card-header"><div><div class="card-title">Compare students</div><div style="font-size:12px;color:var(--g500)">Students with 0/3 are omitted from this chart.</div></div><button class="btn btn-outline btn-sm" onclick="toggleSimulationCompare()">${_simCompareOpen?'Done':'Compare others'}</button></div>
+      <section class="card"><div class="card-header"><div><div class="card-title">Compare students</div><div style="font-size:12px;color:var(--g500)">Students with no test in these dates are left out of this chart.</div></div><button class="btn btn-outline btn-sm" onclick="toggleSimulationCompare()">${_simCompareOpen?'Done':'Compare others'}</button></div>
         ${_simCompareOpen?`<div style="margin-bottom:12px;border:1px solid var(--line);border-radius:10px;padding:10px;background:var(--surf2)"><div style="display:flex;gap:6px;margin-bottom:8px"><button class="btn btn-outline btn-sm" onclick="setSimulationCompareAll(true)">All class</button><button class="btn btn-outline btn-sm" onclick="setSimulationCompareAll(false)">None</button><span style="margin-left:auto;align-self:center;font-size:11px;color:var(--g500)">${_simCompareIds.length} selected</span></div><input class="search-inp" id="sim-compare-search" placeholder="Search student name / ID…" value="${_h(_simCompareSearchQuery)}" oninput="_simCompareSearchQuery=this.value;renderSimulationProgress(document.getElementById('sim-progress-wrap'))" style="width:100%;margin-bottom:8px"><div style="max-height:170px;overflow:auto;display:flex;flex-direction:column;gap:2px">${comparePickerRows.map(r=>`<label style="display:flex;align-items:center;gap:8px;padding:5px 6px;border-radius:6px;font-size:12px;cursor:pointer"><input type="checkbox" ${_simCompareIds.includes(r.StudentID)?'checked':''} onchange="toggleSimulationCompareStudent('${_h(r.StudentID)}',this.checked)"><span>${_h(r.StudentName)}</span><span style="margin-left:auto;font-size:10px;color:var(--g400)">${_h(r.StudentID)}</span></label>`).join('')||'<div style="padding:12px;text-align:center;color:var(--g500);font-size:12px">No matching students</div>'}</div></div>`:''}
         ${compareSeries.length?simChartSvg(compareSeries,'sim-compare',false):`<div class="empty" style="padding:28px">${_simCompareOpen?'Choose students with at least one attempt to compare.':'Choose Compare others to select students.'}</div>`}
         ${compareSeries.length?`<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">${compareSeries.map((s,i)=>`<span style="font-size:10px;color:var(--g600)"><i style="display:inline-block;width:12px;height:3px;vertical-align:middle;margin-right:4px;background:${colorList[i%colorList.length]}"></i>${_h(s.name)}</span>`).join('')}</div>`:''}
@@ -3414,7 +3422,9 @@ async function exportSessions() {
     // The search rows go too: Apps Script adds, for each homework in the
     // export, the full report (whole roster, status, scores, improvement, Doc
     // links). taskType/topics/sinceDays are the rows merged, for an older Code.gs.
-    const queries = progActive().map(q => ({ taskType: q.type, topics: q.type === 'test' ? [] : q.topics.filter(Boolean), sinceDays: q.days }));
+    const queries = progActive().map(q => q.type === 'test'
+      ? { taskType: 'test', topics: [], sinceDays: progTestDays(q), from: q.from || '', to: q.to || '' }
+      : { taskType: q.type, topics: q.topics.filter(Boolean), sinceDays: q.days });
     const types = [...new Set(queries.map(q => q.taskType))];
     const topics = [...new Set(queries.flatMap(q => q.topics))];
     const label = Object.fromEntries(PROG_TYPES);
@@ -7518,17 +7528,22 @@ function progSearchHtml() {
   const opt = (v, text, sel) => `<option value="${_h(v)}" ${sel ? 'selected' : ''}>${_h(text)}</option>`;
   const rows = _progQ.map((q, i) => {
     const topics = _progTopicsBy[q.type] || [];
-    const noTopics = !q.type || q.type === 'test';
-    return `
-      <select class="search-inp" aria-label="Mode ${i + 1}" onchange="progSetType(${i},this.value)">
+    const mode = `<select class="search-inp" aria-label="Mode ${i + 1}" onchange="progSetType(${i},this.value)">
         ${opt('', '— Choose a mode —', !q.type)}${PROG_TYPES.map(([v, t]) => opt(v, t, q.type === v)).join('')}
-      </select>
-      ${[0, 1, 2].map(k => `<select class="search-inp" aria-label="Row ${i + 1} topic ${k + 1}" ${noTopics ? 'disabled' : ''} onchange="_progQ[${i}].topics[${k}]=this.value">
-        ${noTopics ? opt('', q.type === 'test' ? 'All tests' : '—', true) : opt('', 'None', !q.topics[k]) + topics.map(t => opt(t.topic, t.topic, q.topics[k] === t.topic)).join('')}
-      </select>`).join('')}
+      </select>`;
+    const date = (key, label) => `<label class="prog-q-date"><span>${label}</span>
+        <input type="date" class="search-inp" value="${_h(q[key] || '')}" aria-label="Row ${i + 1} ${label} date" onchange="_progQ[${i}].${key}=this.value"></label>`;
+    const cells = q.type === 'test'
+      ? date('from', 'From') + date('to', 'To') + '<span></span><span></span>'
+      : [0, 1, 2].map(k => `<select class="search-inp" aria-label="Row ${i + 1} topic ${k + 1}" ${q.type ? '' : 'disabled'} onchange="_progQ[${i}].topics[${k}]=this.value">
+        ${!q.type ? opt('', '—', true) : opt('', 'None', !q.topics[k]) + topics.map(t => opt(t.topic, t.topic, q.topics[k] === t.topic)).join('')}
+      </select>`).join('') + `
       <select class="search-inp" aria-label="Row ${i + 1} time" ${q.type ? '' : 'disabled'} onchange="_progQ[${i}].days=parseInt(this.value)">
         ${PROG_DAYS.map(([d, t]) => opt(d, t, q.days === d)).join('')}
-      </select>
+      </select>`;
+    return `
+      ${mode}
+      ${cells}
       ${i ? `<button class="prog-q-x" title="Remove this row" aria-label="Remove row ${i + 1}" onclick="progRemoveRow(${i})">×</button>` : '<span></span>'}`;
   }).join('');
   return `<div class="prog-q">
@@ -7538,7 +7553,7 @@ function progSearchHtml() {
     <div style="display:flex;align-items:center;gap:12px;margin-top:12px;flex-wrap:wrap">
       <button class="btn btn-primary" onclick="loadProgressResults()">${ic('progress')}Load results</button>
       ${_progQ.length < PROG_MAX_ROWS ? `<button class="btn btn-outline btn-sm" onclick="progAddRow()">+ Add row</button>` : ''}
-      <span style="font-size:12px;color:var(--g500)">Topics left as None = all topics of that mode. · Để None = mọi topic của mode đó.</span>
+      <span style="font-size:12px;color:var(--g500)">Topics left as None = all topics of that mode. Test Simulation: tests done between the two dates. · Để None = mọi topic; Test Simulation tính theo khoảng ngày.</span>
     </div>`;
 }
 async function progLoadTopics() {
@@ -7554,24 +7569,34 @@ function progRedrawSearch() { const box = document.getElementById('prog-q'); if 
 function progAddRow() { if (_progQ.length < PROG_MAX_ROWS) { _progQ.push(progRow()); progRedrawSearch(); } }
 function progRemoveRow(i) { if (i > 0) { _progQ.splice(i, 1); progRedrawSearch(); } }
 async function progSetType(i, type) {
-  _progQ[i] = { type, topics: ['', '', ''], days: _progQ[i].days || 6 };
+  _progQ[i] = progRow(type, _progQ[i].days);
   await progLoadTopics();
   const box = document.getElementById('prog-q');
   if (box) box.innerHTML = progSearchHtml();
 }
 // One request per mode and time range; each row keeps its own topics; an
 // attempt matched by two rows is listed once.
+// Days back to cover a test row's From date (0 = everything).
+function progTestDays(q) { return q.from ? Math.ceil((Date.now() - new Date(q.from + 'T00:00:00').getTime()) / 86400000) + 1 : 0; }
+// Whether a session's start falls in a test row's From–To range (local days).
+function progInRange(s, q) {
+  const d = new Date(s.StartTime || s.Date || '');
+  if (Number.isNaN(d.getTime())) return false;
+  return (!q.from || d >= new Date(q.from + 'T00:00:00')) && (!q.to || d <= new Date(q.to + 'T23:59:59.999'));
+}
+const progKey = q => q.type === 'test' ? 'test|' + progTestDays(q) : q.type + '|' + q.days;
 async function progFetchSessions() {
   const act = progActive(), byKey = {};
-  act.forEach(q => { byKey[q.type + '|' + q.days] = { taskType: q.type, sinceDays: q.days }; });
+  act.forEach(q => { byKey[progKey(q)] = { taskType: q.type, sinceDays: q.type === 'test' ? progTestDays(q) : q.days }; });
   const keys = Object.keys(byKey);
   const res = await Promise.all(keys.map(k => gasCall('teacher.getAllSessions', Object.assign({ classId: _progFilter }, byKey[k]))));
   res.forEach(r => { if (!r || r.success === false) throw new Error((r && r.error) || 'load failed'); });
   const seen = new Set(), out = [];
   act.forEach(q => {
-    const rows = res[keys.indexOf(q.type + '|' + q.days)].data || [];
+    const rows = res[keys.indexOf(progKey(q))].data || [];
     const topics = q.type === 'test' ? [] : q.topics.filter(Boolean).map(t => t.toLowerCase());
     rows.forEach(s => {
+      if (q.type === 'test' && !progInRange(s, q)) return;
       if (topics.length && !topics.includes(String(s.Topic || '').toLowerCase())) return;
       const id = s.SessionID || (s.StudentID + '|' + s.StartTime + '|' + s.Topic);
       if (seen.has(id)) return;
@@ -7583,13 +7608,12 @@ async function progFetchSessions() {
 
 function loadProgressResults() {
   if (!progActive().length) { toast('Choose at least one mode.', 'error'); return; }
+  const tests = progActive().filter(q => q.type === 'test');
+  if (tests.some(q => q.from && q.to && q.from > q.to)) { toast('From date must be on or before To date.', 'error'); return; }
   if (progTestOnly()) {
-    // The test view filters by dates: the row's time range, up to today.
-    const days = Math.max(...progActive().map(q => q.days)), all = progActive().some(q => !q.days);
-    const today = new Date(), start = new Date(today);
-    start.setDate(start.getDate() - days);
-    _simFromDate = all ? '' : localDateInputValue(start);
-    _simToDate = localDateInputValue(today);
+    // The test view filters by its own From–To dates: the rows' range.
+    _simFromDate = tests.some(q => !q.from) ? '' : tests.map(q => q.from).sort()[0];
+    _simToDate = tests.some(q => !q.to) ? '' : tests.map(q => q.to).sort().slice(-1)[0];
     _simSelectedStudent = ''; _simCompareIds = []; _simCompareOpen = false;
   }
   _progMode=''; _progLoaded=true; _progReload=true;
