@@ -308,7 +308,7 @@ async function tsStart() {
   Voice.onSilent = () => { const a = document.getElementById('ts-alert'); if (a && !TS.keyBad) { a.style.display = 'block'; a.innerHTML = TS_SILENT_MSG; } };
   try { TS.ac = new (window.AudioContext || window.webkitAudioContext)(); TS.ac.resume?.(); } catch (e) { TS.ac = null; }
 
-  Object.assign(TS, { on: true, stopped: false, recs: [], trq: Promise.resolve(), done: 0, waiters: [], keyBad: false, t0: new Date().toISOString(), grades: {}, reports: {} });
+  Object.assign(TS, { on: true, stopped: false, recs: [], trq: Promise.resolve(), done: 0, waiters: [], keyBad: false, limitShown: false, retrying: false, t0: new Date().toISOString(), grades: {}, reports: {} });
   TS.plan = tsBuildPlan(r.p1, r.cards, r.pool);
   TS.steps = TS.plan.part1.reduce((n, t) => n + t.qs.length, 0) + 1 + TS.plan.part3.length;
   TS.step = 0;
@@ -464,10 +464,14 @@ async function tsAnswer(item) {
 
 // One answer at a time, in the order spoken, so a fast talker never hits the
 // transcription rate limit. Nothing is shown to the student.
+// A rate-limited key (Groq's free tier caps audio per hour — easily reached
+// when several students share one key) is waited out instead of dropping
+// the answer; the recording is kept so a failed answer can be sent again.
 async function tsTranscribe(rec, blob, mime) {
-  if (TS.stopped) return;
+  if (TS.stopped && !TS.retrying) return;
+  rec._blob = blob; rec._mime = mime;
   if (!blob || blob.size < 1500) { rec.err = 'silent'; TS.done++; tsProcStatus(); return; }
-  for (let k = 0; k < 2; k++) {
+  for (let k = 0; k < 5; k++) {
     try {
       const tr = await transcribeGroq(blob, mime);
       rec.studentAnswer = tr.text || ''; rec._words = tr.words || []; rec._dur = tr.duration || 0; rec.err = '';
@@ -478,11 +482,64 @@ async function tsTranscribe(rec, blob, mime) {
     } catch (e) {
       rec.err = e.message || String(e);
       if (/key/i.test(rec.err)) { tsKeyProblem(rec.err); break; }
-      await new Promise(r => setTimeout(r, 1500));
+      const limited = /rate limit/i.test(rec.err);
+      if (limited) tsLimitNotice();
+      else if (k >= 1) break;                    // other errors: two tries
+      await new Promise(r => setTimeout(r, limited ? 20000 : 1500));
+      if (TS.stopped && !TS.retrying) break;
     }
   }
   TS.done++;
   tsProcStatus();
+}
+function tsLimitNotice() {
+  if (TS.limitShown || TS.keyBad) return;
+  TS.limitShown = true;
+  const a = document.getElementById('ts-alert');
+  if (a) { a.style.display = 'block'; a.innerHTML = '<strong>Groq is limiting your key right now</strong> (free tier: audio per hour — is the key shared with others?). Keep going: your answers are kept and sent again automatically.<br><em>Groq đang giới hạn key của bạn (gói miễn phí giới hạn số giây ghi âm mỗi giờ — có dùng chung key không?). Cứ tiếp tục thi: bài nói được giữ lại và tự gửi lại.</em>'; }
+}
+// Why no answer could be transcribed, in words the student can act on.
+function tsFailReason() {
+  const errs = TS.recs.map(r => r.err || ((r.studentAnswer || '').trim() ? '' : 'empty'));
+  const has = re => errs.some(e => re.test(e));
+  if (TS.keyBad || has(/key/i)) return { kind: 'key', text: 'Your Groq key was rejected — paste it again in Practice (from console.groq.com). · Groq từ chối key — vào Practice dán lại key (lấy ở console.groq.com).' };
+  if (has(/rate limit/i)) return { kind: 'rate', text: 'Groq\'s free limit for your key was reached (audio seconds per hour — often because a key is shared). Wait about an hour, or use your own key, then press Send again. · Key Groq đã hết lượt miễn phí trong giờ (thường do dùng chung key). Đợi khoảng 1 tiếng hoặc dùng key riêng rồi bấm Gửi lại.' };
+  if (has(/load failed|failed to fetch|network|timed? ?out/i)) return { kind: 'network', text: 'The connection dropped while sending your answers. Check Wi-Fi, then press Send again. · Mạng bị lỗi khi gửi bài. Kiểm tra Wi-Fi rồi bấm Gửi lại.' };
+  if (errs.every(e => e === 'silent' || e === 'empty')) return { kind: 'mic', text: 'The microphone recorded only silence. Check that the right microphone is selected and not muted, then take the test again. · Micro chỉ thu được im lặng. Kiểm tra đúng micro và không bị tắt tiếng rồi thi lại.' };
+  return { kind: 'other', text: 'Transcription failed: ' + (errs.find(e => e && e !== 'empty' && e !== 'silent') || 'unknown error') + ' · Không chuyển được giọng nói thành chữ.' };
+}
+// After a failed test: show why, and (unless the mic or key is the problem)
+// let the student send the kept recordings again instead of re-taking it.
+function tsShowFailure() {
+  const why = tsFailReason();
+  const c = document.getElementById('student-content');
+  const canRetry = (why.kind === 'rate' || why.kind === 'network' || why.kind === 'other') && TS.recs.some(r => r._blob && r._blob.size >= 1500);
+  if (!c) { toast(why.text, 'error', 15000); return; }
+  c.innerHTML = `<div class="card" style="max-width:620px;margin:20px auto;text-align:center">
+      <div style="font-size:1.2rem;font-weight:800;color:var(--red-d);margin-bottom:8px">None of your answers could be transcribed</div>
+      <div style="font-size:14px;line-height:1.7;color:var(--g700)">${_h(why.text)}</div>
+      <div style="display:flex;gap:10px;justify-content:center;margin-top:16px;flex-wrap:wrap">
+        ${canRetry ? '<button class="btn btn-primary" onclick="tsRetryFailed()">Send again · Gửi lại</button>' : ''}
+        <button class="btn btn-outline" onclick="studentTab(\'practice\')">Back to Practice</button>
+      </div>
+      <div id="ts-retry-st" style="font-size:12px;color:var(--g500);margin-top:10px"></div>
+    </div>`;
+}
+async function tsRetryFailed() {
+  const st = document.getElementById('ts-retry-st');
+  const todo = TS.recs.filter(r => !(r.studentAnswer || '').trim() && r._blob && r._blob.size >= 1500);
+  A.groqKey = localStorage.getItem('speak_groq_key') || A.groqKey || '';   // a key just fixed in Practice
+  TS.retrying = true; TS.keyBad = false;
+  let n = 0;
+  for (const r of todo) {
+    if (st) st.textContent = 'Sending ' + (++n) + ' / ' + todo.length + '…';
+    await tsTranscribe(r, r._blob, r._mime);
+  }
+  TS.retrying = false;
+  const answered = TS.recs.filter(r => (r.studentAnswer || '').trim());
+  if (!answered.length) { tsShowFailure(); return; }
+  ['part1', 'part2', 'part3'].forEach(tsPronPart);   // parts with no mark are marked again in tsCollectGrades
+  await tsGradeAndSave(answered, TS.recs.length - answered.length);
 }
 function tsKeyProblem(msg) {
   if (TS.keyBad) return;
@@ -727,8 +784,8 @@ async function tsFinish() {
   const missing = TS.recs.length - answered.length;
   tsTeardown();
   if (!answered.length) {
-    toast('None of your answers could be transcribed' + (TS.keyBad ? ' — your Groq key was rejected.' : '. Check the microphone and try again.'), 'error', 9000);
-    studentTab('practice');
+    await studentTab('practice');
+    tsShowFailure();
     return;
   }
   await tsGradeAndSave(answered, missing);
