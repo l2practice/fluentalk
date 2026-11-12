@@ -308,7 +308,7 @@ async function tsStart() {
   Voice.onSilent = () => { const a = document.getElementById('ts-alert'); if (a && !TS.keyBad) { a.style.display = 'block'; a.innerHTML = TS_SILENT_MSG; } };
   try { TS.ac = new (window.AudioContext || window.webkitAudioContext)(); TS.ac.resume?.(); } catch (e) { TS.ac = null; }
 
-  Object.assign(TS, { on: true, stopped: false, recs: [], trq: Promise.resolve(), done: 0, waiters: [], keyBad: false, limitShown: false, retrying: false, t0: new Date().toISOString(), grades: {}, reports: {} });
+  Object.assign(TS, { on: true, stopped: false, recs: [], trq: Promise.resolve(), done: 0, waiters: [], keyBad: false, limitShown: false, rateDead: false, retrying: false, t0: new Date().toISOString(), grades: {}, reports: {} });
   TS.plan = tsBuildPlan(r.p1, r.cards, r.pool);
   TS.steps = TS.plan.part1.reduce((n, t) => n + t.qs.length, 0) + 1 + TS.plan.part3.length;
   TS.step = 0;
@@ -484,7 +484,10 @@ async function tsTranscribe(rec, blob, mime) {
       if (/key/i.test(rec.err)) { tsKeyProblem(rec.err); break; }
       const limited = /rate limit/i.test(rec.err);
       if (limited) tsLimitNotice();
-      else if (k >= 1) break;                    // other errors: two tries
+      // Answers are sent one after another: once one has waited the limit out
+      // in vain, the rest try once and are kept for "Send again", or the end
+      // of the test would wait 80 s per answer.
+      if (limited ? (TS.rateDead || k >= 4) : k >= 1) { if (limited) TS.rateDead = true; break; }
       await new Promise(r => setTimeout(r, limited ? 20000 : 1500));
       if (TS.stopped && !TS.retrying) break;
     }
@@ -529,7 +532,7 @@ async function tsRetryFailed() {
   const st = document.getElementById('ts-retry-st');
   const todo = TS.recs.filter(r => !(r.studentAnswer || '').trim() && r._blob && r._blob.size >= 1500);
   A.groqKey = localStorage.getItem('speak_groq_key') || A.groqKey || '';   // a key just fixed in Practice
-  TS.retrying = true; TS.keyBad = false;
+  TS.retrying = true; TS.keyBad = false; TS.rateDead = false;
   let n = 0;
   for (const r of todo) {
     if (st) st.textContent = 'Sending ' + (++n) + ' / ' + todo.length + '…';
