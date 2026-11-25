@@ -957,6 +957,9 @@ function tsDocSlotHtml() {
 function tsDocSlot() { const el = document.getElementById('ts-doc-slot'); if (el) el.innerHTML = tsDocSlotHtml(); }
 // History / teacher: a test opens its own Doc, or builds it if that never happened.
 function tsOpenDoc(url, sessionId, asTeacher, studentId) {
+  // Apps Script stores docs.google.com/open?id=…; the formatter wants /document/d/….
+  const id = (/[?&]id=([\w-]+)/.exec(url || '') || [])[1];
+  if (id) url = 'https://docs.google.com/document/d/' + id + '/edit';
   if (url) {
     const win = window.open('about:blank', '_blank');
     gasCall(asTeacher ? 'teacher.formatDoc' : 'speak.formatDoc', { url, studentId })

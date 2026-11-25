@@ -5631,7 +5631,7 @@ function thinkingCfgFor(model) {
 // unset so the model uses its own ceiling, and thinking is given real room:
 // a capped budget was what produced empty replies and, previously, invented
 // band scores.
-async function gemFetch(sys, usr, attempt, jsonMode, noThinkCfg) {
+async function gemFetch(sys, usr, attempt, jsonMode, noThinkCfg, busyTry) {
   attempt = attempt || 1;
   if (!A.gkey) throw new Error('No Gemini API key set');
 
@@ -5658,6 +5658,17 @@ async function gemFetch(sys, usr, attempt, jsonMode, noThinkCfg) {
 
     if (r.status === 404 && attempt === 1)
       return gemFetch(sys, usr, 2, jsonMode, noThinkCfg);
+
+    // "This model is currently experiencing high demand" (503) and other
+    // server-side failures pass in seconds: wait and ask the same model again
+    // before giving up on it.
+    if (r.status >= 500 && (busyTry || 0) < 2) {
+      for (let i = busyTry ? 20 : 8; i > 0; i--) {
+        setGradingStatus('Gemini is busy — trying again in ' + i + 's…');
+        await new Promise(res => setTimeout(res, 1000));
+      }
+      return gemFetch(sys, usr, attempt, jsonMode, noThinkCfg, (busyTry || 0) + 1);
+    }
 
     if (r.status === 429 && attempt <= 2) {
       for (let i = 20; i > 0; i--) {
@@ -5703,7 +5714,7 @@ async function gemFetch(sys, usr, attempt, jsonMode, noThinkCfg) {
 // capacity. Llama chat models are retired; the gpt-oss family replaced them.
 const GROQ_GRADE_MODEL = 'openai/gpt-oss-120b';
 
-async function groqGrade(sys, prompt) {
+async function groqGrade(sys, prompt, retried) {
   if (!A.groqKey) throw new Error('No Groq API key set');
   const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
@@ -5712,17 +5723,23 @@ async function groqGrade(sys, prompt) {
       model: GROQ_GRADE_MODEL,
       messages: [{ role: 'system', content: sys }, { role: 'user', content: prompt }],
       temperature: 0.4,
-      // Groq's free tier allows ~8000 tokens a minute for this model and counts
-      // the reply ceiling in each request: left unset (the model's 64k), every
-      // grading request was refused as too large. ~3.5 characters a token.
-      max_completion_tokens: Math.max(2000, 7600 - Math.ceil((sys.length + prompt.length) / 3.5)),
-      reasoning_effort: 'low',
+      reasoning_effort: 'low',          // fewer tokens against the free tier's 8000 a minute
       response_format: { type: 'json_object' }
     })
   });
   if (!r.ok) {
     let msg = 'Groq error ' + r.status;
     try { const e = await r.json(); msg = e.error?.message || msg; } catch (_) {}
+    // Free tier: 8000 tokens a minute, so a test part marked in two pieces
+    // can hit it; Groq says how long to wait ("try again in 18.09s").
+    const wait = r.status === 429 && !retried && Math.ceil(parseFloat((/try again in ([\d.]+)s/i.exec(msg) || [])[1]) || 30) + 1;
+    if (wait && wait <= 65) {
+      for (let i = wait; i > 0; i--) {
+        setGradingStatus('Backup grader busy — trying again in ' + i + 's…');
+        await new Promise(res => setTimeout(res, 1000));
+      }
+      return groqGrade(sys, prompt, true);
+    }
     throw new Error(msg);
   }
   const j = await r.json();
