@@ -5712,6 +5712,11 @@ async function groqGrade(sys, prompt) {
       model: GROQ_GRADE_MODEL,
       messages: [{ role: 'system', content: sys }, { role: 'user', content: prompt }],
       temperature: 0.4,
+      // Groq's free tier allows ~8000 tokens a minute for this model and counts
+      // the reply ceiling in each request: left unset (the model's 64k), every
+      // grading request was refused as too large. ~3.5 characters a token.
+      max_completion_tokens: Math.max(2000, 7600 - Math.ceil((sys.length + prompt.length) / 3.5)),
+      reasoning_effort: 'low',
       response_format: { type: 'json_object' }
     })
   });
