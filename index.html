@@ -6438,6 +6438,8 @@ function buildReport(answered, r, isMilestone, attemptNo) {
 // ════════════════════════════════════════════
 function renderResults(answered, rpt, isMilestone, attemptNo, overall, fc, lr, gr, p, gradeError, gradingPending, gradedBy, gradedCount) {
   SS('S-results');
+  // A test with one part unmarked still shows the marks of the other parts.
+  const showQs = isMilestone || (A.mode === 'test' && !gradingPending && answered.some(r => r.scores));
   const main = document.getElementById('results-main');
   const next = nextMilestone(attemptNo);
 
@@ -6508,7 +6510,7 @@ function renderResults(answered, rpt, isMilestone, attemptNo, overall, fc, lr, g
       </div>`}
     ${A.mode === 'test' && !gradingPending ? tsResultsSummary(answered) : ''}
 
-    ${isMilestone ? answered.map((r, i) => `
+    ${showQs ? answered.map((r, i) => `
       <div class="qacc">
         <div class="qacc-hdr" onclick="this.nextElementSibling.classList.toggle('open')">
           <div class="qa-n">${i+1}</div>
@@ -6547,7 +6549,7 @@ function renderResults(answered, rpt, isMilestone, attemptNo, overall, fc, lr, g
       </div>`).join('') : ''}
 
     ${A.langText ? renderProgressStrip(attemptNo) : ''}
-    ${!isMilestone ? renderTranscriptReview(answered) : renderLexCard(answered)}
+    ${!showQs ? renderTranscriptReview(answered) : renderLexCard(answered)}
     ${A.langText ? renderLanguageAnalysis(A.langText, A.prosody) : ''}
 
     ${rpt ? `
